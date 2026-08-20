@@ -1,0 +1,27 @@
+{
+  "owner": "CK_A2166",
+  "object": "V_ASN",
+  "rows": 336,
+  "columns": [
+    "division",
+    "department",
+    "display_type",
+    "attribute1",
+    "item_code",
+    "set_barcode",
+    "single_set_qty",
+    "asn_qty",
+    "total_no_of_set",
+    "set_order_qty",
+    "asn_no",
+    "asn_status",
+    "po_no",
+    "po_date",
+    "shipment_date",
+    "shipment_confirm_date",
+    "key_1"
+  ],
+  "fetched_at": "2026-08-20T09:31:51.630950+00:00",
+  "fetched_at_ts": 1787218311.63095,
+  "size_bytes": 23145
+}

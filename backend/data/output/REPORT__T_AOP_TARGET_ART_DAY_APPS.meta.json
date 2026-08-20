@@ -1,0 +1,18 @@
+{
+  "owner": "REPORT",
+  "object": "T_AOP_TARGET_ART_DAY_APPS",
+  "rows": 5000,
+  "columns": [
+    "store_name",
+    "division",
+    "department",
+    "article_name",
+    "display_type",
+    "target_dt",
+    "tgt_q",
+    "tgt_v"
+  ],
+  "fetched_at": "2026-08-18T05:39:14.079976+00:00",
+  "fetched_at_ts": 1787031554.079976,
+  "size_bytes": 29906
+}

@@ -1,0 +1,9 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "SS27 Frontend",
+      "url": "http://localhost:5173"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "owner": "REPORT",
+  "object": "T_WEEK_STR",
+  "rows": 252,
+  "columns": [
+    "attribute1",
+    "zone",
+    "store_grade",
+    "min_wk_str",
+    "max_wk_str"
+  ],
+  "fetched_at": "2026-08-18T07:03:15.732265+00:00",
+  "fetched_at_ts": 1787036595.732265,
+  "size_bytes": 3757
+}

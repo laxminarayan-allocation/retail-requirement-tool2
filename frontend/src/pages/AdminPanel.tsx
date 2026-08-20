@@ -1,0 +1,583 @@
+import { useState, useEffect, useCallback } from 'react'
+import axios from 'axios'
+
+type RoleRequest = {
+  id: string; user_email: string; user_name: string;
+  requested_role: string; from_role: string; reason: string; status: string;
+  reviewed_by: string; reviewed_at: string; created_at: string; temp_days: number | null
+}
+type User = {
+  id: string; email: string; full_name: string; role: string;
+  is_active: number; created_at: string; last_login_at: string;
+  temp_admin_expires_at: string | null
+}
+type Log = {
+  id: string; user_email: string; action: string;
+  details: string; ip_address: string; created_at: string
+}
+type AiChat = {
+  id: string; user_email: string; user_name: string; user_role: string;
+  question: string; answer: string; created_at: string
+}
+
+const ROLE_COLOR: Record<string, string> = {
+  admin: '#818cf8', temp_admin: '#c084fc', planner: '#34d399', viewer: '#94a3b8', pending: '#d97706',
+}
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Admin', temp_admin: 'Temp Admin', planner: 'Planner', viewer: 'Viewer', pending: 'Pending',
+}
+// Duration options — hours stored in temp_days column
+const TEMP_OPTS = [{h:1,l:'1h'},{h:3,l:'3h'},{h:24,l:'1d'},{h:72,l:'3d'},{h:168,l:'7d'}]
+function fmtTempLabel(hours: number | null): string {
+  if (!hours) return ''
+  const o = TEMP_OPTS.find(o => o.h === hours)
+  return o ? o.l : hours < 24 ? `${hours}h` : `${Math.round(hours/24)}d`
+}
+function fmtExpiry(iso: string): string {
+  const d = new Date(iso)
+  const diffH = (d.getTime() - Date.now()) / 3600000
+  if (diffH < 48) return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+const S: Record<string, React.CSSProperties> = {
+  page: { fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#e2e8f0', maxWidth: 900 },
+  h1: { fontSize: 20, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4, color: '#f1f5f9' },
+  sub: { fontSize: 12, color: '#64748b', marginBottom: 28 },
+  tabs: { display: 'flex', gap: 2, borderBottom: '1px solid #334155', marginBottom: 24 },
+  tab: (a: boolean): React.CSSProperties => ({
+    padding: '8px 16px', fontSize: 13, fontWeight: a ? 600 : 400,
+    color: a ? '#38bdf8' : '#64748b', background: 'none', border: 'none',
+    borderBottom: a ? '2px solid #38bdf8' : '2px solid transparent',
+    cursor: 'pointer', marginBottom: -1,
+  }),
+  table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 12 },
+  th: {
+    textAlign: 'left' as const, padding: '8px 12px', color: '#475569',
+    fontWeight: 600, letterSpacing: '.06em', fontSize: 10, textTransform: 'uppercase' as const,
+    borderBottom: '1px solid #1e293b',
+  },
+  td: { padding: '10px 12px', borderBottom: '1px solid #0f172a', verticalAlign: 'middle' as const },
+  badge: (role: string): React.CSSProperties => ({
+    display: 'inline-block', padding: '2px 8px', borderRadius: 10,
+    fontSize: 10, fontWeight: 700, letterSpacing: '.06em',
+    color: ROLE_COLOR[role] || '#94a3b8',
+    background: (ROLE_COLOR[role] || '#94a3b8') + '18',
+    textTransform: 'uppercase' as const,
+  }),
+  statusBadge: (s: string): React.CSSProperties => ({
+    display: 'inline-block', padding: '2px 8px', borderRadius: 10,
+    fontSize: 10, fontWeight: 700, letterSpacing: '.06em',
+    color: s === 'pending' ? '#fcd34d' : s === 'approved' ? '#34d399' : '#f87171',
+    background: (s === 'pending' ? '#fcd34d' : s === 'approved' ? '#34d399' : '#f87171') + '18',
+    textTransform: 'uppercase' as const,
+  }),
+  btnSm: (variant: 'approve' | 'deny' | 'neutral'): React.CSSProperties => ({
+    padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none',
+    borderRadius: 4, cursor: 'pointer',
+    background: variant === 'approve' ? 'rgba(52,211,153,.15)' : variant === 'deny' ? 'rgba(248,113,113,.15)' : '#1e293b',
+    color: variant === 'approve' ? '#34d399' : variant === 'deny' ? '#f87171' : '#94a3b8',
+    marginRight: 6,
+  }),
+  select: {
+    background: '#0f172a', border: '1px solid #334155', borderRadius: 4,
+    color: '#e2e8f0', fontSize: 11, padding: '3px 6px',
+  },
+  empty: { padding: '32px 0', textAlign: 'center' as const, color: '#334155', fontSize: 13 },
+  pendingDot: {
+    display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+    background: '#fcd34d', marginRight: 6,
+  },
+  sectionHead: { fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 12, marginTop: 0 },
+}
+
+export default function AdminPanel() {
+  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats'>('requests')
+  const [requests, setRequests] = useState<RoleRequest[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [logs, setLogs] = useState<Log[]>([])
+  const [aiChats, setAiChats] = useState<AiChat[]>([])
+  const [expandedChat, setExpandedChat] = useState<string | null>(null)
+  const [notifyingChat, setNotifyingChat] = useState<string | null>(null)
+  const [notifMsg, setNotifMsg] = useState('')
+  const [notifSending, setNotifSending] = useState(false)
+  const [notifSent, setNotifSent] = useState<string | null>(null)
+  const [pendingCount, setPendingCount] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [warnings, setWarnings] = useState<string[]>([])
+  // Temp admin duration picker (Users tab direct set)
+  const [tempDaysPicker, setTempDaysPicker] = useState<{ userId: string; days: number } | null>(null)
+  // Temp admin duration picker for approving a role request
+  const [approveWithDays, setApproveWithDays] = useState<{ reqId: string; days: number } | null>(null)
+
+  useEffect(() => {
+    axios.get('/api/assistant/status').then(r => {
+      if (!r.data.data?.configured) {
+        setWarnings(w => [...w, 'AI Assistant is not configured — set ANTHROPIC_API_KEY in backend/.env to enable the 💬 chat widget for all users.'])
+      }
+    }).catch(() => {})
+  }, [])
+
+  const loadRequests = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [all, pending] = await Promise.all([
+        axios.get('/api/auth/role-requests'),
+        axios.get('/api/auth/role-requests?status=pending'),
+      ])
+      setRequests(all.data.data?.requests || [])
+      setPendingCount(pending.data.data?.total || 0)
+    } finally { setLoading(false) }
+  }, [])
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await axios.get('/api/auth/users')
+      setUsers(res.data.data?.users || [])
+    } finally { setLoading(false) }
+  }, [])
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await axios.get('/api/auth/logs?limit=200')
+      setLogs(res.data.data?.logs || [])
+    } finally { setLoading(false) }
+  }, [])
+
+  const loadAiChats = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await axios.get('/api/assistant/logs?limit=200')
+      setAiChats(res.data.data?.logs || [])
+    } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'requests') loadRequests()
+    else if (tab === 'users') loadUsers()
+    else if (tab === 'logs') loadLogs()
+    else loadAiChats()
+  }, [tab, loadRequests, loadUsers, loadLogs])
+
+  async function sendNotification(chat: AiChat) {
+    if (!notifMsg.trim()) return
+    setNotifSending(true)
+    try {
+      await axios.post('/api/notifications/send', {
+        to_email: chat.user_email,
+        subject: 'Re: Your question has been addressed',
+        message: notifMsg.trim(),
+        chat_log_id: chat.id,
+      })
+      setNotifSent(chat.id)
+      setNotifyingChat(null)
+      setNotifMsg('')
+      setTimeout(() => setNotifSent(null), 3000)
+    } finally { setNotifSending(false) }
+  }
+
+  async function reviewRequest(id: string, action: 'approved' | 'denied', temp_days?: number) {
+    await axios.patch(`/api/auth/role-requests/${id}`, { action, temp_days })
+    setApproveWithDays(null)
+    await loadRequests()
+    await loadUsers()
+  }
+
+  async function changeUserRole(userId: string, role: string, temp_days?: number) {
+    await axios.patch(`/api/auth/users/${userId}/role`, { role, temp_days })
+    setTempDaysPicker(null)
+    await loadUsers()
+  }
+
+  async function toggleUserActive(userId: string, isActive: boolean) {
+    await axios.patch(`/api/auth/users/${userId}/active?is_active=${isActive}`)
+    await loadUsers()
+  }
+
+  return (
+    <div style={S.page}>
+      <h1 style={S.h1}>Admin Panel</h1>
+      <p style={S.sub}>Manage user access, approve role requests, and review activity logs.</p>
+
+      {warnings.map((w, i) => (
+        <div key={i} style={{
+          background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.3)',
+          borderRadius: 8, padding: '10px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+          <div>
+            <div style={{ fontSize: 12.5, color: '#fcd34d', fontWeight: 600, marginBottom: 2 }}>Configuration Required</div>
+            <div style={{ fontSize: 12, color: '#a16207', lineHeight: 1.5 }}>{w}</div>
+          </div>
+          <button onClick={() => setWarnings(ws => ws.filter((_, j) => j !== i))}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>✕</button>
+        </div>
+      ))}
+
+      <div style={S.tabs}>
+        <button style={S.tab(tab === 'requests')} onClick={() => setTab('requests')}>
+          Role Requests
+          {pendingCount > 0 && (
+            <span style={{ marginLeft: 6, background: '#fcd34d', color: '#0f172a', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>
+              {pendingCount}
+            </span>
+          )}
+        </button>
+        <button style={S.tab(tab === 'users')} onClick={() => setTab('users')}>Users</button>
+        <button style={S.tab(tab === 'logs')} onClick={() => setTab('logs')}>Activity Logs</button>
+        <button style={S.tab(tab === 'aichats')} onClick={() => setTab('aichats')}>
+          💬 AI Chats
+          {aiChats.length > 0 && (
+            <span style={{ marginLeft: 6, background: '#6366f1', color: '#fff', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>
+              {aiChats.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Role Requests ── */}
+      {tab === 'requests' && (
+        <>
+          {requests.filter(r => r.status === 'pending').length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <p style={S.sectionHead}>
+                <span style={S.pendingDot} />Pending ({requests.filter(r => r.status === 'pending').length})
+              </p>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>User</th>
+                    <th style={S.th}>Requested</th>
+                    <th style={S.th}>Reason</th>
+                    <th style={S.th}>Submitted</th>
+                    <th style={S.th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.filter(r => r.status === 'pending').map(r => (
+                    <tr key={r.id}>
+                      <td style={S.td}>
+                        <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{r.user_name}</div>
+                        <div style={{ color: '#64748b', fontSize: 11 }}>{r.user_email}</div>
+                      </td>
+                      <td style={S.td}>
+                        {r.from_role && <><span style={S.badge(r.from_role)}>{ROLE_LABEL[r.from_role] || r.from_role}</span><span style={{ color: '#475569', margin: '0 4px' }}>→</span></>}
+                        <span style={S.badge(r.requested_role)}>{ROLE_LABEL[r.requested_role] || r.requested_role}</span>
+                        {r.requested_role === 'temp_admin' && r.temp_days && (
+                          <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 4 }}>({fmtTempLabel(r.temp_days)})</span>
+                        )}
+                      </td>
+                      <td style={S.td}><span style={{ color: '#94a3b8' }}>{r.reason || '—'}</span></td>
+                      <td style={S.td}><span style={{ color: '#64748b' }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</span></td>
+                      <td style={S.td}>
+                        {r.requested_role === 'temp_admin' && approveWithDays?.reqId === r.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                              <span style={{ fontSize: 9, color: '#64748b' }}>Duration:</span>
+                              {TEMP_OPTS.map(o => (
+                                <button key={o.h} onClick={() => setApproveWithDays(a => a ? { ...a, days: o.h } : null)}
+                                  style={{ fontSize: 9, padding: '2px 5px', background: approveWithDays.days === o.h ? '#7c3aed' : '#1e293b', color: approveWithDays.days === o.h ? '#fff' : '#64748b', border: '1px solid #334155', borderRadius: 3, cursor: 'pointer' }}>
+                                  {o.l}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button style={S.btnSm('approve')} onClick={() => reviewRequest(r.id, 'approved', approveWithDays.days)}>
+                                Approve {fmtTempLabel(approveWithDays.days)}
+                              </button>
+                              <button style={S.btnSm('deny')} onClick={() => setApproveWithDays(null)}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <button style={S.btnSm('approve')} onClick={() => {
+                              if (r.requested_role === 'temp_admin') {
+                                setApproveWithDays({ reqId: r.id, days: r.temp_days || 24 })
+                              } else {
+                                reviewRequest(r.id, 'approved')
+                              }
+                            }}>Approve</button>
+                            <button style={S.btnSm('deny')} onClick={() => reviewRequest(r.id, 'denied')}>Deny</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p style={{ ...S.sectionHead, marginTop: 8 }}>All requests</p>
+          {requests.length === 0
+            ? <div style={S.empty}>{loading ? 'Loading…' : 'No requests yet.'}</div>
+            : (
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>User</th>
+                    <th style={S.th}>Role</th>
+                    <th style={S.th}>Status</th>
+                    <th style={S.th}>Reviewed by</th>
+                    <th style={S.th}>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.map(r => (
+                    <tr key={r.id}>
+                      <td style={S.td}>
+                        <div style={{ color: '#cbd5e1' }}>{r.user_name}</div>
+                        <div style={{ color: '#64748b', fontSize: 11 }}>{r.user_email}</div>
+                      </td>
+                      <td style={S.td}><span style={S.badge(r.requested_role)}>{r.requested_role}</span></td>
+                      <td style={S.td}><span style={S.statusBadge(r.status)}>{r.status}</span></td>
+                      <td style={S.td}><span style={{ color: '#64748b' }}>{r.reviewed_by || '—'}</span></td>
+                      <td style={S.td}><span style={{ color: '#64748b' }}>{(r.reviewed_at || r.created_at)?.slice(0, 16).replace('T', ' ')}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          }
+        </>
+      )}
+
+      {/* ── Users ── */}
+      {tab === 'users' && (
+        users.length === 0
+          ? <div style={S.empty}>{loading ? 'Loading…' : 'No users.'}</div>
+          : (
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>User</th>
+                  <th style={S.th}>Role</th>
+                  <th style={S.th}>Status</th>
+                  <th style={S.th}>Last login</th>
+                  <th style={S.th}>Change role</th>
+                  <th style={S.th}>Access</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td style={S.td}>
+                      <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{u.full_name}</div>
+                      <div style={{ color: '#64748b', fontSize: 11 }}>{u.email}</div>
+                    </td>
+                    <td style={S.td}>
+                      <span style={S.badge(u.role)}>{ROLE_LABEL[u.role] || u.role}</span>
+                      {u.role === 'temp_admin' && u.temp_admin_expires_at && (
+                        <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 2 }}>
+                          Until {fmtExpiry(u.temp_admin_expires_at)}
+                        </div>
+                      )}
+                    </td>
+                    <td style={S.td}>
+                      <span style={{ color: u.is_active ? '#34d399' : '#f87171', fontSize: 11 }}>
+                        {u.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td style={S.td}>
+                      <span style={{ color: '#64748b' }}>
+                        {u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : 'Never'}
+                      </span>
+                    </td>
+                    <td style={S.td}>
+                      {tempDaysPicker?.userId === u.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                            <span style={{ fontSize: 9, color: '#64748b' }}>Duration:</span>
+                            {TEMP_OPTS.map(o => (
+                              <button key={o.h} onClick={() => setTempDaysPicker(p => p ? { ...p, days: o.h } : null)}
+                                style={{ fontSize: 9, padding: '2px 5px', background: tempDaysPicker.days === o.h ? '#7c3aed' : '#1e293b', color: tempDaysPicker.days === o.h ? '#fff' : '#64748b', border: '1px solid #334155', borderRadius: 3, cursor: 'pointer' }}>
+                                {o.l}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button style={S.btnSm('approve')} onClick={() => changeUserRole(u.id, 'temp_admin', tempDaysPicker.days)}>
+                              Set {fmtTempLabel(tempDaysPicker.days)}
+                            </button>
+                            <button style={S.btnSm('neutral')} onClick={() => setTempDaysPicker(null)}>✕</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          style={S.select}
+                          value={u.role}
+                          onChange={e => {
+                            if (e.target.value === 'temp_admin') {
+                              setTempDaysPicker({ userId: u.id, days: 24 })
+                            } else {
+                              changeUserRole(u.id, e.target.value)
+                            }
+                          }}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="viewer">Viewer</option>
+                          <option value="planner">Planner</option>
+                          <option value="temp_admin">Temp Admin</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      )}
+                    </td>
+                    <td style={S.td}>
+                      <button
+                        style={S.btnSm(u.is_active ? 'deny' : 'approve')}
+                        onClick={() => toggleUserActive(u.id, !u.is_active)}
+                      >
+                        {u.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+      )}
+
+      {/* ── AI Chats ── */}
+      {tab === 'aichats' && (
+        aiChats.length === 0
+          ? <div style={S.empty}>{loading ? 'Loading…' : 'No AI assistant conversations yet.'}</div>
+          : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ ...S.sectionHead, marginTop: 0 }}>
+                User questions to the AI assistant — review to improve the app or documentation.
+              </p>
+              {aiChats.map(c => (
+                <div key={c.id} style={{
+                  background: '#0f172a', border: '1px solid #1e293b',
+                  borderRadius: 8, overflow: 'hidden',
+                }}>
+                  {/* Header row */}
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', cursor: 'pointer',
+                      borderBottom: expandedChat === c.id ? '1px solid #1e293b' : 'none',
+                    }}
+                    onClick={() => setExpandedChat(expandedChat === c.id ? null : c.id)}
+                  >
+                    <span style={S.badge(c.user_role)}>{c.user_role}</span>
+                    <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: 12 }}>{c.user_name}</span>
+                    <span style={{ color: '#475569', fontSize: 11 }}>{c.user_email}</span>
+                    <span style={{ marginLeft: 'auto', color: '#38bdf8', fontSize: 12, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Q: {c.question}
+                    </span>
+                    <span style={{ color: '#334155', fontSize: 11, flexShrink: 0 }}>{c.created_at?.slice(0, 16).replace('T', ' ')}</span>
+                    <span style={{ color: '#475569', fontSize: 12 }}>{expandedChat === c.id ? '▲' : '▼'}</span>
+                  </div>
+                  {/* Expanded Q&A */}
+                  {expandedChat === c.id && (
+                    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ background: '#1e293b', borderRadius: 6, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: '.06em', marginBottom: 4 }}>USER ASKED</div>
+                        <div style={{ fontSize: 12.5, color: '#e0f2fe', lineHeight: 1.6 }}>{c.question}</div>
+                      </div>
+                      <div style={{ background: '#0c1628', borderRadius: 6, padding: '10px 12px', border: '1px solid #1e3a5f' }}>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: '.06em', marginBottom: 4 }}>ASSISTANT REPLIED</div>
+                        <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{c.answer}</div>
+                      </div>
+
+                      {/* Notify user section */}
+                      {notifSent === c.id ? (
+                        <div style={{ background: 'rgba(52,211,153,.1)', border: '1px solid rgba(52,211,153,.3)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#34d399' }}>
+                          ✓ Notification sent to {c.user_name}
+                        </div>
+                      ) : notifyingChat === c.id ? (
+                        <div style={{ background: '#0f172a', borderRadius: 6, padding: '10px 12px', border: '1px solid #334155' }}>
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+                            Send notification to <strong style={{ color: '#94a3b8' }}>{c.user_name}</strong>:
+                          </div>
+                          <textarea
+                            rows={3}
+                            value={notifMsg}
+                            onChange={e => setNotifMsg(e.target.value)}
+                            placeholder="e.g. We've addressed your question — the fill rate feature has been updated..."
+                            style={{
+                              width: '100%', background: '#1e293b', border: '1px solid #334155',
+                              borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '8px 10px',
+                              resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button
+                              onClick={() => sendNotification(c)}
+                              disabled={notifSending || !notifMsg.trim()}
+                              style={{
+                                background: '#1d4ed8', border: 'none', borderRadius: 5,
+                                color: '#fff', fontSize: 11, fontWeight: 600, padding: '6px 14px',
+                                cursor: notifSending ? 'wait' : 'pointer', opacity: !notifMsg.trim() ? 0.5 : 1,
+                              }}
+                            >
+                              {notifSending ? 'Sending…' : '📤 Send Notification'}
+                            </button>
+                            <button
+                              onClick={() => { setNotifyingChat(null); setNotifMsg('') }}
+                              style={{ background: 'none', border: '1px solid #334155', borderRadius: 5, color: '#64748b', fontSize: 11, padding: '6px 12px', cursor: 'pointer' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setNotifyingChat(c.id); setExpandedChat(c.id) }}
+                          style={{
+                            alignSelf: 'flex-start', background: 'rgba(99,102,241,.15)',
+                            border: '1px solid rgba(99,102,241,.4)', borderRadius: 6,
+                            color: '#818cf8', fontSize: 11, fontWeight: 600,
+                            padding: '6px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          🔔 Notify User — Problem Addressed
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+      )}
+
+      {/* ── Logs ── */}
+      {tab === 'logs' && (
+        logs.length === 0
+          ? <div style={S.empty}>{loading ? 'Loading…' : 'No activity yet.'}</div>
+          : (
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>User</th>
+                  <th style={S.th}>Action</th>
+                  <th style={S.th}>Details</th>
+                  <th style={S.th}>IP</th>
+                  <th style={S.th}>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(l => (
+                  <tr key={l.id}>
+                    <td style={S.td}><span style={{ color: '#94a3b8' }}>{l.user_email}</span></td>
+                    <td style={S.td}>
+                      <code style={{ fontSize: 11, color: '#7dd3fc', background: '#0f172a', padding: '2px 6px', borderRadius: 3 }}>
+                        {l.action}
+                      </code>
+                    </td>
+                    <td style={S.td}><span style={{ color: '#475569', fontSize: 11 }}>{l.details || '—'}</span></td>
+                    <td style={S.td}><span style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>{l.ip_address || '—'}</span></td>
+                    <td style={S.td}><span style={{ color: '#334155' }}>{l.created_at?.slice(0, 16).replace('T', ' ')}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+      )}
+    </div>
+  )
+}

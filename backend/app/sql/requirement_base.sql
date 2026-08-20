@@ -1,0 +1,53 @@
+-- requirement_base.sql
+-- Source: CK_A2166.V_MC_REQ_APPS  (MC-level requirement — Oracle reference)
+-- This is the Oracle-computed requirement used for reconciliation validation.
+-- Python calculation engine results are compared against this.
+-- Bind variables: none (filter in Python after fetch)
+
+SELECT
+    LOCATION,
+    STORE_STATUS,
+    OPENING_DATE,
+    STORE_TAG,
+    VM_FILTER,
+    STORE_GRADE,
+    STORE_NAME,
+    CLUSTER_TYPE,
+    ZONE,
+    ATTRIBUTE1,
+    DIVISION,
+    SECTION,
+    DEPARTMENT,
+    DISPLAY_TYPE,
+    MC_LISTING,
+    NVL(MC_STR,          0) AS MC_STR,
+    NVL(PBS,             0) AS PBS,
+    NVL(PBS_FILL,        0) AS PBS_FILL,
+    NVL(PBS_ACHV,        0) AS PBS_ACHV,
+    NVL(FRESH_TTL_STK_Q, 0) AS FRESH_TTL_STK_Q,
+    NVL(TTL_25_STK_Q,    0) AS TTL_25_STK_Q,
+    NVL(OLD_TTL_STK_Q,   0) AS OLD_TTL_STK_Q,
+    NVL(MDQ,             0) AS MDQ,
+    NVL(LM_SL_Q,         0) AS LM_SL_Q,
+    NVL(MTD_SL_Q,        0) AS MTD_SL_Q,
+    NVL(ADJ_TTL_STK_Q,   0) AS ADJ_TTL_STK_Q,
+    NVL(TTL_STK_Q,       0) AS TTL_STK_Q,
+    NVL(STK_Q,           0) AS STK_Q,
+    NVL(INTR_Q,          0) AS INTR_Q,
+    NVL(PRD_Q,           0) AS PRD_Q,
+    NVL(TO_Q,            0) AS TO_Q,
+    NVL(ADJ_STK_Q,       0) AS ADJ_STK_Q,
+    NVL(SL_7D_Q,         0) AS SL_7D_Q,
+    NVL(TGT_Q,           0) AS TGT_Q,
+    NVL(TGT_V,           0) AS TGT_V,
+    NVL(SL_Q,            0) AS SL_Q,
+    NVL(SL_V,            0) AS SL_V,
+    NVL(ACHV_PER,        0) AS ACHV_PER,
+    NVL(USE_ACH,         0) AS USE_ACH,
+    NVL(FNL_PBS,         0) AS FNL_PBS,
+    NVL(REQ,             0) AS REQ,
+    NVL(FILL_RATE,       0) AS FILL_RATE,
+    FILL_RATE_RANK,
+    FILL_RATE_BUCKET,
+    TOP_MC_FILTER
+FROM CK_A2166.V_MC_REQ_APPS

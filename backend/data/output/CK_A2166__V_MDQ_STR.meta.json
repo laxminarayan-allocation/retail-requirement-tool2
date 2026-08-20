@@ -1,0 +1,25 @@
+{
+  "owner": "CK_A2166",
+  "object": "V_MDQ_STR",
+  "rows": 77847,
+  "columns": [
+    "store_name",
+    "division",
+    "department",
+    "attribute1",
+    "display_type",
+    "mdq",
+    "mdq_str_actual",
+    "max_cap",
+    "safety_days",
+    "new_bgt_str",
+    "bgt_mc_str",
+    "ly_sl_q",
+    "month_1",
+    "month_2",
+    "month_3"
+  ],
+  "fetched_at": "2026-08-20T08:05:41.166500+00:00",
+  "fetched_at_ts": 1787213141.1665,
+  "size_bytes": 662167
+}

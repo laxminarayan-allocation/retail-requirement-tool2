@@ -1,0 +1,27 @@
+{
+  "owner": "CK_A2166",
+  "object": "V_DC_STOCK",
+  "rows": 5000,
+  "columns": [
+    "sitecode",
+    "sitealias",
+    "icode",
+    "stockpoint",
+    "division",
+    "section",
+    "department",
+    "article_name",
+    "attribute1",
+    "cat2",
+    "season",
+    "cat",
+    "brand",
+    "stock_v",
+    "stock_qty",
+    "below_10",
+    "age_group"
+  ],
+  "fetched_at": "2026-08-20T08:24:57.652710+00:00",
+  "fetched_at_ts": 1787214297.65271,
+  "size_bytes": 123376
+}

@@ -10,12 +10,21 @@ backend/.env
 frontend/node_modules/
 frontend/dist/
 
-# Data
-data/output/*
-!data/output/.gitkeep
-data/input/*
-!data/input/.gitkeep
+# Data — generated/binary, not version-controlled
+backend/data/output/
+backend/data/input/
+backend/data/*.db
+backend/data/factors.db
+
+# Logs
+backend/*.log
+backend/*.log.err
+backend/*.err
+frontend/server.log
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Git push helper (contains credentials)
+push_to_github.bat

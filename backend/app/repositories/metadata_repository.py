@@ -45,8 +45,10 @@ class MetadataRepository:
         """
         sql = """
             SELECT DISTINCT owner
-            FROM   all_objects
-            WHERE  object_type IN ('TABLE', 'VIEW')
+            FROM   all_tables
+            UNION
+            SELECT DISTINCT owner
+            FROM   all_views
             ORDER BY owner
         """
         with get_connection() as conn:

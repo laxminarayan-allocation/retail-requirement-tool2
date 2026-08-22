@@ -1184,7 +1184,7 @@ function DownloadedFilesPanel() {
                       <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
                       <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <button onClick={() => { setPanelExpanded(false); openWindow(f) }}
+                        <button onClick={() => openWindow(f)}
                           style={{ padding: '3px 9px', background: isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                           {isOpen ? '👁 View ✓' : '👁 View'}
                         </button>
@@ -1217,7 +1217,7 @@ function DownloadedFilesPanel() {
         const btnSt: React.CSSProperties = { width: 24, height: 24, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }
         const { columns, records, loading: wLoading, error, limit, label, rows } = win
         return (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'stretch' }}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'stretch' }}
             onClick={e => { if (e.target === e.currentTarget) setActiveWin(null) }}>
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
             <div style={{ position: 'relative', margin: '28px auto', width: 'min(96vw, 1300px)', background: '#0c1628', border: '1px solid #1e40af55', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.7)', zIndex: 1 }}>

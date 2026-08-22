@@ -1430,6 +1430,7 @@ export default function DatabaseExplorer() {
   const [objectType, setObjectType] = useState<ObjType>('TABLE')
   const [selectedName, setSelectedName] = useState('')
   const [selectedType, setSelectedType] = useState<ObjType>('TABLE')
+  const [mobilePanelTab, setMobilePanelTab] = useState(0)
 
   const handleObjectSelect = (name: string, type: ObjType) => {
     setSelectedName(name)
@@ -1462,42 +1463,73 @@ export default function DatabaseExplorer() {
         <SqlQueryPanel userRole={user?.role ?? ''} />
       </div>
 
-      {/* Three-panel body — flex: 1 but capped so Downloaded Files fits */}
-      <div style={{ display: 'flex', gap: 10, flex: '1 1 0', minHeight: 0 }}>
-        {/* Schemas */}
-        <Card
-          title="Schemas"
-          style={{ width: 200, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
-        >
-          <SchemaPanel selectedSchema={selectedSchema} onSelect={handleSchemaSelect} />
-        </Card>
-
-        {/* Object list */}
-        <Card
-          title={selectedSchema ? `${selectedSchema} — Objects` : 'Objects'}
-          style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-        >
-          <ObjectPanel
-            schema={selectedSchema}
-            objectType={objectType}
-            onObjectTypeChange={t => { setObjectType(t); setSelectedName('') }}
-            onSelect={handleObjectSelect}
-            selectedName={selectedName}
-          />
-        </Card>
-
-        {/* Column detail */}
-        <Card
-          title={selectedName ? `${selectedName} — Columns` : 'Column Detail'}
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-        >
-          <ColumnPanel
-            schema={selectedSchema}
-            name={selectedName}
-            type={selectedType}
-          />
-        </Card>
-      </div>
+      {/* Three-panel body */}
+      {isMobile ? (
+        // Mobile: tab switcher — Schema → Objects → Columns
+        <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Tab bar */}
+          <div style={{ display: 'flex', borderBottom: '1px solid #334155', flexShrink: 0 }}>
+            {(['Schemas', 'Objects', 'Columns'] as const).map((tab, i) => {
+              const active = mobilePanelTab === i
+              return (
+                <button key={tab} onClick={() => setMobilePanelTab(i)} style={{
+                  flex: 1, padding: '8px 4px', fontSize: 11, fontWeight: active ? 700 : 400,
+                  color: active ? '#38bdf8' : '#64748b',
+                  background: 'none', border: 'none', borderBottom: active ? '2px solid #38bdf8' : '2px solid transparent',
+                  cursor: 'pointer',
+                }}>
+                  {tab}
+                  {i === 1 && selectedSchema ? ` (${selectedSchema})` : ''}
+                  {i === 2 && selectedName ? ` ✓` : ''}
+                </button>
+              )
+            })}
+          </div>
+          {/* Panel content */}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {mobilePanelTab === 0 && (
+              <Card title="Schemas" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <SchemaPanel selectedSchema={selectedSchema} onSelect={s => { handleSchemaSelect(s); setMobilePanelTab(1) }} />
+              </Card>
+            )}
+            {mobilePanelTab === 1 && (
+              <Card title={selectedSchema ? `${selectedSchema} — Objects` : 'Objects'} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <ObjectPanel
+                  schema={selectedSchema}
+                  objectType={objectType}
+                  onObjectTypeChange={t => { setObjectType(t); setSelectedName('') }}
+                  onSelect={(n, t) => { handleObjectSelect(n, t); setMobilePanelTab(2) }}
+                  selectedName={selectedName}
+                />
+              </Card>
+            )}
+            {mobilePanelTab === 2 && (
+              <Card title={selectedName ? `${selectedName} — Columns` : 'Column Detail'} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <ColumnPanel schema={selectedSchema} name={selectedName} type={selectedType} />
+              </Card>
+            )}
+          </div>
+        </div>
+      ) : (
+        // Desktop: three panels side by side
+        <div style={{ display: 'flex', gap: 10, flex: '1 1 0', minHeight: 0 }}>
+          <Card title="Schemas" style={{ width: 200, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <SchemaPanel selectedSchema={selectedSchema} onSelect={handleSchemaSelect} />
+          </Card>
+          <Card title={selectedSchema ? `${selectedSchema} — Objects` : 'Objects'} style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <ObjectPanel
+              schema={selectedSchema}
+              objectType={objectType}
+              onObjectTypeChange={t => { setObjectType(t); setSelectedName('') }}
+              onSelect={handleObjectSelect}
+              selectedName={selectedName}
+            />
+          </Card>
+          <Card title={selectedName ? `${selectedName} — Columns` : 'Column Detail'} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <ColumnPanel schema={selectedSchema} name={selectedName} type={selectedType} />
+          </Card>
+        </div>
+      )}
 
       {/* Downloaded Files — full-width panel at bottom */}
       <Card

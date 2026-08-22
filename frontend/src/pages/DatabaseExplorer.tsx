@@ -7,6 +7,16 @@
  *   Right  : column detail for selected object
  */
 import { useEffect, useState, useCallback } from 'react'
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+  return mobile
+}
 import { api } from '@/api/client'
 import http from '@/api/http'
 import { useAuth } from '@/context/AuthContext'
@@ -1142,10 +1152,10 @@ function DownloadedFilesPanel() {
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.6)' }} />
           <div style={{
             position: 'relative',
-            margin: window.innerWidth < 768 ? '0' : '32px auto',
-            width: window.innerWidth < 768 ? '100vw' : 'min(96vw, 1200px)',
-            height: window.innerWidth < 768 ? '100vh' : undefined,
-            borderRadius: window.innerWidth < 768 ? 0 : 12,
+            margin: isMobile ? '0' : '32px auto',
+            width: isMobile ? '100vw' : 'min(96vw, 1200px)',
+            height: isMobile ? '100dvh' : undefined,
+            borderRadius: isMobile ? 0 : 12,
             background: '#0c1628', border: '1px solid #334155',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
             boxShadow: '0 24px 80px rgba(0,0,0,.75)', zIndex: 1,
@@ -1160,8 +1170,8 @@ function DownloadedFilesPanel() {
               <button onClick={() => { setPanelExpanded(false); setFileFilter('') }}
                 style={{ width: 28, height: 28, border: '1px solid #334155', borderRadius: 5, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
             </div>
-            {/* Column headers — hidden on mobile, shown on desktop */}
-            {window.innerWidth >= 768 && (
+            {/* Column headers — hidden on mobile */}
+            {!isMobile && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 100px 340px', gap: 6, padding: '6px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#080f1a' }}>
                 {['TABLE / QUERY', 'ROWS', 'SIZE', 'DOWNLOADED', 'ACTIONS'].map(h => (
                   <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '.07em', textTransform: 'uppercase' }}>{h}</span>
@@ -1182,7 +1192,6 @@ function DownloadedFilesPanel() {
                   const rfLabel: Record<string, string> = { idle: '↻ Refresh', refreshing: '↻…', done: '✓ Done', error: '✕ Failed' }
                   const mdColor: Record<string, string> = { idle: '#38bdf8', adding: '#64748b', done: '#4ade80', exists: '#fbbf24' }
                   const rfColor: Record<string, string> = { idle: '#a78bfa', refreshing: '#64748b', done: '#4ade80', error: '#f87171' }
-                  const isMobile = window.innerWidth < 768
                   return (
                     <div key={rowKey} style={{
                       display: isMobile ? 'flex' : 'grid',
@@ -1194,15 +1203,19 @@ function DownloadedFilesPanel() {
                       borderBottom: '1px solid #1e293b',
                       background: isOpen ? '#0c1a30' : 'transparent',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={`${f.owner}.${f.object}`}>
-                          {f.owner}.{f.object}
-                        </span>
-                        {isMobile && <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>}
-                      </div>
-                      {!isMobile && <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>}
-                      {!isMobile && <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>}
-                      {!isMobile && <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>}
+                      {/* Table name — always visible */}
+                      <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#e2e8f0', wordBreak: 'break-all' as const, fontWeight: 600 }}>
+                        {f.owner}.{f.object}
+                      </span>
+                      {/* Meta info — inline on mobile, separate columns on desktop */}
+                      {isMobile
+                        ? <span style={{ fontSize: 11, color: '#64748b' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>
+                        : <>
+                            <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
+                            <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
+                            <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
+                          </>
+                      }
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' as const }}>
                         <button onClick={() => openWindow(f)}
                           style={{ padding: '5px 12px', background: isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -1402,6 +1415,7 @@ function GlobalSearch({ onSelect }: { onSelect: (owner: string, name: string, ty
 
 export default function DatabaseExplorer() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   const [selectedSchema, setSelectedSchema] = useState('')
   const [objectType, setObjectType] = useState<ObjType>('TABLE')
   const [selectedName, setSelectedName] = useState('')

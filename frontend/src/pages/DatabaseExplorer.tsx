@@ -295,7 +295,7 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
     setLoading(true)
     setError(null)
     const url = `/database/table/${encodeURIComponent(schema)}/${encodeURIComponent(name)}/preview?limit=200${forceRefresh ? '&force_refresh=true' : ''}`
-    http.get(url, { timeout: 120000 })
+    http.get(url, { timeout: 300000 })
       .then(res => {
         const d = res.data
         if (d.success && d.data) {
@@ -641,7 +641,7 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
     http.post('/database/query/export', {
       sql: sql.trim(),
       label: label.trim() || 'custom_query',
-    }, { timeout: 120000 })
+    }, { timeout: 300000 })
       .then(res => {
         const d = res.data
         if (d.success && d.data) setResult(d.data)
@@ -904,7 +904,7 @@ function DownloadedFilesPanel() {
     setRefreshStatus(prev => ({ ...prev, [key]: 'refreshing' }))
     try {
       const url = `/database/table/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}/preview?limit=200&force_refresh=true`
-      await http.get(url, { timeout: 120000 })
+      await http.get(url, { timeout: 300000 })
       setRefreshStatus(prev => ({ ...prev, [key]: 'done' }))
       loadList()
       setTimeout(() => setRefreshStatus(prev => ({ ...prev, [key]: 'idle' })), 3000)

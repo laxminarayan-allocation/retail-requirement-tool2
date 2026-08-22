@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import http from '@/api/http'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -54,6 +54,15 @@ interface TableKpi {
   articles?: number
   date_from?: string
   date_to?: string
+}
+
+// ── Per-window state ──────────────────────────────────────────────────────────
+
+interface WinState {
+  data: PreviewData | null
+  loading: boolean
+  error: string | null
+  limit: number
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -771,17 +780,20 @@ export default function MasterData() {
   const [kpis, setKpis]           = useState<Record<string, TableKpi | null>>({})
   const [customTables, setCustomTables] = useState<CustomTable[]>([])
 
-  const [activeKey, setActiveKey]       = useState<TableKey | null>(null)
-  const [vizKey, setVizKey]             = useState<TableKey | null>(null)
-  const [preview, setPreview]           = useState<PreviewData | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [previewLimit, setPreviewLimit] = useState(200)
-  const [refreshing, setRefreshing]     = useState(false)   // background Oracle download in progress
+  const [vizKey, setVizKey]         = useState<TableKey | null>(null)
+  const [wins, setWins]             = useState<Record<string, WinState>>({})
+  const [activeWin, setActiveWin]   = useState<string | null>(null)
+  const [refreshingWin, setRefreshingWin] = useState<string | null>(null)
 
   useEffect(() => {
     TABLE_KEYS.forEach(k => { loadStatus(k); loadKpi(k) })
     loadCustomTables()
+  }, [])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setActiveWin(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   async function loadStatus(key: TableKey) {
@@ -826,83 +838,85 @@ export default function MasterData() {
     await http.delete(`/master/custom/${id}`)
     setCustomTables(p => p.filter(t => t.id !== id))
     setStatuses(p => { const n = { ...p }; delete n[id]; return n })
-    if (activeKey === id) { setActiveKey(null); setPreview(null) }
+    setWins(p => { const n = { ...p }; delete n[id]; return n })
+    if (activeWin === id) setActiveWin(null)
   }
 
   const isCustom = (key: TableKey) => !TABLE_KEYS.includes(key as 'sales' | 'stock' | 'mdq')
 
-  const loadPreview = useCallback(async (key: TableKey, forceRefresh = false) => {
-    setPreviewLoading(true)
-    setPreviewError(null)
+  async function loadWinPreview(key: string, forceRefresh: boolean, limit: number) {
+    setWins(p => ({ ...p, [key]: { ...(p[key] ?? { data: null, error: null, limit }), loading: true, error: null } }))
     try {
       const url = isCustom(key)
-        ? `/master/custom/${key}/preview?limit=${previewLimit}&force_refresh=${forceRefresh}`
-        : `/master/table/${key}/preview?limit=${previewLimit}&force_refresh=${forceRefresh}`
+        ? `/master/custom/${key}/preview?limit=${limit}&force_refresh=${forceRefresh}`
+        : `/master/table/${key}/preview?limit=${limit}&force_refresh=${forceRefresh}`
       const res = await http.get(url, { timeout: 180_000 })
       if (res.data.success) {
-        setPreview({ ...res.data.data, key })
+        setWins(p => ({ ...p, [key]: { ...p[key], data: { ...res.data.data, key }, loading: false } }))
         if (forceRefresh || !statuses[key]?.exists) {
           isCustom(key) ? loadCustomStatus(key) : loadStatus(key as 'sales' | 'stock' | 'mdq')
         }
       } else {
-        setPreviewError(res.data.message || 'Server returned an error.')
+        setWins(p => ({ ...p, [key]: { ...p[key], loading: false, error: res.data.message || 'Server returned an error.' } }))
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail
         || (err as { response?: { data?: { message?: string } } })?.response?.data?.message
         || (err as { message?: string })?.message || 'Request failed.'
-      setPreviewError(msg)
-    } finally {
-      setPreviewLoading(false)
+      setWins(p => ({ ...p, [key]: { ...p[key], loading: false, error: msg } }))
     }
-  }, [previewLimit, statuses])
+  }
 
   async function handleRefresh(key: TableKey) {
-    setActiveKey(key)
-    setPreviewError(null)
-    setRefreshing(true)
+    const limit = wins[key]?.limit ?? statuses[key]?.rows ?? 200
+    if (!wins[key]) setWins(p => ({ ...p, [key]: { data: null, loading: false, error: null, limit } }))
+    setActiveWin(key)
+    setRefreshingWin(key)
 
-    // If there's existing cached data, load it immediately so user can see it
-    const exists = statuses[key]?.exists
-    if (exists && preview?.key !== key) {
-      // Load cached preview without force_refresh (non-blocking display)
-      const url = isCustom(key)
-        ? `/master/custom/${key}/preview?limit=${previewLimit}&force_refresh=false`
-        : `/master/table/${key}/preview?limit=${previewLimit}&force_refresh=false`
-      http.get(url, { timeout: 30_000 }).then(res => {
-        if (res.data.success) setPreview({ ...res.data.data, key })
-      }).catch(() => { /* ignore — will show after refresh anyway */ })
+    if (!wins[key]?.data && statuses[key]?.exists) {
+      const cachedUrl = isCustom(key)
+        ? `/master/custom/${key}/preview?limit=${limit}&force_refresh=false`
+        : `/master/table/${key}/preview?limit=${limit}&force_refresh=false`
+      http.get(cachedUrl, { timeout: 30_000 }).then(res => {
+        if (res.data.success) setWins(p => ({ ...p, [key]: { ...p[key], data: { ...res.data.data, key } } }))
+      }).catch(() => {})
     }
 
-    // Now do the actual Oracle refresh in foreground (but with cached data already visible)
     try {
       const url = isCustom(key)
-        ? `/master/custom/${key}/preview?limit=${previewLimit}&force_refresh=true`
-        : `/master/table/${key}/preview?limit=${previewLimit}&force_refresh=true`
+        ? `/master/custom/${key}/preview?limit=${limit}&force_refresh=true`
+        : `/master/table/${key}/preview?limit=${limit}&force_refresh=true`
       const res = await http.get(url, { timeout: 180_000 })
       if (res.data.success) {
-        setPreview({ ...res.data.data, key })
+        setWins(p => ({ ...p, [key]: { ...p[key], data: { ...res.data.data, key }, error: null } }))
         isCustom(key) ? loadCustomStatus(key) : loadStatus(key as 'sales' | 'stock' | 'mdq')
       } else {
-        setPreviewError(res.data.message || 'Refresh failed.')
+        setWins(p => ({ ...p, [key]: { ...p[key], error: res.data.message || 'Refresh failed.' } }))
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail
         || (err as { response?: { data?: { message?: string } } })?.response?.data?.message
         || (err as { message?: string })?.message || 'Refresh failed.'
-      setPreviewError(msg)
+      setWins(p => ({ ...p, [key]: { ...p[key], error: msg } }))
     } finally {
-      setRefreshing(false)
+      setRefreshingWin(null)
     }
     if (!isCustom(key)) loadKpi(key)
   }
 
-  async function handlePreview(key: TableKey) {
-    if (activeKey === key && preview?.key === key) {
-      setActiveKey(null); setPreview(null); setPreviewError(null); return
+  async function openWindow(key: string) {
+    if (activeWin === key) { setActiveWin(null); return }
+    setActiveWin(key)
+    if (!wins[key]) {
+      const limit = statuses[key]?.rows ?? 200
+      setWins(p => ({ ...p, [key]: { data: null, loading: false, error: null, limit } }))
+      await loadWinPreview(key, false, limit)
     }
-    setActiveKey(key); setPreview(null); setPreviewError(null)
-    await loadPreview(key, false)
+  }
+
+  function closeWindow(key: string) {
+    setWins(p => { const n = { ...p }; delete n[key]; return n })
+    if (activeWin === key) setActiveWin(null)
   }
 
   function handleViz(key: TableKey) {
@@ -1229,7 +1243,7 @@ export default function MasterData() {
                 const { id, isCustom: ic, name, schema, view, desc, color, status: st, loading, kpi, ct, pqOwner, pqName } = row
                 const exists  = st?.exists ?? false
                 const stale   = st?.stale ?? false
-                const isActive = activeKey === id
+                const isActive = !!wins[id]
 
                 function renderCell(col: ColKey) {
                   switch (col) {
@@ -1284,8 +1298,8 @@ export default function MasterData() {
                             {exists ? 'Refresh' : 'Download'}
                           </ActionBtn>
                           {exists && (
-                            <ActionBtn onClick={() => handlePreview(id)}>
-                              {isActive ? 'Close' : 'View'}
+                            <ActionBtn onClick={() => openWindow(id)}>
+                              {activeWin === id ? 'Close' : wins[id] ? 'View ✓' : 'View'}
                             </ActionBtn>
                           )}
                           {exists && (
@@ -1375,77 +1389,122 @@ export default function MasterData() {
         )
       })()}
 
-      {/* Preview panel */}
-      {activeKey && (
-        <div style={{
-          flex: '1 1 0', minHeight: 0,
-          background: '#1e293b',
-          border: `1px solid ${isCustom(activeKey) ? '#f59e0b' : (TABLE_META[activeKey]?.color ?? '#f59e0b')}40`,
-          borderRadius: 10, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        }}>
-          {/* Preview header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #334155', flexShrink: 0, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: isCustom(activeKey) ? '#f59e0b' : TABLE_META[activeKey]?.color }}>
-              {preview?.label ?? activeKey.toUpperCase()} — Preview
-            </span>
-            {preview && (
-              <>
-                <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>{preview.oracle_view}</span>
-                <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: preview.served_from === 'oracle' ? '#052e16' : '#0f172a', color: preview.served_from === 'oracle' ? '#4ade80' : '#64748b', border: `1px solid ${preview.served_from === 'oracle' ? '#166534' : '#334155'}` }}>
-                  {preview.served_from === 'oracle' ? '⚡ fresh from Oracle' : '💾 from local file'}
+
+      {/* Active full-screen modal */}
+      {activeWin && wins[activeWin] && (() => {
+        const key   = activeWin
+        const win   = wins[key]
+        const accent = isCustom(key) ? '#f59e0b' : (TABLE_META[key]?.color ?? '#38bdf8')
+        const isRefreshing = refreshingWin === key
+        const winBtnSt: React.CSSProperties = { width: 26, height: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
+        const { data, loading, error, limit } = win
+
+        return (
+          <div onClick={e => { if (e.target === e.currentTarget) setActiveWin(null) }}
+            style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(2,8,20,0.72)' }}>
+            <div style={{ width: 'min(93vw, 1340px)', height: 'min(86vh, 880px)', background: '#131e30', border: `1.5px solid ${accent}55`, borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 32px 64px rgba(0,0,0,.85)' }}>
+
+              {/* header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0f1827', flexWrap: 'wrap' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: accent, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: accent, whiteSpace: 'nowrap' }}>
+                  {data?.label ?? key.toUpperCase()}
                 </span>
-                <span style={{ fontSize: 10, color: preview.stale ? '#fbbf24' : '#64748b' }}>{preview.age_label}</span>
-                <span style={{ fontSize: 10, color: '#475569' }}>{preview.rows_in_file.toLocaleString()} rows in file</span>
-              </>
-            )}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ fontSize: 11, color: '#64748b' }}>Show</label>
-              <select value={previewLimit} onChange={e => setPreviewLimit(Number(e.target.value))}
-                style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '3px 6px' }}>
-                {[100, 200, 500, 1000, 2000].map(n => <option key={n} value={n}>{n} rows</option>)}
-              </select>
-              <button onClick={() => loadPreview(activeKey, false)}
-                style={{ padding: '4px 10px', background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                ↻ Reload
-              </button>
-              <button onClick={() => { setActiveKey(null); setPreview(null) }}
-                style={{ padding: '4px 8px', background: 'none', color: '#475569', border: 'none', cursor: 'pointer', fontSize: 13 }}>✕</button>
-            </div>
-          </div>
-
-          {/* Stale warning */}
-          {preview?.stale && !previewLoading && !refreshing && (
-            <div style={{ flexShrink: 0, margin: '0 14px', padding: '6px 10px', background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.3)', borderRadius: 6, fontSize: 11, color: '#fcd34d' }}>
-              ⚠️ File is <strong>{preview.age_label}</strong> — older than {preview.stale_hours >= 24 ? `${preview.stale_hours / 24}d` : `${preview.stale_hours}hr`} threshold. Refresh for accurate data.
-            </div>
-          )}
-
-          {/* Background refresh banner */}
-          {refreshing && (
-            <div style={{ flexShrink: 0, margin: '0 14px', padding: '7px 12px', background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.25)', borderRadius: 6, fontSize: 11, color: '#7dd3fc', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <style>{`@keyframes md-spin { to { transform: rotate(360deg) } }`}</style>
-              <span style={{ animation: 'md-spin 1.2s linear infinite', display: 'inline-block', fontSize: 13 }}>↻</span>
-              Downloading fresh data from Oracle…
-              {preview && <span style={{ color: '#475569', marginLeft: 4 }}>Showing cached data ({preview.age_label} old) while updating.</span>}
-            </div>
-          )}
-
-          {/* Grid / error */}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            {previewError ? (
-              <div style={{ padding: 32, textAlign: 'center' }}>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>⚠️</div>
-                <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Failed to load data</div>
-                <div style={{ color: '#64748b', fontSize: 12, maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>{previewError}</div>
-                <button onClick={() => loadPreview(activeKey!, false)}
-                  style={{ marginTop: 16, padding: '7px 20px', background: '#1e3a5f', border: '1px solid #334155', borderRadius: 6, color: '#7dd3fc', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  ↻ Retry
-                </button>
+                {data && (
+                  <>
+                    <span style={{ fontSize: 10, color: '#334155' }}>—</span>
+                    <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{data.oracle_view}</span>
+                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: data.served_from === 'oracle' ? '#052e16' : '#0f172a', color: data.served_from === 'oracle' ? '#4ade80' : '#64748b', border: `1px solid ${data.served_from === 'oracle' ? '#166534' : '#334155'}` }}>
+                      {data.served_from === 'oracle' ? '⚡ fresh' : '💾 cache'}
+                    </span>
+                    <span style={{ fontSize: 10, color: data.stale ? '#fbbf24' : '#64748b', whiteSpace: 'nowrap' }}>{data.age_label}</span>
+                    <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{data.rows_in_file.toLocaleString()} rows · {data.columns.length} cols</span>
+                  </>
+                )}
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <label style={{ fontSize: 11, color: '#475569' }}>Show</label>
+                  <select value={limit} onChange={e => {
+                    const nl = Number(e.target.value)
+                    setWins(p => ({ ...p, [key]: { ...p[key], limit: nl } }))
+                  }} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '3px 6px' }}>
+                    {(() => {
+                      const total = data?.rows_in_file ?? statuses[key]?.rows
+                      const fixed = [100, 200, 500, 1000, 2000]
+                      const opts = total && !fixed.includes(total) ? [...fixed, total].sort((a, b) => a - b) : fixed
+                      return opts.map(n => <option key={n} value={n}>{n === total ? `${n.toLocaleString()} (all)` : `${n}`}</option>)
+                    })()}
+                  </select>
+                  <button onClick={() => loadWinPreview(key, false, limit)}
+                    style={{ padding: '4px 9px', background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #1e40af', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    ↻ Reload
+                  </button>
+                  <button title="Minimize" onClick={() => setActiveWin(null)} style={winBtnSt}>▬</button>
+                  <button title="Close" onClick={() => closeWindow(key)} style={{ ...winBtnSt, color: '#94a3b8' }}>✕</button>
+                </div>
               </div>
-            ) : (
-              <DataGrid records={preview?.records ?? []} columns={preview?.columns ?? []} loading={previewLoading && !refreshing} />
-            )}
+
+              {/* Stale warning */}
+              {data?.stale && !loading && !isRefreshing && (
+                <div style={{ flexShrink: 0, margin: '8px 16px 0', padding: '6px 10px', background: 'rgba(251,191,36,.08)', border: '1px solid rgba(251,191,36,.3)', borderRadius: 6, fontSize: 11, color: '#fcd34d' }}>
+                  ⚠️ File is <strong>{data.age_label}</strong> — older than {data.stale_hours >= 24 ? `${data.stale_hours / 24}d` : `${data.stale_hours}hr`} threshold.
+                </div>
+              )}
+
+              {/* Refresh banner */}
+              {isRefreshing && (
+                <div style={{ flexShrink: 0, margin: '8px 16px 0', padding: '7px 12px', background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.25)', borderRadius: 6, fontSize: 11, color: '#7dd3fc', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <style>{`@keyframes md-spin { to { transform: rotate(360deg) } }`}</style>
+                  <span style={{ animation: 'md-spin 1.2s linear infinite', display: 'inline-block', fontSize: 13 }}>↻</span>
+                  Downloading fresh data from Oracle…
+                  {data && <span style={{ color: '#475569', marginLeft: 4 }}>Showing cached ({data.age_label} old).</span>}
+                </div>
+              )}
+
+              {/* Grid / error */}
+              <div style={{ flex: 1, minHeight: 0 }}>
+                {error ? (
+                  <div style={{ padding: 48, textAlign: 'center' }}>
+                    <div style={{ fontSize: 30, marginBottom: 10 }}>⚠️</div>
+                    <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Failed to load data</div>
+                    <div style={{ color: '#64748b', fontSize: 12, maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>{error}</div>
+                    <button onClick={() => loadWinPreview(key, false, limit)}
+                      style={{ marginTop: 16, padding: '7px 20px', background: '#1e3a5f', border: '1px solid #334155', borderRadius: 6, color: '#7dd3fc', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      ↻ Retry
+                    </button>
+                  </div>
+                ) : (
+                  <DataGrid records={data?.records ?? []} columns={data?.columns ?? []} loading={loading && !isRefreshing} />
+                )}
+              </div>
+            </div>
           </div>
+        )
+      })()}
+
+      {/* Minimized windows taskbar */}
+      {Object.keys(wins).filter(k => k !== activeWin).length > 0 && (
+        <div style={{ position: 'fixed', bottom: 0, right: 16, zIndex: 1001, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+          {Object.keys(wins).filter(k => k !== activeWin).map(key => {
+            const win   = wins[key]
+            const accent = isCustom(key) ? '#f59e0b' : (TABLE_META[key]?.color ?? '#38bdf8')
+            const label  = win.data?.label ?? key.toUpperCase()
+            return (
+              <div key={key}
+                style={{ background: '#131e30', border: `1.5px solid ${accent}55`, borderBottom: 'none', borderRadius: '10px 10px 0 0', boxShadow: '0 -4px 20px rgba(0,0,0,.55)', minWidth: 210, maxWidth: 280, cursor: 'pointer' }}
+                onClick={() => setActiveWin(key)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{label}</span>
+                  {win.data && <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>{win.data.rows_in_file.toLocaleString()} rows</span>}
+                  {win.loading && <span style={{ fontSize: 10, color: '#334155' }}>…</span>}
+                  <button title="Restore" onClick={e => { e.stopPropagation(); setActiveWin(key) }}
+                    style={{ width: 22, height: 22, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
+                  <button title="Close" onClick={e => { e.stopPropagation(); closeWindow(key) }}
+                    style={{ width: 22, height: 22, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

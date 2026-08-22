@@ -154,7 +154,7 @@ export default function AppLayout() {
   const visibleNav = NAV_ITEMS.filter(item => hasRole(user, item.minRole))
 
   return (
-    <div style={styles.shell}>
+    <div style={{ ...styles.shell, ...(isMobile ? { height: 'auto', overflow: 'visible' } : {}) }}>
       <AssistantWidget />
 
       {/* Mobile overlay backdrop */}
@@ -260,7 +260,7 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      <main style={styles.main}>
+      <main style={{ ...styles.main, ...(isMobile ? { overflow: 'visible' } : {}) }}>
         <div style={styles.topbar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {isMobile && (
@@ -276,7 +276,11 @@ export default function AppLayout() {
             <NotificationBell />
           </div>
         </div>
-        <div style={{ ...styles.content, padding: isMobile ? 12 : 24 }}>
+        <div style={{
+          ...styles.content,
+          padding: isMobile ? 12 : 24,
+          ...(isMobile ? { overflowY: 'visible', flex: 'unset' } : {}),
+        }}>
           <Outlet />
         </div>
       </main>

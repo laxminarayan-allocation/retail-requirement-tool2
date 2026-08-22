@@ -357,8 +357,8 @@ export default function NSODashboard() {
       )}
 
       {!loading && data && cols.length > 0 && (
-        <div style={{ ...S.card, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={S.tblWrap}>
+        <div style={{ ...S.card, ...(isMobile ? {} : { flex: 1, minHeight: 0 }), display: 'flex', flexDirection: 'column' }}>
+          <div style={{ ...S.tblWrap, ...(isMobile ? { overflowY: 'visible', flex: 'unset', minHeight: 'unset' } : {}) }}>
             <table style={S.tbl}>
               <thead>
                 <tr>

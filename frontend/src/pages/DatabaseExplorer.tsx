@@ -1029,8 +1029,8 @@ function DownloadedFilesPanel() {
         </div>
       </div>
 
-      {/* Column headers — sticky, outside scroll container */}
-      {files.length > 0 && (
+      {/* Column headers — hidden on mobile */}
+      {files.length > 0 && !isMobile && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 90px 330px', gap: 6, padding: '4px 6px', borderBottom: '1px solid #1e293b', marginBottom: 2, flexShrink: 0, background: '#0f1c2e' }}>
           {[
             { label: 'TABLE / QUERY', color: '#334155' },
@@ -1072,21 +1072,30 @@ function DownloadedFilesPanel() {
 
                 return (
                   <div style={{
-                    display: 'grid', gridTemplateColumns: '1fr 80px 60px 90px 330px',
-                    gap: 6, alignItems: 'center', padding: '5px 6px',
+                    display: isMobile ? 'flex' : 'grid',
+                    gridTemplateColumns: isMobile ? undefined : '1fr 80px 60px 90px 330px',
+                    flexDirection: isMobile ? 'column' as const : undefined,
+                    gap: isMobile ? 5 : 6, alignItems: isMobile ? undefined : 'center',
+                    padding: isMobile ? '10px 8px' : '5px 6px',
                     borderBottom: '1px solid #1e293b',
                     background: isOpen ? '#0c1628' : 'transparent',
                   }}>
-                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    {/* Table name */}
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#e2e8f0', wordBreak: 'break-all' as const, fontWeight: 600 }}
                       title={`${f.owner}.${f.object}`}>
                       {f.owner}.{f.object}
                     </span>
-                    <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
-                    <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
-                    <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
-
+                    {/* Meta info */}
+                    {isMobile
+                      ? <span style={{ fontSize: 11, color: '#64748b' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>
+                      : <>
+                          <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
+                          <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
+                          <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
+                        </>
+                    }
                     {/* Actions row */}
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' as const }}>
                       {/* View */}
                       <button onClick={() => openWindow(f)}
                         style={{ padding: '3px 9px', background: activeWin === key ? '#0c4a6e' : isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>

@@ -1140,27 +1140,34 @@ function DownloadedFilesPanel() {
         <div style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'stretch' }}
           onClick={e => { if (e.target === e.currentTarget) setPanelExpanded(false) }}>
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.6)' }} />
-          <div style={{ position: 'relative', margin: '32px auto', width: 'min(96vw, 1200px)', background: '#0c1628', border: '1px solid #334155', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.75)', zIndex: 1 }}>
+          <div style={{
+            position: 'relative',
+            margin: window.innerWidth < 768 ? '0' : '32px auto',
+            width: window.innerWidth < 768 ? '100vw' : 'min(96vw, 1200px)',
+            height: window.innerWidth < 768 ? '100vh' : undefined,
+            borderRadius: window.innerWidth < 768 ? 0 : 12,
+            background: '#0c1628', border: '1px solid #334155',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 24px 80px rgba(0,0,0,.75)', zIndex: 1,
+          }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0a1220' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>📁 Downloaded Files</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0a1220', flexWrap: 'wrap' as const }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>📁 Downloaded Files</span>
               <span style={{ fontSize: 11, color: '#475569' }}>{files.length} files</span>
-              {/* Search */}
               <input value={fileFilter} onChange={e => setFileFilter(e.target.value)}
                 placeholder="🔍 Search table name…"
-                style={{ marginLeft: 12, flex: 1, maxWidth: 340, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px', outline: 'none' }} />
-              <span style={{ fontSize: 11, color: '#475569', marginLeft: 4 }}>
-                {fileFilter ? `${files.filter(f => `${f.owner}.${f.object}`.toLowerCase().includes(fileFilter.toLowerCase())).length} match` : ''}
-              </span>
+                style={{ flex: 1, minWidth: 120, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px', outline: 'none' }} />
               <button onClick={() => { setPanelExpanded(false); setFileFilter('') }}
-                style={{ marginLeft: 'auto', width: 26, height: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                style={{ width: 28, height: 28, border: '1px solid #334155', borderRadius: 5, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
             </div>
-            {/* Column headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 100px 340px', gap: 6, padding: '6px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#080f1a' }}>
-              {['TABLE / QUERY', 'ROWS', 'SIZE', 'DOWNLOADED', 'ACTIONS'].map(h => (
-                <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '.07em', textTransform: 'uppercase' }}>{h}</span>
-              ))}
-            </div>
+            {/* Column headers — hidden on mobile, shown on desktop */}
+            {window.innerWidth >= 768 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 100px 340px', gap: 6, padding: '6px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#080f1a' }}>
+                {['TABLE / QUERY', 'ROWS', 'SIZE', 'DOWNLOADED', 'ACTIONS'].map(h => (
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '.07em', textTransform: 'uppercase' }}>{h}</span>
+                ))}
+              </div>
+            )}
             {/* File list */}
             <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
               {files
@@ -1175,27 +1182,40 @@ function DownloadedFilesPanel() {
                   const rfLabel: Record<string, string> = { idle: '↻ Refresh', refreshing: '↻…', done: '✓ Done', error: '✕ Failed' }
                   const mdColor: Record<string, string> = { idle: '#38bdf8', adding: '#64748b', done: '#4ade80', exists: '#fbbf24' }
                   const rfColor: Record<string, string> = { idle: '#a78bfa', refreshing: '#64748b', done: '#4ade80', error: '#f87171' }
+                  const isMobile = window.innerWidth < 768
                   return (
-                    <div key={rowKey} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 100px 340px', gap: 6, alignItems: 'center', padding: '6px 16px', borderBottom: '1px solid #1e293b', background: isOpen ? '#0c1a30' : 'transparent' }}>
-                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${f.owner}.${f.object}`}>
-                        {f.owner}.{f.object}
-                      </span>
-                      <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
-                      <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <div key={rowKey} style={{
+                      display: isMobile ? 'flex' : 'grid',
+                      gridTemplateColumns: isMobile ? undefined : '1fr 90px 70px 100px 340px',
+                      flexDirection: isMobile ? 'column' as const : undefined,
+                      gap: isMobile ? 6 : 6,
+                      alignItems: isMobile ? undefined : 'center',
+                      padding: isMobile ? '10px 14px' : '6px 16px',
+                      borderBottom: '1px solid #1e293b',
+                      background: isOpen ? '#0c1a30' : 'transparent',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={`${f.owner}.${f.object}`}>
+                          {f.owner}.{f.object}
+                        </span>
+                        {isMobile && <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>}
+                      </div>
+                      {!isMobile && <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>}
+                      {!isMobile && <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>}
+                      {!isMobile && <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>}
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' as const }}>
                         <button onClick={() => openWindow(f)}
-                          style={{ padding: '3px 9px', background: isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          style={{ padding: '5px 12px', background: isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                           {isOpen ? '👁 View ✓' : '👁 View'}
                         </button>
                         <button onClick={() => downloadCsv(f.owner, f.object)}
-                          style={{ padding: '3px 9px', background: '#14532d', color: '#4ade80', border: '1px solid #166534', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>⬇ CSV</button>
+                          style={{ padding: '5px 12px', background: '#14532d', color: '#4ade80', border: '1px solid #166534', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>⬇ CSV</button>
                         <button onClick={() => addToMasterData(f.owner, f.object)} disabled={mdSt === 'adding' || mdSt === 'done'}
-                          style={{ padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', cursor: (mdSt === 'adding' || mdSt === 'done') ? 'default' : 'pointer', color: mdColor[mdSt], background: 'transparent', border: `1px solid ${mdColor[mdSt]}33` }}>
+                          style={{ padding: '5px 12px', borderRadius: 4, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', cursor: (mdSt === 'adding' || mdSt === 'done') ? 'default' : 'pointer', color: mdColor[mdSt], background: 'transparent', border: `1px solid ${mdColor[mdSt]}33` }}>
                           {mdLabel[mdSt]}
                         </button>
                         <button onClick={() => refreshFile(f.owner, f.object)} disabled={rfSt === 'refreshing'}
-                          style={{ padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', cursor: rfSt === 'refreshing' ? 'default' : 'pointer', color: rfColor[rfSt], background: 'transparent', border: `1px solid ${rfColor[rfSt]}44` }}>
+                          style={{ padding: '5px 12px', borderRadius: 4, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', cursor: rfSt === 'refreshing' ? 'default' : 'pointer', color: rfColor[rfSt], background: 'transparent', border: `1px solid ${rfColor[rfSt]}44` }}>
                           {rfLabel[rfSt]}
                         </button>
                         <button onClick={() => removeFile(f.owner, f.object)} disabled={rmSt === 'removing'}

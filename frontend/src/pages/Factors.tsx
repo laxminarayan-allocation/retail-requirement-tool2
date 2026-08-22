@@ -1290,6 +1290,7 @@ function BCVarsPanel({ setId, config, onRefresh }: { setId: string; config: Fact
 type DetailTab = 'config' | 'grades' | 'divisions' | 'mcvars' | 'bcvars' | 'deepdive'
 
 function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: () => void; onDelete: () => void }) {
+  const isMobile = useIsMobile()
   const [tab, setTab] = useState<DetailTab>('config')
   const [activating, setActivating] = useState(false)
   const [cloning, setCloning] = useState(false)
@@ -1322,7 +1323,7 @@ function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: ()
   const tabStyle = (t: DetailTab): React.CSSProperties => ({
     background: 'transparent', border: 'none',
     borderBottom: `2px solid ${tab === t ? C.blue : 'transparent'}`,
-    padding: '9px 14px', fontSize: 12, fontWeight: tab === t ? 600 : 500,
+    padding: isMobile ? '8px 8px' : '9px 14px', fontSize: isMobile ? 11 : 12, fontWeight: tab === t ? 600 : 500,
     color: tab === t ? C.blue : C.text3, cursor: 'pointer', whiteSpace: 'nowrap',
     display: 'flex', alignItems: 'center', gap: 5,
   })
@@ -1382,24 +1383,18 @@ function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: ()
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', padding: '0 20px', background: C.surf1, borderBottom: `1px solid ${C.border2}` }}>
-        <button style={tabStyle('config')} onClick={() => setTab('config')}>⚙ Global Config</button>
+      {/* Tabs — horizontally scrollable on mobile */}
+      <div style={{ display: 'flex', padding: '0 8px', background: C.surf1, borderBottom: `1px solid ${C.border2}`, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as unknown as undefined, flexShrink: 0 }}>
+        <button style={tabStyle('config')} onClick={() => setTab('config')}>⚙ Config</button>
         <button style={tabStyle('grades')} onClick={() => setTab('grades')}>
-          Grade Factors {countBadge(fs.grade_factors.length)}
+          Grades {countBadge(fs.grade_factors.length)}
         </button>
         <button style={tabStyle('divisions')} onClick={() => setTab('divisions')}>
-          Division Factors {countBadge(fs.division_factors.length)}
+          Divisions {countBadge(fs.division_factors.length)}
         </button>
-        <button style={tabStyle('mcvars')} onClick={() => setTab('mcvars')}>
-          📐 MC Variables
-        </button>
-        <button style={tabStyle('bcvars')} onClick={() => setTab('bcvars')}>
-          📦 BC Variables
-        </button>
-        <button style={tabStyle('deepdive')} onClick={() => setTab('deepdive')}>
-          🔬 View Logic
-        </button>
+        <button style={tabStyle('mcvars')} onClick={() => setTab('mcvars')}>📐 MC Vars</button>
+        <button style={tabStyle('bcvars')} onClick={() => setTab('bcvars')}>📦 BC Vars</button>
+        <button style={tabStyle('deepdive')} onClick={() => setTab('deepdive')}>🔬 Logic</button>
       </div>
 
       {/* Tab content */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 
 function useIsMobile() {
@@ -86,11 +86,13 @@ export default function SaleDashboard() {
   const [selStatus,setSelStatus]      = useState('')
   const [storeSearch, setStoreSearch] = useState('')
   const [loading, setLoading]         = useState(false)
+  const [fetching, setFetching]       = useState(false)  // Oracle BG thread running
   const [cacheInfo, setCacheInfo]     = useState<{ total: number; elapsed: number; from: string } | null>(null)
   const [page, setPage]               = useState(1)
   const [sortCol, setSortCol]         = useState<string>('')
   const [sortDir, setSortDir]         = useState<1 | -1>(1)
   const [error, setError]             = useState('')
+  const pollRef                       = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── Load filters on mount ──────────────────────────────────────────────────
   useEffect(() => {
@@ -106,8 +108,32 @@ export default function SaleDashboard() {
     }).catch(() => {})
   }, [])
 
-  // ── Load data ──────────────────────────────────────────────────────────────
-  const load = useCallback(async (forceRefresh = false) => {
+  // ── Poll cache-status while background fetch is active ────────────────────
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await axios.get('/api/sale/cache-status')
+        const d = r.data.data
+        if (d.ready) {
+          clearInterval(pollRef.current!); pollRef.current = null
+          setFetching(false)
+          // Cache is ready — load data
+          loadData()
+        } else if (!d.fetching) {
+          // Thread finished but nothing cached (error)
+          clearInterval(pollRef.current!); pollRef.current = null
+          setFetching(false)
+          if (d.error) setError(`Oracle fetch failed: ${d.error}`)
+        }
+      } catch { /* ignore poll errors */ }
+    }, 20000) // poll every 20s
+  }, []) // eslint-disable-line
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  // ── Load data from cache ───────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -118,21 +144,43 @@ export default function SaleDashboard() {
       if (selDiv)      params.division     = selDiv
       if (selStatus)   params.store_status = selStatus
       if (storeSearch) params.store_search = storeSearch
-      if (forceRefresh) params.force_refresh = 'true'
 
-      const r = await axios.get('/api/sale/data', { params, timeout: 300000 })
+      const r = await axios.get('/api/sale/data', { params })
       const d = r.data.data
-      setAllRows(d.rows || [])
-      setCacheInfo({ total: d.total_cached, elapsed: d.elapsed_ms, from: d.served_from })
-      setPage(1)
+      if (d.loading) {
+        // Background fetch started — start polling
+        setFetching(true)
+        startPolling()
+      } else {
+        setAllRows(d.rows || [])
+        setCacheInfo({ total: d.total_cached, elapsed: d.elapsed_ms, from: d.served_from })
+        setPage(1)
+        setFetching(false)
+      }
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || 'Failed to load')
     } finally {
       setLoading(false)
     }
-  }, [selAttr1, selZone, selDist, selDiv, selStatus, storeSearch])
+  }, [selAttr1, selZone, selDist, selDiv, selStatus, storeSearch, startPolling])
 
-  useEffect(() => { load() }, [selAttr1, selZone, selDist, selDiv, selStatus]) // eslint-disable-line
+  const load = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) {
+      setError('')
+      setFetching(true)
+      try {
+        await axios.get('/api/sale/data', { params: { force_refresh: 'true' } })
+        startPolling()
+      } catch (e: any) {
+        setError(e?.response?.data?.message || e?.message || 'Failed to start refresh')
+        setFetching(false)
+      }
+    } else {
+      await loadData()
+    }
+  }, [loadData, startPolling])
+
+  useEffect(() => { loadData() }, [selAttr1, selZone, selDist, selDiv, selStatus]) // eslint-disable-line
 
   // ── Client-side search filter + sort ──────────────────────────────────────
   useEffect(() => {
@@ -258,11 +306,11 @@ export default function SaleDashboard() {
             ⬇ Export CSV
           </button>
           <button
-            style={{ ...S.btn, background: loading ? C.muted : C.accent, color: '#fff', opacity: loading ? 0.7 : 1 }}
+            style={{ ...S.btn, background: (loading || fetching) ? C.muted : C.accent, color: '#fff', opacity: (loading || fetching) ? 0.7 : 1 }}
             onClick={() => load(true)}
-            disabled={loading}
+            disabled={loading || fetching}
           >
-            {loading ? '⏳ Loading…' : '🔄 Refresh Oracle'}
+            {fetching ? '⏳ Fetching…' : loading ? '⏳ Loading…' : '🔄 Refresh Oracle'}
           </button>
         </div>
       </div>
@@ -353,7 +401,7 @@ export default function SaleDashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Store-wise TY vs LY Comparison</span>
         <span style={{ fontSize: 11, color: C.sub }}>
-          {loading ? 'Loading…' : `${rows.length.toLocaleString()} stores · Page ${page} / ${totalPages}`}
+          {fetching ? '⏳ Fetching from Oracle (10–15 min first load)…' : loading ? 'Loading…' : `${rows.length.toLocaleString()} stores · Page ${page} / ${totalPages}`}
         </span>
       </div>
 
@@ -378,8 +426,13 @@ export default function SaleDashboard() {
             </tr>
           </thead>
           <tbody>
-            {loading && !pageRows.length ? (
-              <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>⏳ Fetching data from Oracle…<br /><span style={{ fontSize: 11 }}>First load may take 2–3 minutes</span></td></tr>
+            {fetching ? (
+              <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>
+                ⏳ Fetching all data from Oracle in background…<br />
+                <span style={{ fontSize: 11 }}>First load takes 10–15 min. Page will update automatically.</span>
+              </td></tr>
+            ) : loading && !pageRows.length ? (
+              <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>⏳ Loading…</td></tr>
             ) : !pageRows.length ? (
               <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>No data. Apply filters or refresh Oracle.</td></tr>
             ) : pageRows.map((r, i) => {

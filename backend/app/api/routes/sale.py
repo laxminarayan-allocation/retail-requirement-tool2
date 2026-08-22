@@ -1,19 +1,16 @@
 """
-Store-wise Sale Dashboard — TY vs LY comparison from Oracle views.
+Store-wise Sale Dashboard — TY vs LY from pre-aggregated Oracle base tables.
 
-These views are complex season-period aggregates — full Oracle fetch can take
-10–15 minutes.  We run the fetch in a background thread so the client is never
-blocked.  The frontend polls /api/sale/cache-status until ready, then calls
-/api/sale/data for instant pandas-filtered results from the Parquet cache.
-
-Note: No SALE_DATE / DAY column in these views — TY vs LY comparison via
-SL_V / LM_SL_V columns only.
+T_DAILY_SALE_AMT_TY and T_DAILY_SALE_AMT_LY are the data source.
+A background thread aggregates both to STORE × DATE level (~18s), writes
+two Parquet files, and the frontend polls until ready (typically <30s).
 """
 import logging
 import threading
 import time
 from typing import Optional
 
+import pandas as pd
 from fastapi import APIRouter, Query, HTTPException
 
 from app.models.response_models import APIResponse
@@ -23,23 +20,71 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sale", tags=["Sale Dashboard"])
 
-_SALE_OWNER = "MISRETAIL"
-_SALE_VIEW  = "V_COMPARE_TY_LY_LLY_CONSO"
+_OWNER = "MISRETAIL"
+_TABLE_TY = "T_DAILY_SALE_AMT_TY"
+_TABLE_LY = "T_DAILY_SALE_AMT_LY"
 
-# ── Background fetch state ────────────────────────────────────────────────────
+# Parquet cache keys (store_name re-used as owner/view slug)
+_CACHE_TY = ("MISRETAIL", "SALE_TY_STORE_DATE")
+_CACHE_LY = ("MISRETAIL", "SALE_LY_STORE_DATE")
+
 _fetch_lock   = threading.Lock()
-_fetch_active = False   # True while Oracle thread is running
-_fetch_error  = ""      # last error message if thread failed
+_fetch_active = False
+_fetch_error  = ""
 
-_ALLOWED_VIEWS = {
-    "V_COMPARE_TY_LY_LLY_CONSO",
-    "V_SALE_COMPARE_CONSOLIDATED",
-    "V_STORE_WISE_DAY_SALE",
-    "V_STORE_WISE_DAY_SALE_V1",
-    "V_COMPARE_TY_LY_LLY_DAY_WISE",
-    "V_DAILY_SALE_AMT_TY_LY",
-    "V_DAILY_SALE_FINAL_OUTPUT",
-}
+# Aggregation SQL — store × date × attribute1 level (18s total for both tables)
+_AGG_SQL = """
+    SELECT STORE_NAME, CLUSTER_TYPE, STORE_STATUS, REGION_TYPE, ATTRIBUTE1,
+           TRUNC(BILLDATE) as SALE_DATE,
+           SUM(SL_QTY) as SL_QTY,
+           SUM(SL_V)   as SL_V,
+           SUM(TGT_Q)  as TGT_Q,
+           SUM(TGT_V)  as TGT_V
+    FROM MISRETAIL."{table}"
+    GROUP BY STORE_NAME, CLUSTER_TYPE, STORE_STATUS, REGION_TYPE, ATTRIBUTE1,
+             TRUNC(BILLDATE)
+"""
+
+
+def _do_background_fetch() -> None:
+    global _fetch_active, _fetch_error
+    try:
+        from app.core.parquet_cache import write_cache
+        from app.repositories.base_repository import fetch_df
+
+        logger.info("SALE BG: fetching TY data from %s.%s", _OWNER, _TABLE_TY)
+        t0 = time.perf_counter()
+        with get_connection() as conn:
+            df_ty = fetch_df(conn, _AGG_SQL.format(table=_TABLE_TY), label="SALE_TY")
+        logger.info("SALE BG: TY done — %d rows in %.0fs", len(df_ty), time.perf_counter() - t0)
+
+        logger.info("SALE BG: fetching LY data from %s.%s", _OWNER, _TABLE_LY)
+        t1 = time.perf_counter()
+        with get_connection() as conn:
+            df_ly = fetch_df(conn, _AGG_SQL.format(table=_TABLE_LY), label="SALE_LY")
+        logger.info("SALE BG: LY done — %d rows in %.0fs", len(df_ly), time.perf_counter() - t1)
+
+        write_cache(*_CACHE_TY, df_ty)
+        write_cache(*_CACHE_LY, df_ly)
+        _fetch_error = ""
+        logger.info("SALE BG: cache ready — TY=%d rows, LY=%d rows", len(df_ty), len(df_ly))
+    except Exception as exc:
+        _fetch_error = str(exc)
+        logger.error("SALE BG: fetch failed: %s", exc)
+    finally:
+        with _fetch_lock:
+            _fetch_active = False
+
+
+def _start_fetch_if_idle() -> bool:
+    global _fetch_active
+    with _fetch_lock:
+        if _fetch_active:
+            return False
+        _fetch_active = True
+    t = threading.Thread(target=_do_background_fetch, daemon=True, name="sale-fetch")
+    t.start()
+    return True
 
 
 def _require_oracle():
@@ -47,63 +92,25 @@ def _require_oracle():
         raise HTTPException(status_code=503, detail="Oracle not configured")
 
 
-def _do_background_fetch(owner: str, view_name: str) -> None:
-    """Runs in a daemon thread — fetches full Oracle view into Parquet cache."""
-    global _fetch_active, _fetch_error
-    try:
-        from app.core.parquet_cache import write_cache
-        from app.repositories.base_repository import fetch_df
-        logger.info("SALE BG: starting full fetch of %s.%s", owner, view_name)
-        t0 = time.perf_counter()
-        sql = f'SELECT * FROM "{owner}"."{view_name}"'
-        with get_connection() as conn:
-            df = fetch_df(conn, sql, label=f"SALE_{view_name}")
-        write_cache(owner, view_name, df)
-        elapsed = round((time.perf_counter() - t0))
-        _fetch_error = ""
-        logger.info("SALE BG: cached %d rows for %s in %ds", len(df), view_name, elapsed)
-    except Exception as exc:
-        _fetch_error = str(exc)
-        logger.error("SALE BG: fetch failed for %s: %s", view_name, exc)
-    finally:
-        with _fetch_lock:
-            _fetch_active = False
-
-
-def _start_fetch_if_idle(owner: str, view_name: str) -> bool:
-    """Starts background thread if one is not already running. Returns True if started."""
-    global _fetch_active
-    with _fetch_lock:
-        if _fetch_active:
-            return False
-        _fetch_active = True
-    t = threading.Thread(target=_do_background_fetch, args=(owner, view_name),
-                         daemon=True, name=f"sale-fetch-{view_name}")
-    t.start()
-    return True
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/cache-status", response_model=APIResponse)
-async def get_cache_status(view_name: str = Query(_SALE_VIEW)):
-    """
-    Poll this endpoint to check if the Parquet cache is ready.
-    Returns {ready: bool, fetching: bool, error: str, rows: int}.
-    """
+async def get_cache_status():
+    """Poll to check if Parquet cache is ready."""
     _require_oracle()
-    if view_name not in _ALLOWED_VIEWS:
-        raise HTTPException(status_code=400, detail=f"Unknown view: {view_name}")
     try:
         from app.core.parquet_cache import has_output, get_meta
-        ready = has_output(_SALE_OWNER, view_name)
-        meta  = get_meta(_SALE_OWNER, view_name) if ready else None
+        ty_ready = has_output(*_CACHE_TY)
+        ly_ready = has_output(*_CACHE_LY)
+        ready = ty_ready and ly_ready
+        meta_ty = get_meta(*_CACHE_TY) if ty_ready else {}
+        meta_ly = get_meta(*_CACHE_LY) if ly_ready else {}
         return APIResponse.ok(data={
             "ready":    ready,
             "fetching": _fetch_active,
             "error":    _fetch_error,
-            "rows":     meta.get("rows", 0) if meta else 0,
-            "view":     view_name,
+            "rows_ty":  meta_ty.get("rows", 0),
+            "rows_ly":  meta_ly.get("rows", 0),
         })
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -111,117 +118,156 @@ async def get_cache_status(view_name: str = Query(_SALE_VIEW)):
 
 @router.get("/data", response_model=APIResponse)
 async def get_sale_data(
-    attribute1:    Optional[str] = Query(None),
     cluster_type:  Optional[str] = Query(None),
-    district:      Optional[str] = Query(None),
+    region_type:   Optional[str] = Query(None),
     store_status:  Optional[str] = Query(None),
-    division:      Optional[str] = Query(None),
+    attribute1:    Optional[str] = Query(None),
     store_search:  Optional[str] = Query(None),
-    view_name:     str            = Query(_SALE_VIEW),
-    force_refresh: bool           = Query(False),
-    limit:         int            = Query(10000, ge=1, le=100000),
+    date_from:     Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="YYYY-MM-DD"),
+    force_refresh: bool          = Query(False),
+    limit:         int           = Query(5000, ge=1, le=50000),
 ):
     """
-    Return filtered rows from the sale comparison view.
+    Return store-wise TY vs LY sale comparison.
 
-    If the Parquet cache is not ready:
-    - Starts a background thread to fetch from Oracle (may take 10–15 min)
-    - Returns {loading: true} immediately — poll /api/sale/cache-status
+    Filtered by store attributes and optional date range.
+    Results are aggregated to store × date level — group by STORE_NAME on
+    the frontend for totals.
 
-    Once cached, filters and serves in-memory via pandas (instant).
-    Force_refresh=true re-fetches from Oracle and rebuilds the cache.
+    First call starts a ~20s Oracle background fetch; poll /api/sale/cache-status.
     """
     _require_oracle()
-    if view_name not in _ALLOWED_VIEWS:
-        raise HTTPException(status_code=400, detail=f"Unknown view: {view_name}")
-
     try:
-        t0 = time.perf_counter()
-        from app.core.parquet_cache import has_output, read_cache, write_cache
-        import pandas as pd
+        from app.core.parquet_cache import has_output, read_cache
 
-        # ── Handle force_refresh ───────────────────────────────────────────
         if force_refresh:
-            started = _start_fetch_if_idle(_SALE_OWNER, view_name)
+            _start_fetch_if_idle()
+            return APIResponse.ok(data={"loading": True, "fetching": True,
+                                        "message": "Oracle refresh started"})
+
+        if not (has_output(*_CACHE_TY) and has_output(*_CACHE_LY)):
+            started = _start_fetch_if_idle()
             return APIResponse.ok(data={
-                "loading": True,
-                "fetching": True,
-                "message": "Oracle refresh started in background — poll /api/sale/cache-status",
+                "loading":     True,
+                "fetching":    True,
                 "started_new": started,
+                "message":     "Fetching from Oracle (~20 seconds). Poll /api/sale/cache-status.",
+                "rows": [], "count": 0,
             })
 
-        # ── Serve from cache if ready ──────────────────────────────────────
-        if has_output(_SALE_OWNER, view_name):
-            df = read_cache(_SALE_OWNER, view_name)
-            if df is None:
-                return APIResponse.fail(message="Cache read error — try force_refresh=true")
+        t0 = time.perf_counter()
+        df_ty = read_cache(*_CACHE_TY)
+        df_ly = read_cache(*_CACHE_LY)
+        if df_ty is None or df_ly is None:
+            return APIResponse.fail(message="Cache read error — try force_refresh=true")
 
-            mask = pd.Series([True] * len(df), index=df.index)
-
-            def col(name: str):
-                return next((c for c in df.columns if c.upper() == name.upper()), None)
-
-            if attribute1:
-                c = col("ATTRIBUTE1")
-                if c: mask &= df[c].str.upper() == attribute1.upper()
+        def _mask(df: pd.DataFrame) -> pd.Series:
+            m = pd.Series([True] * len(df), index=df.index)
             if cluster_type:
-                c = col("CLUSTER_TYPE")
-                if c: mask &= df[c].str.upper() == cluster_type.upper()
-            if district:
-                c = col("DISTRICT")
-                if c: mask &= df[c].str.upper() == district.upper()
+                m &= df["cluster_type"].str.upper() == cluster_type.upper()
+            if region_type:
+                m &= df["region_type"].str.upper() == region_type.upper()
             if store_status and store_status != "-":
-                c = col("STORE_STATUS")
-                if c: mask &= df[c] == store_status
-            if division:
-                c = col("DIVISION")
-                if c: mask &= df[c].str.upper() == division.upper()
+                m &= df["store_status"] == store_status
+            if attribute1:
+                m &= df["attribute1"].str.upper() == attribute1.upper()
             if store_search:
-                c = col("STORE_NAME")
-                if c: mask &= df[c].str.upper().str.contains(store_search.upper(), na=False)
+                m &= df["store_name"].str.upper().str.contains(store_search.upper(), na=False)
+            if date_from:
+                m &= pd.to_datetime(df["sale_date"]) >= pd.to_datetime(date_from)
+            if date_to:
+                m &= pd.to_datetime(df["sale_date"]) <= pd.to_datetime(date_to)
+            return m
 
-            filtered = df[mask].head(limit)
-            filtered = filtered.where(filtered.notna(), None)
-            elapsed  = round((time.perf_counter() - t0) * 1000, 1)
-            return APIResponse.ok(data={
-                "rows":         filtered.to_dict(orient="records"),
-                "count":        len(filtered),
-                "total_cached": len(df),
-                "columns":      list(df.columns),
-                "elapsed_ms":   elapsed,
-                "served_from":  "cache",
-                "loading":      False,
-                "view":         view_name,
-            })
+        ty_f = df_ty[_mask(df_ty)].copy()
+        ly_f = df_ly[_mask(df_ly)].copy()
 
-        # ── Cache not ready — start background fetch ───────────────────────
-        started = _start_fetch_if_idle(_SALE_OWNER, view_name)
+        # Aggregate to store level for TY vs LY table
+        ty_agg = ty_f.groupby(
+            ["store_name", "cluster_type", "store_status", "region_type"],
+            as_index=False
+        ).agg(TY_QTY=("sl_qty", "sum"), TY_V=("sl_v", "sum"),
+              TY_TGT_Q=("tgt_q", "sum"), TY_TGT_V=("tgt_v", "sum"))
+
+        ly_agg = ly_f.groupby(
+            ["store_name", "cluster_type", "store_status", "region_type"],
+            as_index=False
+        ).agg(LY_QTY=("sl_qty", "sum"), LY_V=("sl_v", "sum"),
+              LY_TGT_Q=("tgt_q", "sum"), LY_TGT_V=("tgt_v", "sum"))
+
+        merged = pd.merge(ty_agg, ly_agg,
+                          on=["store_name", "cluster_type", "store_status", "region_type"],
+                          how="outer").fillna(0)
+
+        merged = merged.rename(columns={
+            "store_name": "STORE_NAME", "cluster_type": "CLUSTER_TYPE",
+            "store_status": "STORE_STATUS", "region_type": "REGION_TYPE",
+        })
+
+        # Derived columns
+        merged["ACHV_PCT"]  = (merged["TY_V"] / merged["TY_TGT_V"].replace(0, pd.NA) * 100).round(1)
+        merged["GRWTH_PCT"] = ((merged["TY_V"] - merged["LY_V"]) / merged["LY_V"].replace(0, pd.NA) * 100).round(1)
+        merged = merged.where(merged.notna(), None)
+        merged = merged.head(limit)
+
+        elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return APIResponse.ok(data={
-            "loading":     True,
-            "fetching":    True,
-            "started_new": started,
-            "message":     "Fetching from Oracle in background (10–15 min first load). Poll /api/sale/cache-status for progress.",
-            "rows":        [],
-            "count":       0,
+            "rows":    merged.to_dict(orient="records"),
+            "count":   len(merged),
+            "elapsed_ms": elapsed,
+            "loading": False,
         })
 
     except Exception as exc:
-        logger.error("SALE data query failed: %s", exc)
+        logger.error("SALE data error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/daily", response_model=APIResponse)
+async def get_daily_trend(
+    store_name: str            = Query(...),
+    date_from:  Optional[str] = Query(None),
+    date_to:    Optional[str] = Query(None),
+):
+    """Day-wise TY vs LY trend for a single store."""
+    _require_oracle()
+    try:
+        from app.core.parquet_cache import has_output, read_cache
+        if not (has_output(*_CACHE_TY) and has_output(*_CACHE_LY)):
+            return APIResponse.ok(data={"loading": True})
+
+        df_ty = read_cache(*_CACHE_TY)
+        df_ly = read_cache(*_CACHE_LY)
+
+        def _store_daily(df):
+            m = df["store_name"].str.upper() == store_name.upper()
+            if date_from:
+                m &= pd.to_datetime(df["sale_date"]) >= pd.to_datetime(date_from)
+            if date_to:
+                m &= pd.to_datetime(df["sale_date"]) <= pd.to_datetime(date_to)
+            return df[m].groupby("sale_date", as_index=False).agg(
+                sl_v=("sl_v", "sum"), tgt_v=("tgt_v", "sum"))
+
+        ty_d = _store_daily(df_ty).rename(columns={"sl_v": "TY_V", "tgt_v": "TY_TGT", "sale_date": "SALE_DATE"})
+        ly_d = _store_daily(df_ly).rename(columns={"sl_v": "LY_V", "tgt_v": "LY_TGT", "sale_date": "SALE_DATE"})
+        merged = pd.merge(ty_d, ly_d, on="SALE_DATE", how="outer").fillna(0)
+        merged["SALE_DATE"] = merged["SALE_DATE"].astype(str)
+        merged = merged.sort_values("SALE_DATE")
+
+        return APIResponse.ok(data={"rows": merged.to_dict(orient="records"), "store": store_name})
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/filters", response_model=APIResponse)
 async def get_sale_filters():
-    """
-    Return distinct filter values from in-memory item/store caches — instant.
-    """
+    """Return distinct filter values — instant (from in-memory caches)."""
     _require_oracle()
     try:
-        t0 = time.perf_counter()
-        from app.repositories.item_repository import ItemRepository
+        from app.core.parquet_cache import has_output, read_cache
         from app.repositories.store_repository import StoreRepository
 
-        item_df  = ItemRepository()._load()
         store_df = StoreRepository().get_all_stores(active_only=False)
 
         def uniq(df, col):
@@ -229,33 +275,24 @@ async def get_sale_filters():
                 return sorted(df[col].dropna().unique().tolist())
             return []
 
-        attr1    = uniq(item_df,  "attribute1")
-        division = uniq(item_df,  "division")
         cluster  = uniq(store_df, "cluster_type")
-        district = uniq(store_df, "district")
+        region   = uniq(store_df, "region_type") if "region_type" in store_df.columns else []
 
-        store_status: list = []
-        try:
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT DISTINCT STORE_STATUS FROM MISRETAIL.T_STORE_OPENING_DATE "
-                        "WHERE STORE_STATUS IS NOT NULL ORDER BY STORE_STATUS"
-                    )
-                    store_status = [r[0] for r in cur.fetchall()]
-        except Exception:
-            store_status = ["ACTIVE", "INACTIVE"]
+        # If cache is ready, pull filters from actual sale data
+        attribute1 = []
+        store_statuses = ["ACTIVE", "INACTIVE"]
+        if has_output(*_CACHE_TY):
+            df = read_cache(*_CACHE_TY)
+            if df is not None:
+                attribute1     = uniq(df, "attribute1")
+                store_statuses = uniq(df, "store_status")
 
-        elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return APIResponse.ok(data={
-            "attribute1":   attr1,
-            "division":     division,
             "cluster_type": cluster,
-            "district":     district,
-            "store_status": store_status,
-            "elapsed_ms":   elapsed,
+            "region_type":  region,
+            "attribute1":   attribute1,
+            "store_status": store_statuses,
         })
 
     except Exception as exc:
-        logger.error("SALE filters query failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

@@ -1,488 +1,386 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+
+const PAGE_SIZE = 20
 
 function useIsMobile() {
   const [m, setM] = useState(window.innerWidth < 768)
   useEffect(() => {
-    const fn = () => setM(window.innerWidth < 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
+    const h = () => setM(window.innerWidth < 768)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
   }, [])
   return m
 }
 
-// ── Palette (matches app theme) ────────────────────────────────────────────────
-const C = {
-  bg:     '#0f172a',
-  surf1:  '#1e293b',
-  surf2:  '#0f172a',
-  surf3:  '#243447',
-  border: '#334155',
-  border2:'#3b4f6a',
-  text:   '#e2e8f0',
-  sub:    '#94a3b8',
-  muted:  '#64748b',
-  accent: '#38bdf8',
-  green:  '#22c55e',
-  amber:  '#f59e0b',
-  red:    '#ef4444',
+function fmt(v: unknown, dec = 0) {
+  if (v === null || v === undefined || v === '') return '—'
+  const n = Number(v)
+  if (isNaN(n)) return '—'
+  if (Math.abs(n) >= 10_000_000) return `${(n / 10_000_000).toFixed(1)}Cr`
+  if (Math.abs(n) >= 100_000) return `${(n / 100_000).toFixed(1)}L`
+  return n.toLocaleString('en-IN', { maximumFractionDigits: dec })
 }
 
-// ── Number formatters ─────────────────────────────────────────────────────────
-function fmtV(n: number | null | undefined): string {
-  if (n == null || isNaN(Number(n))) return '—'
-  const v = Number(n)
-  if (Math.abs(v) >= 1e7) return '₹' + (v / 1e7).toFixed(2) + 'Cr'
-  if (Math.abs(v) >= 1e5) return '₹' + (v / 1e5).toFixed(1) + 'L'
-  return '₹' + v.toFixed(0)
-}
-function fmtPct(n: number | null | undefined): string {
-  if (n == null || isNaN(Number(n))) return '—'
-  return Number(n).toFixed(1) + '%'
-}
-function achvClass(n: number | null | undefined): string {
-  if (n == null) return 'neutral'
-  const v = Number(n)
-  if (v >= 100) return 'high'
-  if (v >= 80)  return 'mid'
-  return 'low'
+function AchvBadge({ val }: { val: unknown }) {
+  const n = Number(val)
+  if (isNaN(n) || val === null || val === undefined) return <span className="achv-na">—</span>
+  const cls = n >= 100 ? 'achv-green' : n >= 80 ? 'achv-amber' : 'achv-red'
+  return <span className={cls}>{n.toFixed(1)}%</span>
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface Row {
-  [key: string]: unknown
+function GrowthBadge({ val }: { val: unknown }) {
+  const n = Number(val)
+  if (isNaN(n) || val === null || val === undefined) return <span className="achv-na">—</span>
+  const cls = n >= 0 ? 'achv-green' : 'achv-red'
+  return <span className={cls}>{n > 0 ? '+' : ''}{n.toFixed(1)}%</span>
 }
 
-interface Filters {
-  attribute1: string[]
-  cluster_type: string[]
-  district: string[]
-  division: string[]
-  store_status: string[]
-}
+type Row = Record<string, unknown>
 
-const KPI_COLS: { key: string; label: string; fmt: 'v' | 'p' }[] = [
-  { key: 'sl_v',       label: 'TY Sale Value',    fmt: 'v' },
-  { key: 'lm_sl_v',   label: 'LY Sale Value',     fmt: 'v' },
-  { key: 'achv_per',  label: 'TY Achv %',         fmt: 'p' },
-  { key: 'lm_achv_per', label: 'LY Achv %',       fmt: 'p' },
-  { key: 'mtd_sl_v',  label: 'MTD Sale',          fmt: 'v' },
-  { key: 'to_v',      label: 'TO Value',          fmt: 'v' },
-]
-
-const PAGE_SIZE = 20
+interface CacheStatus { ready: boolean; fetching: boolean; error: string; rows_ty?: number; rows_ly?: number }
 
 export default function SaleDashboard() {
   const isMobile = useIsMobile()
-
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [rows, setRows]               = useState<Row[]>([])
-  const [allRows, setAllRows]         = useState<Row[]>([])
-  const [filters, setFilters]         = useState<Filters>({ attribute1: [], cluster_type: [], district: [], division: [], store_status: [] })
-  const [selAttr1, setSelAttr1]       = useState('')
-  const [selZone,  setSelZone]        = useState('')
-  const [selDist,  setSelDist]        = useState('')
-  const [selDiv,   setSelDiv]         = useState('')
-  const [selStatus,setSelStatus]      = useState('')
+  const [rows, setRows]             = useState<Row[]>([])
+  const [allRows, setAllRows]       = useState<Row[]>([])
+  const [cacheInfo, setCacheInfo]   = useState<CacheStatus | null>(null)
+  const [loading, setLoading]       = useState(false)
+  const [fetching, setFetching]     = useState(false)
+  const [error, setError]           = useState('')
+  const [page, setPage]             = useState(1)
+  const [sortCol, setSortCol]       = useState('TY_V')
+  const [sortDir, setSortDir]       = useState<'asc'|'desc'>('desc')
   const [storeSearch, setStoreSearch] = useState('')
-  const [loading, setLoading]         = useState(false)
-  const [fetching, setFetching]       = useState(false)  // Oracle BG thread running
-  const [cacheInfo, setCacheInfo]     = useState<{ total: number; elapsed: number; from: string } | null>(null)
-  const [page, setPage]               = useState(1)
-  const [sortCol, setSortCol]         = useState<string>('')
-  const [sortDir, setSortDir]         = useState<1 | -1>(1)
-  const [error, setError]             = useState('')
-  const pollRef                       = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [selCluster, setSelCluster] = useState('')
+  const [selRegion, setSelRegion]   = useState('')
+  const [selStatus, setSelStatus]   = useState('')
+  const [selAttr, setSelAttr]       = useState('')
+  const [dateFrom, setDateFrom]     = useState('')
+  const [dateTo, setDateTo]         = useState('')
+  const [filters, setFilters]       = useState<Record<string, string[]>>({})
+  const [pollRef, setPollRef]       = useState<ReturnType<typeof setInterval> | null>(null)
 
-  // ── Load filters on mount ──────────────────────────────────────────────────
-  useEffect(() => {
-    axios.get('/api/sale/filters').then(r => {
-      const d = r.data.data
-      setFilters({
-        attribute1:   d.attribute1   || [],
-        cluster_type: d.cluster_type || [],
-        district:     d.district     || [],
-        division:     d.division     || [],
-        store_status: d.store_status || [],
-      })
-    }).catch(() => {})
-  }, [])
+  const stopPolling = useCallback(() => {
+    if (pollRef) { clearInterval(pollRef); setPollRef(null) }
+  }, [pollRef])
 
-  // ── Poll cache-status while background fetch is active ────────────────────
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return
-    pollRef.current = setInterval(async () => {
-      try {
-        const r = await axios.get('/api/sale/cache-status')
-        const d = r.data.data
-        if (d.ready) {
-          clearInterval(pollRef.current!); pollRef.current = null
-          setFetching(false)
-          // Cache is ready — load data
-          loadData()
-        } else if (!d.fetching) {
-          // Thread finished but nothing cached (error)
-          clearInterval(pollRef.current!); pollRef.current = null
-          setFetching(false)
-          if (d.error) setError(`Oracle fetch failed: ${d.error}`)
-        }
-      } catch { /* ignore poll errors */ }
-    }, 20000) // poll every 20s
-  }, []) // eslint-disable-line
-
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
-
-  // ── Load data from cache ───────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const params: Record<string, string> = {}
-      if (selAttr1)    params.attribute1   = selAttr1
-      if (selZone)     params.cluster_type = selZone
-      if (selDist)     params.district     = selDist
-      if (selDiv)      params.division     = selDiv
-      if (selStatus)   params.store_status = selStatus
+      if (selCluster) params.cluster_type = selCluster
+      if (selRegion)  params.region_type  = selRegion
+      if (selStatus && selStatus !== '-') params.store_status = selStatus
+      if (selAttr)    params.attribute1   = selAttr
       if (storeSearch) params.store_search = storeSearch
+      if (dateFrom)   params.date_from    = dateFrom
+      if (dateTo)     params.date_to      = dateTo
 
-      const r = await axios.get('/api/sale/data', { params })
-      const d = r.data.data
+      const res = await axios.get('/api/sale/data', { params, timeout: 30000 })
+      const d = res.data?.data
+      if (!d) return
       if (d.loading) {
-        // Background fetch started — start polling
         setFetching(true)
-        startPolling()
-      } else {
-        setAllRows(d.rows || [])
-        setCacheInfo({ total: d.total_cached, elapsed: d.elapsed_ms, from: d.served_from })
-        setPage(1)
-        setFetching(false)
+        return
       }
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || 'Failed to load')
+      setFetching(false)
+      stopPolling()
+      setAllRows(d.rows || [])
+      setPage(1)
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e)) setError(e.response?.data?.detail || e.message)
+      else setError(String(e))
     } finally {
       setLoading(false)
     }
-  }, [selAttr1, selZone, selDist, selDiv, selStatus, storeSearch, startPolling])
+  }, [selCluster, selRegion, selStatus, selAttr, storeSearch, dateFrom, dateTo, stopPolling])
 
-  const load = useCallback(async (forceRefresh = false) => {
-    if (forceRefresh) {
-      setError('')
-      setFetching(true)
+  const startPolling = useCallback(() => {
+    if (pollRef) return
+    const id = setInterval(async () => {
       try {
-        await axios.get('/api/sale/data', { params: { force_refresh: 'true' } })
-        startPolling()
-      } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || 'Failed to start refresh')
-        setFetching(false)
-      }
-    } else {
-      await loadData()
-    }
-  }, [loadData, startPolling])
+        const res = await axios.get('/api/sale/cache-status')
+        const d: CacheStatus = res.data?.data
+        setCacheInfo(d)
+        if (d.ready) { stopPolling(); loadData() }
+        if (d.error) { setError(d.error); stopPolling() }
+      } catch { /* ignore */ }
+    }, 5000)
+    setPollRef(id)
+  }, [pollRef, stopPolling, loadData])
 
-  useEffect(() => { loadData() }, [selAttr1, selZone, selDist, selDiv, selStatus]) // eslint-disable-line
-
-  // ── Client-side search filter + sort ──────────────────────────────────────
   useEffect(() => {
-    let data = allRows
-    if (storeSearch.trim()) {
-      const q = storeSearch.toLowerCase()
-      data = data.filter(r => String(r.store_name ?? '').toLowerCase().includes(q))
-    }
-    if (sortCol) {
-      data = [...data].sort((a, b) => {
-        const av = a[sortCol], bv = b[sortCol]
-        if (av == null && bv == null) return 0
-        if (av == null) return 1
-        if (bv == null) return -1
-        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir
-        return String(av).localeCompare(String(bv)) * sortDir
-      })
-    }
-    setRows(data)
+    axios.get('/api/sale/filters').then(r => setFilters(r.data?.data || {})).catch(() => {})
+  }, [])
+
+  useEffect(() => { loadData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (fetching) startPolling()
+  }, [fetching, startPolling])
+
+  // Re-load when server-side filters change
+  useEffect(() => {
+    if (cacheInfo?.ready || allRows.length > 0) loadData()
+  }, [selCluster, selRegion, selStatus, selAttr, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Client-side search + sort
+  useEffect(() => {
+    let r = [...allRows]
+    if (storeSearch) r = r.filter(x => String(x.STORE_NAME || '').toLowerCase().includes(storeSearch.toLowerCase()))
+    r.sort((a, b) => {
+      const av = Number(a[sortCol] ?? 0), bv = Number(b[sortCol] ?? 0)
+      return sortDir === 'desc' ? bv - av : av - bv
+    })
+    setRows(r)
     setPage(1)
   }, [allRows, storeSearch, sortCol, sortDir])
 
-  // ── KPI aggregation ────────────────────────────────────────────────────────
-  function sumCol(key: string) {
-    return rows.reduce((acc, r) => acc + (Number(r[key]) || 0), 0)
+  function toggleSort(col: string) {
+    if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortCol(col); setSortDir('desc') }
   }
 
-  const kpiValues: Record<string, number> = {
-    sl_v:       sumCol('sl_v'),
-    lm_sl_v:    sumCol('lm_sl_v'),
-    achv_per:   rows.length ? sumCol('achv_per') / rows.length : 0,
-    lm_achv_per:rows.length ? sumCol('lm_achv_per') / rows.length : 0,
-    mtd_sl_v:   sumCol('mtd_sl_v'),
-    to_v:       sumCol('to_v'),
+  function Th({ col, label }: { col: string; label: string }) {
+    const active = sortCol === col
+    return (
+      <th onClick={() => toggleSort(col)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
+        {label} {active ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+      </th>
+    )
   }
 
-  // ── Pagination ─────────────────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const pageRows   = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const tyTotal  = allRows.reduce((s, r) => s + Number(r.TY_V  || 0), 0)
+  const lyTotal  = allRows.reduce((s, r) => s + Number(r.LY_V  || 0), 0)
+  const tgtTotal = allRows.reduce((s, r) => s + Number(r.TY_TGT_V || 0), 0)
+  const achvPct  = tgtTotal > 0 ? (tyTotal / tgtTotal * 100) : null
+  const grwthPct = lyTotal > 0 ? ((tyTotal - lyTotal) / lyTotal * 100) : null
 
-  // ── Sort handler ───────────────────────────────────────────────────────────
-  function handleSort(col: string) {
-    if (sortCol === col) setSortDir(d => d === 1 ? -1 : 1)
-    else { setSortCol(col); setSortDir(-1) }  // default descending for numbers
-  }
-  function sortIcon(col: string) {
-    if (sortCol !== col) return ' ↕'
-    return sortDir === 1 ? ' ↑' : ' ↓'
-  }
+  const paged = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const totalPages = Math.ceil(rows.length / PAGE_SIZE)
 
-  // ── CSV export ─────────────────────────────────────────────────────────────
-  function exportCSV() {
+  function exportCsv() {
     if (!rows.length) return
     const cols = Object.keys(rows[0])
-    const lines = [cols.join(','), ...rows.map(r => cols.map(c => String(r[c] ?? '')).join(','))]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a'); a.href = url; a.download = 'sale_data.csv'; a.click()
-    URL.revokeObjectURL(url)
+    const lines = [cols.join(','), ...rows.map(r => cols.map(c => JSON.stringify(r[c] ?? '')).join(','))]
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+    a.download = 'sale_dashboard.csv'
+    a.click()
   }
 
-  // ── Styles ─────────────────────────────────────────────────────────────────
-  const S: Record<string, React.CSSProperties> = {
-    page:    { display: 'flex', flexDirection: 'column', gap: 12, height: '100%' },
-    header:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-    title:   { fontSize: 16, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 8 },
-    badge:   { fontSize: 10, background: C.accent, color: '#fff', padding: '2px 8px', borderRadius: 20, fontWeight: 600 },
-    alert:   { background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.3)', borderLeft: `3px solid ${C.amber}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, color: C.amber, lineHeight: 1.5 },
-    filters: { display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'flex-end' },
-    fg:      { display: 'flex', flexDirection: 'column' as const, gap: 3 },
-    flabel:  { fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase' as const, letterSpacing: '.5px' },
-    sel:     { background: C.surf1, border: `1px solid ${C.border2}`, color: C.text, fontSize: 12, padding: '5px 8px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', minWidth: 110 },
-    sinput:  { background: C.surf1, border: `1px solid ${C.border2}`, color: C.text, fontSize: 12, padding: '5px 8px', borderRadius: 6, outline: 'none', fontFamily: 'inherit', minWidth: 160 },
-    kpiGrid: { display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(6,1fr)', gap: 8 },
-    kpiCard: { background: C.surf1, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px' },
-    kpiLbl:  { fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase' as const, letterSpacing: '.5px', marginBottom: 4 },
-    kpiVal:  { fontSize: isMobile ? 15 : 18, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums' },
-    tableWrap: { overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: 8, flex: 1 },
-    btn:     { display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', fontFamily: 'inherit' },
-    row:     { borderBottom: `1px solid ${C.border}` },
-    th:      { textAlign: 'left' as const, padding: '8px 10px', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase' as const, letterSpacing: '.5px', whiteSpace: 'nowrap' as const, cursor: 'pointer', background: C.surf3, userSelect: 'none' as const },
-    td:      { padding: '7px 10px', fontSize: 12, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' as const },
+  function forceReload() {
+    setFetching(true)
+    axios.get('/api/sale/data', { params: { force_refresh: true } }).catch(() => {})
   }
-
-  function AchvBadge({ val }: { val: number | null | undefined }) {
-    const cls = achvClass(val)
-    const color = cls === 'high' ? C.green : cls === 'mid' ? C.amber : C.red
-    const bg    = cls === 'high' ? 'rgba(34,197,94,.12)' : cls === 'mid' ? 'rgba(245,158,11,.12)' : 'rgba(239,68,68,.12)'
-    return (
-      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700, color, background: bg, minWidth: 54, textAlign: 'center' }}>
-        {fmtPct(val)}
-      </span>
-    )
-  }
-
-  function StatusChip({ val }: { val: string }) {
-    const active = String(val).toUpperCase() === 'ACTIVE'
-    return (
-      <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600, background: active ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)', color: active ? C.green : C.red }}>
-        {val}
-      </span>
-    )
-  }
-
-  const TH = ({ col, label }: { col: string; label: string }) => (
-    <th style={S.th} onClick={() => handleSort(col)}>{label}{sortIcon(col)}</th>
-  )
 
   return (
-    <div style={S.page}>
-      {/* Header */}
-      <div style={S.header}>
-        <div style={S.title}>
-          📊 Store-wise Sale Dashboard
-          {cacheInfo && (
-            <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>
-              {cacheInfo.from === 'cache' ? '⚡' : '🔄'} {cacheInfo.total.toLocaleString()} rows · {cacheInfo.elapsed}ms · {cacheInfo.from}
-            </span>
-          )}
+    <div className="sale-dash">
+      <style>{`
+        .sale-dash { padding: 12px; font-size: 13px; }
+        .kpi-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+        .kpi { background: var(--card-bg, #1a2235); border-radius: 8px; padding: 10px 14px; flex: 1 1 130px; min-width: 110px; }
+        .kpi-label { font-size: 11px; opacity: .65; text-transform: uppercase; letter-spacing: .05em; }
+        .kpi-val { font-size: 20px; font-weight: 700; color: #38bdf8; margin-top: 2px; }
+        .kpi-sub { font-size: 11px; opacity: .5; }
+        .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+        .filters select, .filters input[type=text] { background: var(--input-bg, #0f1724); border: 1px solid #2a3a55;
+          border-radius: 6px; padding: 5px 8px; color: inherit; font-size: 12px; }
+        .filters input[type=date] { background: var(--input-bg, #0f1724); border: 1px solid #2a3a55;
+          border-radius: 6px; padding: 5px 8px; color: inherit; font-size: 12px; }
+        .filters label { font-size: 11px; opacity: .6; margin-right: 2px; }
+        .date-group { display: flex; gap: 4px; align-items: center; }
+        .sale-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .sale-table th { background: #0f1724; padding: 7px 8px; text-align: right; border-bottom: 1px solid #2a3a55; font-size: 11px; }
+        .sale-table th:first-child { text-align: left; }
+        .sale-table td { padding: 6px 8px; border-bottom: 1px solid #1a2540; text-align: right; }
+        .sale-table td:first-child { text-align: left; font-weight: 600; }
+        .sale-table tr:hover td { background: #1a2a40; }
+        .achv-green { color: #22c55e; font-weight: 600; }
+        .achv-amber { color: #f59e0b; font-weight: 600; }
+        .achv-red   { color: #ef4444; font-weight: 600; }
+        .achv-na    { opacity: .35; }
+        .pagination { display: flex; gap: 6px; align-items: center; margin-top: 10px; justify-content: center; font-size: 12px; }
+        .pagination button { background: #1a2235; border: 1px solid #2a3a55; border-radius: 4px;
+          padding: 3px 10px; color: inherit; cursor: pointer; }
+        .pagination button:disabled { opacity: .35; cursor: default; }
+        .loading-bar { text-align: center; padding: 40px; opacity: .6; }
+        .fetch-banner { background: #1a2a10; border: 1px solid #2d5a1a; border-radius: 8px;
+          padding: 10px 14px; margin-bottom: 12px; font-size: 12px; }
+        .err-banner { background: #2a1010; border: 1px solid #5a1a1a; border-radius: 8px;
+          padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #f87171; }
+        .tbl-scroll { overflow-x: auto; }
+        .actions { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+        .btn { background: #1a2235; border: 1px solid #2a3a55; border-radius: 6px;
+          padding: 5px 12px; color: inherit; cursor: pointer; font-size: 12px; }
+        .btn:hover { background: #243050; }
+        .btn:disabled { opacity: .4; cursor: default; }
+        .group-header th { background: #0a0f1c; font-size: 10px; text-align: center; border-bottom: 1px solid #2a3a55; opacity: .7; }
+      `}</style>
+
+      <h2 style={{ marginBottom: 14 }}>Store-wise Sale Dashboard</h2>
+
+      {/* KPI strip */}
+      <div className="kpi-strip">
+        <div className="kpi">
+          <div className="kpi-label">TY Sale</div>
+          <div className="kpi-val">{fmt(tyTotal)}</div>
+          <div className="kpi-sub">{allRows.length} stores</div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button style={{ ...S.btn, background: C.surf1, color: C.sub, border: `1px solid ${C.border2}` }} onClick={exportCSV} disabled={!rows.length}>
-            ⬇ Export CSV
-          </button>
-          <button
-            style={{ ...S.btn, background: (loading || fetching) ? C.muted : C.accent, color: '#fff', opacity: (loading || fetching) ? 0.7 : 1 }}
-            onClick={() => load(true)}
-            disabled={loading || fetching}
-          >
-            {fetching ? '⏳ Fetching…' : loading ? '⏳ Loading…' : '🔄 Refresh Oracle'}
-          </button>
+        <div className="kpi">
+          <div className="kpi-label">LY Sale</div>
+          <div className="kpi-val">{fmt(lyTotal)}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Target</div>
+          <div className="kpi-val">{fmt(tgtTotal)}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Achievement</div>
+          <div className="kpi-val">{achvPct !== null ? `${achvPct.toFixed(1)}%` : '—'}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">YoY Growth</div>
+          <div className="kpi-val">{grwthPct !== null ? `${grwthPct > 0 ? '+' : ''}${grwthPct.toFixed(1)}%` : '—'}</div>
         </div>
       </div>
 
-      {/* Alert banner */}
-      <div style={S.alert}>
-        ⚠️ <strong>Period comparison (TY vs LY):</strong> These views are season-period aggregates.
-        Columns available: <strong>SL_V (TY Sale), LM_SL_V (LY Sale), ACHV_PER (TY%), LM_ACHV_PER (LY%), MTD_SL_V, TO_V, PROJ_V.</strong>
-        &nbsp;Day-wise / festive-date filtering requires a separate daily transaction table — confirm the Oracle table name to add it.
-      </div>
-
-      {/* Filters */}
-      <div style={S.filters}>
-        <div style={S.fg}>
-          <span style={S.flabel}>Campaign</span>
-          <select style={S.sel} value={selAttr1} onChange={e => setSelAttr1(e.target.value)}>
-            <option value="">All</option>
-            {filters.attribute1.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-        <div style={S.fg}>
-          <span style={S.flabel}>Zone / Cluster</span>
-          <select style={S.sel} value={selZone} onChange={e => setSelZone(e.target.value)}>
-            <option value="">All</option>
-            {filters.cluster_type.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-        <div style={S.fg}>
-          <span style={S.flabel}>District</span>
-          <select style={S.sel} value={selDist} onChange={e => setSelDist(e.target.value)}>
-            <option value="">All</option>
-            {filters.district.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-        <div style={S.fg}>
-          <span style={S.flabel}>Division</span>
-          <select style={S.sel} value={selDiv} onChange={e => setSelDiv(e.target.value)}>
-            <option value="">All</option>
-            {filters.division.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-        <div style={S.fg}>
-          <span style={S.flabel}>Store Status</span>
-          <select style={S.sel} value={selStatus} onChange={e => setSelStatus(e.target.value)}>
-            <option value="">All</option>
-            {filters.store_status.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-        <div style={S.fg}>
-          <span style={S.flabel}>Search Store</span>
-          <input
-            style={S.sinput}
-            placeholder="Store name…"
-            value={storeSearch}
-            onChange={e => setStoreSearch(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div style={{ background: 'rgba(239,68,68,.1)', border: `1px solid ${C.red}`, borderRadius: 6, padding: '8px 12px', fontSize: 12, color: C.red }}>
-          ❌ {error}
+      {/* Banners */}
+      {fetching && !error && (
+        <div className="fetch-banner">
+          ⏳ Fetching sale data from Oracle (~20 seconds first load)…
+          {cacheInfo && <span style={{ opacity: .6, marginLeft: 8 }}>TY: {(cacheInfo.rows_ty || 0).toLocaleString()} rows cached</span>}
         </div>
       )}
+      {error && <div className="err-banner">⚠ {error}</div>}
 
-      {/* KPI Strip */}
-      <div style={S.kpiGrid}>
-        {KPI_COLS.map(k => (
-          <div key={k.key} style={S.kpiCard}>
-            <div style={S.kpiLbl}>{k.label}</div>
-            <div style={S.kpiVal}>
-              {k.fmt === 'v' ? fmtV(kpiValues[k.key]) : fmtPct(kpiValues[k.key])}
-            </div>
-            {k.key === 'sl_v' && kpiValues['lm_sl_v'] > 0 && (
-              <div style={{ fontSize: 11, marginTop: 3 }}>
-                {(() => {
-                  const g = ((kpiValues['sl_v'] - kpiValues['lm_sl_v']) / kpiValues['lm_sl_v']) * 100
-                  return <span style={{ color: g >= 0 ? C.green : C.red, fontWeight: 600 }}>{g >= 0 ? '+' : ''}{g.toFixed(1)}% vs LY</span>
-                })()}
-              </div>
-            )}
-          </div>
-        ))}
+      {/* Filters */}
+      <div className="filters">
+        <div>
+          <label>Zone</label>
+          <select value={selCluster} onChange={e => setSelCluster(e.target.value)}>
+            <option value=''>All</option>
+            {(filters.cluster_type || []).map(v => <option key={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Region</label>
+          <select value={selRegion} onChange={e => setSelRegion(e.target.value)}>
+            <option value=''>All</option>
+            {(filters.region_type || []).map(v => <option key={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select value={selStatus} onChange={e => setSelStatus(e.target.value)}>
+            <option value=''>All</option>
+            {(filters.store_status || ['ACTIVE', 'INACTIVE']).map(v => <option key={v}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label>Attribute</label>
+          <select value={selAttr} onChange={e => setSelAttr(e.target.value)}>
+            <option value=''>All</option>
+            {(filters.attribute1 || []).map(v => <option key={v}>{v}</option>)}
+          </select>
+        </div>
+        <div className="date-group">
+          <label>Date</label>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <span style={{ opacity: .4 }}>–</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          {(dateFrom || dateTo) && (
+            <button className="btn" onClick={() => { setDateFrom(''); setDateTo('') }}>✕</button>
+          )}
+        </div>
+        <input
+          type="text"
+          placeholder="Search store…"
+          value={storeSearch}
+          onChange={e => setStoreSearch(e.target.value)}
+          style={{ minWidth: isMobile ? 100 : 150 }}
+        />
+      </div>
+
+      {/* Actions */}
+      <div className="actions">
+        <button className="btn" onClick={loadData} disabled={loading || fetching}>
+          {loading ? '…' : '⟳ Refresh'}
+        </button>
+        <button className="btn" onClick={forceReload} disabled={fetching} title="Re-fetch from Oracle">
+          ↺ Reload from DB
+        </button>
+        <button className="btn" onClick={exportCsv} disabled={!rows.length}>⬇ CSV</button>
+        <span style={{ opacity: .4, fontSize: 11 }}>{rows.length} stores shown</span>
       </div>
 
       {/* Table */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Store-wise TY vs LY Comparison</span>
-        <span style={{ fontSize: 11, color: C.sub }}>
-          {fetching ? '⏳ Fetching from Oracle (10–15 min first load)…' : loading ? 'Loading…' : `${rows.length.toLocaleString()} stores · Page ${page} / ${totalPages}`}
-        </span>
-      </div>
-
-      <div style={S.tableWrap}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-          <thead>
-            <tr style={{ background: C.surf3, borderBottom: `2px solid ${C.border}` }}>
-              <TH col="store_name"   label="Store" />
-              <TH col="cluster_type" label="Zone" />
-              <TH col="district"     label="District" />
-              <TH col="store_status" label="Status" />
-              <th style={{ ...S.th, borderLeft: `1px solid ${C.border2}`, color: '#38bdf8' }}>TY Sale ₹</th>
-              <th style={{ ...S.th, color: '#38bdf8' }}>TY Target ₹</th>
-              <th style={{ ...S.th, color: '#38bdf8' }} onClick={() => handleSort('achv_per')}>TY Achv%{sortIcon('achv_per')}</th>
-              <th style={{ ...S.th, borderLeft: `1px solid ${C.border2}`, color: '#4ade80' }}>LY Sale ₹</th>
-              <th style={{ ...S.th, color: '#4ade80' }}>LY Target ₹</th>
-              <th style={{ ...S.th, color: '#4ade80' }} onClick={() => handleSort('lm_achv_per')}>LY Achv%{sortIcon('lm_achv_per')}</th>
-              <th style={{ ...S.th, borderLeft: `1px solid ${C.border2}`, color: '#fcd34d' }}>MTD Sale ₹</th>
-              <th style={{ ...S.th, color: '#fcd34d' }}>TO Value ₹</th>
-              <th style={{ ...S.th, borderLeft: `1px solid ${C.border2}` }} onClick={() => handleSort('proj_v')}>Proj ₹{sortIcon('proj_v')}</th>
-              <th style={S.th} onClick={() => handleSort('_growth')}>Growth%{sortIcon('_growth')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fetching ? (
-              <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>
-                ⏳ Fetching all data from Oracle in background…<br />
-                <span style={{ fontSize: 11 }}>First load takes 10–15 min. Page will update automatically.</span>
-              </td></tr>
-            ) : loading && !pageRows.length ? (
-              <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>⏳ Loading…</td></tr>
-            ) : !pageRows.length ? (
-              <tr><td colSpan={14} style={{ ...S.td, textAlign: 'center', padding: 32, color: C.sub }}>No data. Apply filters or refresh Oracle.</td></tr>
-            ) : pageRows.map((r, i) => {
-              const ty  = Number(r.sl_v)   || 0
-              const ly  = Number(r.lm_sl_v) || 0
-              const growth = ly ? ((ty - ly) / ly * 100) : null
-              return (
-                <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 1 ? 'rgba(255,255,255,.015)' : 'transparent' }}>
-                  <td style={{ ...S.td, fontWeight: 600, color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {String(r.store_name ?? '—')}
-                    {!!r.store_f_name && r.store_f_name !== r.store_name && (
-                      <div style={{ fontSize: 10, color: C.sub }}>{String(r.store_f_name)}</div>
-                    )}
-                  </td>
-                  <td style={S.td}>{String(r.cluster_type ?? '—')}</td>
-                  <td style={S.td}>{String(r.district ?? '—')}</td>
-                  <td style={S.td}><StatusChip val={String(r.store_status ?? '')} /></td>
-                  <td style={{ ...S.td, borderLeft: `1px solid ${C.border2}` }}>{fmtV(r.sl_v as number)}</td>
-                  <td style={S.td}>{fmtV(r.tgt_v as number)}</td>
-                  <td style={S.td}><AchvBadge val={r.achv_per as number} /></td>
-                  <td style={{ ...S.td, borderLeft: `1px solid ${C.border2}` }}>{fmtV(r.lm_sl_v as number)}</td>
-                  <td style={S.td}>{fmtV(r.lm_tgt_v as number)}</td>
-                  <td style={S.td}><AchvBadge val={r.lm_achv_per as number} /></td>
-                  <td style={{ ...S.td, borderLeft: `1px solid ${C.border2}` }}>{fmtV(r.mtd_sl_v as number)}</td>
-                  <td style={S.td}>{fmtV(r.to_v as number)}</td>
-                  <td style={{ ...S.td, borderLeft: `1px solid ${C.border2}` }}>{fmtV(r.proj_v as number)}</td>
-                  <td style={{ ...S.td, fontWeight: 600, color: growth == null ? C.sub : growth >= 0 ? C.green : C.red }}>
-                    {growth == null ? '—' : (growth >= 0 ? '+' : '') + growth.toFixed(1) + '%'}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {loading && !fetching ? (
+        <div className="loading-bar">Loading…</div>
+      ) : (
+        <div className="tbl-scroll">
+          <table className="sale-table">
+            <thead>
+              <tr className="group-header">
+                <th colSpan={3}></th>
+                <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
+                <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
+                <th colSpan={2} style={{ borderLeft: '1px solid #2a3a55' }}>Performance</th>
+              </tr>
+              <tr>
+                <Th col="STORE_NAME"  label="Store" />
+                <th>Zone</th>
+                <th>Region</th>
+                <Th col="TY_V"     label="Sale ₹" />
+                <Th col="TY_TGT_V" label="Target" />
+                <th>Achv%</th>
+                <Th col="LY_V"     label="Sale ₹" />
+                <Th col="LY_TGT_V" label="Target" />
+                <th>LY Achv%</th>
+                <th>Growth%</th>
+                <Th col="TY_QTY"   label="TY Qty" />
+              </tr>
+            </thead>
+            <tbody>
+              {paged.length === 0 && !loading && !fetching && (
+                <tr><td colSpan={11} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
+                  {allRows.length === 0 ? 'No data — click Refresh' : 'No stores match filters'}
+                </td></tr>
+              )}
+              {paged.map((r, i) => {
+                const tyAchv  = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
+                const lyAchv  = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
+                return (
+                  <tr key={i}>
+                    <td>{String(r.STORE_NAME || '—')}</td>
+                    <td style={{ textAlign: 'center' }}>{String(r.CLUSTER_TYPE || '—')}</td>
+                    <td style={{ textAlign: 'center' }}>{String(r.REGION_TYPE || '—')}</td>
+                    <td>{fmt(r.TY_V)}</td>
+                    <td>{fmt(r.TY_TGT_V)}</td>
+                    <td><AchvBadge val={tyAchv} /></td>
+                    <td>{fmt(r.LY_V)}</td>
+                    <td>{fmt(r.LY_TGT_V)}</td>
+                    <td><AchvBadge val={lyAchv} /></td>
+                    <td><GrowthBadge val={r.GRWTH_PCT} /></td>
+                    <td>{fmt(r.TY_QTY)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              style={{
-                width: 30, height: 30, borderRadius: 6, border: `1px solid ${p === page ? C.accent : C.border}`,
-                background: p === page ? C.accent : C.surf1, color: p === page ? '#fff' : C.sub,
-                cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
-              }}
-            >{p}</button>
-          ))}
+        <div className="pagination">
+          <button disabled={page === 1} onClick={() => setPage(1)}>«</button>
+          <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
+          <span>{page} / {totalPages}</span>
+          <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
+          <button disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
         </div>
       )}
     </div>

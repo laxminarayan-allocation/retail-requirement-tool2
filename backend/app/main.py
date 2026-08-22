@@ -26,6 +26,7 @@ from app.api.routes import auth as auth_routes
 from app.api.routes import assistant as assistant_routes
 from app.api.routes import notifications as notif_routes
 from app.api.routes import sop as sop_routes
+from app.api.routes import nso as nso_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -318,6 +319,7 @@ app.include_router(system_routes.router, prefix="/api")    # Phase 12
 app.include_router(assistant_routes.router, prefix="/api") # Assistant
 app.include_router(notif_routes.router, prefix="/api")    # Notifications
 app.include_router(sop_routes.router,   prefix="/api")    # SOP / Procedures
+app.include_router(nso_routes.router,   prefix="/api")    # NSO Dashboard
 
 
 @app.get("/", tags=["Root"])

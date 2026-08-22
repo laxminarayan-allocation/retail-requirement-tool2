@@ -860,9 +860,12 @@ export default function MasterData() {
         setWins(p => ({ ...p, [key]: { ...p[key], loading: false, error: res.data.message || 'Server returned an error.' } }))
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail
-        || (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        || (err as { message?: string })?.message || 'Request failed.'
+      const raw = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data?.detail
+        ?? (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message
+        ?? (err as { message?: string })?.message ?? 'Request failed.'
+      const msg = typeof raw === 'string' ? raw
+        : Array.isArray(raw) ? (raw as { msg?: string }[]).map(e => e?.msg ?? JSON.stringify(e)).join('; ')
+        : JSON.stringify(raw)
       setWins(p => ({ ...p, [key]: { ...p[key], loading: false, error: msg } }))
     }
   }
@@ -894,9 +897,12 @@ export default function MasterData() {
         setWins(p => ({ ...p, [key]: { ...p[key], error: res.data.message || 'Refresh failed.' } }))
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail
-        || (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        || (err as { message?: string })?.message || 'Refresh failed.'
+      const raw = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data?.detail
+        ?? (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message
+        ?? (err as { message?: string })?.message ?? 'Refresh failed.'
+      const msg = typeof raw === 'string' ? raw
+        : Array.isArray(raw) ? (raw as { msg?: string }[]).map(e => e?.msg ?? JSON.stringify(e)).join('; ')
+        : JSON.stringify(raw)
       setWins(p => ({ ...p, [key]: { ...p[key], error: msg } }))
     } finally {
       setRefreshingWin(null)
@@ -908,7 +914,7 @@ export default function MasterData() {
     if (activeWin === key) { setActiveWin(null); return }
     setActiveWin(key)
     if (!wins[key]) {
-      const limit = statuses[key]?.rows ?? 200
+      const limit = Math.min(statuses[key]?.rows ?? 200, 2000)
       setWins(p => ({ ...p, [key]: { data: null, loading: false, error: null, limit } }))
       await loadWinPreview(key, false, limit)
     }

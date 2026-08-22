@@ -872,12 +872,21 @@ interface OutputFile {
   sql_text?: string
 }
 
+interface DlWinState {
+  columns: string[]
+  records: Record<string, unknown>[]
+  loading: boolean
+  error: string | null
+  limit: number
+  label: string
+  rows: number
+}
+
 function DownloadedFilesPanel() {
   const [files, setFiles] = useState<OutputFile[]>([])
   const [loading, setLoading] = useState(false)
-  const [previewFile, setPreviewFile] = useState<string | null>(null)
-  const [previewData, setPreviewData] = useState<{ columns: string[]; records: Record<string, unknown>[] } | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
+  const [wins, setWins] = useState<Record<string, DlWinState>>({})
+  const [activeWin, setActiveWin] = useState<string | null>(null)
   const [mdStatus,      setMdStatus]      = useState<Record<string, 'idle' | 'adding' | 'done' | 'exists'>>({})
   const [refreshStatus, setRefreshStatus] = useState<Record<string, 'idle' | 'refreshing' | 'done' | 'error'>>({})
   const [removeStatus,  setRemoveStatus]  = useState<Record<string, 'idle' | 'removing'>>({})
@@ -935,16 +944,41 @@ function DownloadedFilesPanel() {
 
   useEffect(() => { loadList() }, [])
 
-  function openPreview(owner: string, obj: string) {
-    const key = `${owner}__${obj}`
-    if (previewFile === key) { setPreviewFile(null); setPreviewData(null); return }
-    setPreviewFile(key)
-    setPreviewData(null)
-    setPreviewLoading(true)
-    http.get(`/database/table/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}/preview?limit=100`, { timeout: 30000 })
-      .then(res => { if (res.data.success) setPreviewData(res.data.data) })
-      .catch(() => null)
-      .finally(() => setPreviewLoading(false))
+  async function loadWinData(key: string, owner: string, obj: string, limit: number, fileRows: number, label: string) {
+    setWins(p => ({ ...p, [key]: { ...(p[key] ?? { columns: [], records: [], error: null, limit, label, rows: fileRows }), loading: true, error: null } }))
+    try {
+      const res = await http.get(`/database/table/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}/preview?limit=${limit}`, { timeout: 30000 })
+      if (res.data.success) {
+        setWins(p => ({ ...p, [key]: { ...p[key], columns: res.data.data.columns ?? [], records: res.data.data.records ?? [], loading: false } }))
+      } else {
+        setWins(p => ({ ...p, [key]: { ...p[key], loading: false, error: res.data.message || 'Error' } }))
+      }
+    } catch (err: unknown) {
+      const raw = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data?.detail
+        ?? (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message
+        ?? (err as { message?: string })?.message ?? 'Request failed.'
+      const msg = typeof raw === 'string' ? raw
+        : Array.isArray(raw) ? (raw as { msg?: string }[]).map(e => e?.msg ?? JSON.stringify(e)).join('; ')
+        : JSON.stringify(raw)
+      setWins(p => ({ ...p, [key]: { ...p[key], loading: false, error: msg } }))
+    }
+  }
+
+  async function openWindow(f: OutputFile) {
+    const key = `${f.owner}__${f.object}`
+    const label = `${f.owner}.${f.object}`
+    if (activeWin === key) { setActiveWin(null); return }
+    setActiveWin(key)
+    if (!wins[key]) {
+      const limit = Math.min(f.rows, 2000)
+      setWins(p => ({ ...p, [key]: { columns: [], records: [], loading: false, error: null, limit, label, rows: f.rows } }))
+      await loadWinData(key, f.owner, f.object, limit, f.rows, label)
+    }
+  }
+
+  function closeWindow(key: string) {
+    setWins(p => { const n = { ...p }; delete n[key]; return n })
+    if (activeWin === key) setActiveWin(null)
   }
 
   function downloadCsv(owner: string, obj: string) {
@@ -1002,7 +1036,7 @@ function DownloadedFilesPanel() {
 
         {files.map(f => {
           const key = `${f.owner}__${f.object}`
-          const isOpen = previewFile === key
+          const isOpen = !!wins[key]
           return (
             <div key={key}>
               {/* File row */}
@@ -1035,9 +1069,9 @@ function DownloadedFilesPanel() {
                     {/* Actions row */}
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {/* View */}
-                      <button onClick={() => openPreview(f.owner, f.object)}
-                        style={{ padding: '3px 9px', background: isOpen ? '#0c4a6e' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        {isOpen ? '▲ Hide' : '👁 View'}
+                      <button onClick={() => openWindow(f)}
+                        style={{ padding: '3px 9px', background: activeWin === key ? '#0c4a6e' : isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {activeWin === key ? '▼ Close' : isOpen ? '👁 View ✓' : '👁 View'}
                       </button>
 
                       {/* CSV */}
@@ -1077,61 +1111,103 @@ function DownloadedFilesPanel() {
                 )
               })()}
 
-              {/* Inline view panel */}
-              {isOpen && (
-                <div style={{ background: '#080f1a', borderBottom: '1px solid #1e293b', padding: '10px 12px' }}>
-
-                  {/* SQL block — only for QUERY.* rows */}
-                  {f.owner === 'QUERY' && (
-                    <SqlTextBlock file={f} onSaved={(sql) => {
-                      setFiles(prev => prev.map(x =>
-                        x.owner === f.owner && x.object === f.object ? { ...x, sql_text: sql } : x
-                      ))
-                    }} />
-                  )}
-
-                  {/* Data preview */}
-                  {previewLoading && <div style={{ fontSize: 11, color: '#64748b' }}>Loading data…</div>}
-                  {previewData && (
-                    <>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>
-                        Data Preview <span style={{ color: '#334155', fontWeight: 400 }}>— first {previewData.records.length} rows</span>
-                      </div>
-                      <div style={{ overflowX: 'auto', maxHeight: 150, overflowY: 'auto' }}>
-                        <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap' }}>
-                          <thead>
-                            <tr>
-                              {previewData.columns.map(c => (
-                                <th key={c} style={{
-                                  padding: '3px 10px', color: '#64748b', fontWeight: 600,
-                                  position: 'sticky', top: 0, background: '#080f1a',
-                                  textAlign: 'left', borderBottom: '1px solid #1e293b',
-                                }}>{c}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {previewData.records.map((row, i) => (
-                              <tr key={i} style={{ borderBottom: '1px solid #0f172a' }}>
-                                {previewData.columns.map(c => (
-                                  <td key={c} style={{ padding: '3px 10px', color: '#94a3b8', fontFamily: 'monospace', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                                    title={String(row[c] ?? '')}>
-                                    {row[c] == null ? <span style={{ color: '#334155', fontStyle: 'italic' }}>NULL</span> : String(row[c])}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
+              {/* SQL block inline (QUERY rows only, not a popup) */}
+              {f.owner === 'QUERY' && isOpen && (
+                <div style={{ background: '#080f1a', borderBottom: '1px solid #1e293b', padding: '8px 12px' }}>
+                  <SqlTextBlock file={f} onSaved={(sql) => {
+                    setFiles(prev => prev.map(x =>
+                      x.owner === f.owner && x.object === f.object ? { ...x, sql_text: sql } : x
+                    ))
+                  }} />
                 </div>
               )}
             </div>
           )
         })}
       </div>
+
+      {/* Active floating popup */}
+      {activeWin && wins[activeWin] && (() => {
+        const win = wins[activeWin]
+        const btnSt: React.CSSProperties = { width: 24, height: 24, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }
+        const { columns, records, loading: wLoading, error, limit, label, rows } = win
+        const numCols = new Set(columns.filter(c => records.slice(0, 20).every(r => r[c] == null || typeof r[c] === 'number')))
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'stretch' }}
+            onClick={e => { if (e.target === e.currentTarget) setActiveWin(null) }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
+            <div style={{ position: 'relative', margin: '28px auto', width: 'min(96vw, 1300px)', background: '#0c1628', border: '1px solid #1e40af55', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.7)', zIndex: 1 }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0a1220' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                <span style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{rows.toLocaleString()} rows · {columns.length} cols</span>
+                {/* limit selector */}
+                <label style={{ fontSize: 10, color: '#475569' }}>Show</label>
+                <select value={limit} onChange={e => {
+                  const nl = Number(e.target.value)
+                  setWins(p => ({ ...p, [activeWin]: { ...p[activeWin], limit: nl } }))
+                  const [owner, ...rest] = activeWin.split('__')
+                  loadWinData(activeWin, owner, rest.join('__'), nl, rows, label)
+                }} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '2px 6px' }}>
+                  {[100, 200, 500, 1000, 2000].concat(rows <= 2000 ? [] : []).map(n => <option key={n} value={n}>{n}</option>)}
+                  {rows <= 2000 && <option value={rows}>{rows.toLocaleString()} (all)</option>}
+                </select>
+                <button title="Minimize" onClick={() => setActiveWin(null)} style={btnSt}>▬</button>
+                <button title="Close" onClick={() => closeWindow(activeWin)} style={{ ...btnSt, color: '#94a3b8' }}>✕</button>
+              </div>
+              {/* Body */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                {wLoading && <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>⏳ Loading…</div>}
+                {error && <div style={{ padding: 20, color: '#f87171', fontSize: 12 }}>{error}</div>}
+                {!wLoading && !error && columns.length > 0 && (
+                  <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11, whiteSpace: 'nowrap' }}>
+                    <thead>
+                      <tr style={{ background: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
+                        {columns.map(c => <th key={c} style={{ padding: '5px 10px', fontWeight: 700, letterSpacing: '.04em', textAlign: numCols.has(c) ? 'right' : 'left', borderBottom: '2px solid #1e293b', color: '#64748b' }}>{c}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.map((row, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #1e293b', background: i % 2 === 0 ? 'transparent' : '#ffffff05' }}>
+                          {columns.map(c => {
+                            const v = row[c]; const s = v == null ? '' : String(v)
+                            return <td key={c} title={s} style={{ padding: '4px 10px', color: v == null ? '#334155' : numCols.has(c) ? '#7dd3fc' : '#94a3b8', textAlign: numCols.has(c) ? 'right' : 'left', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: numCols.has(c) ? 'monospace' : 'inherit' }}>{v == null ? <i>NULL</i> : s}</td>
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Minimized taskbar */}
+      {Object.keys(wins).filter(k => k !== activeWin).length > 0 && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1001, display: 'flex', gap: 4, alignItems: 'flex-end', padding: '0 8px' }}>
+          {Object.keys(wins).filter(k => k !== activeWin).map(wk => {
+            const w = wins[wk]
+            return (
+              <div key={wk} onClick={() => setActiveWin(wk)}
+                style={{ background: '#131e30', border: '1.5px solid #38bdf855', borderBottom: 'none', borderRadius: '8px 8px 0 0', flex: '1 1 0', minWidth: 80, maxWidth: 280, cursor: 'pointer', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 8px' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#38bdf8', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{w.label}</span>
+                  {!w.loading && <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', flexShrink: 0 }}>{w.rows.toLocaleString()}</span>}
+                  {w.loading && <span style={{ fontSize: 10, color: '#334155', flexShrink: 0 }}>…</span>}
+                  <button title="Restore" onClick={e => { e.stopPropagation(); setActiveWin(wk) }}
+                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
+                  <button title="Close" onClick={e => { e.stopPropagation(); closeWindow(wk) }}
+                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -1489,24 +1489,24 @@ export default function MasterData() {
 
       {/* Minimized windows taskbar */}
       {Object.keys(wins).filter(k => k !== activeWin).length > 0 && (
-        <div style={{ position: 'fixed', bottom: 0, right: 16, zIndex: 1001, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1001, display: 'flex', gap: 4, alignItems: 'flex-end', padding: '0 8px' }}>
           {Object.keys(wins).filter(k => k !== activeWin).map(key => {
             const win   = wins[key]
             const accent = isCustom(key) ? '#f59e0b' : (TABLE_META[key]?.color ?? '#38bdf8')
             const label  = win.data?.label ?? key.toUpperCase()
             return (
               <div key={key}
-                style={{ background: '#131e30', border: `1.5px solid ${accent}55`, borderBottom: 'none', borderRadius: '10px 10px 0 0', boxShadow: '0 -4px 20px rgba(0,0,0,.55)', minWidth: 210, maxWidth: 280, cursor: 'pointer' }}
+                style={{ background: '#131e30', border: `1.5px solid ${accent}55`, borderBottom: 'none', borderRadius: '8px 8px 0 0', boxShadow: '0 -4px 20px rgba(0,0,0,.55)', flex: '1 1 0', minWidth: 80, maxWidth: 280, cursor: 'pointer', overflow: 'hidden' }}
                 onClick={() => setActiveWin(key)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 8px' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{label}</span>
-                  {win.data && <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>{win.data.rows_in_file.toLocaleString()} rows</span>}
-                  {win.loading && <span style={{ fontSize: 10, color: '#334155' }}>…</span>}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{label}</span>
+                  {win.data && <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', flexShrink: 0 }}>{win.data.rows_in_file.toLocaleString()}</span>}
+                  {win.loading && <span style={{ fontSize: 10, color: '#334155', flexShrink: 0 }}>…</span>}
                   <button title="Restore" onClick={e => { e.stopPropagation(); setActiveWin(key) }}
-                    style={{ width: 22, height: 22, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
+                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
                   <button title="Close" onClick={e => { e.stopPropagation(); closeWindow(key) }}
-                    style={{ width: 22, height: 22, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
                 </div>
               </div>
             )

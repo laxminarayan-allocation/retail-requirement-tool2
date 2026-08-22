@@ -64,7 +64,7 @@ const S: Record<string, React.CSSProperties> = {
   input: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px' },
   select: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px' },
   tblWrap: { overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 },
-  tbl: { borderCollapse: 'collapse' as const, width: '100%', fontSize: 12 },
+  tbl: { borderCollapse: 'collapse' as const, width: '100%', minWidth: 900, fontSize: 12 },
   th: { background: '#0f172a', color: '#64748b', fontWeight: 600, padding: '7px 12px', textAlign: 'left' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, borderBottom: '1px solid #334155', fontSize: 10, letterSpacing: 0.4 },
   td: { padding: '7px 12px', color: '#cbd5e1', borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' as const },
   tdNum: { padding: '7px 12px', color: '#7dd3fc', borderBottom: '1px solid #1e293b', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const },

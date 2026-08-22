@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import http from '@/api/http'
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+  return mobile
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 // ─── Barcode vars ──────────────────────────────────────────────────────────────
@@ -1411,11 +1421,13 @@ function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: ()
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function Factors() {
+  const isMobile = useIsMobile()
   const [sets, setSets] = useState<FactorSet[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<FactorSet | null>(null)
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [mobileShowDetail, setMobileShowDetail] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
 
@@ -1467,10 +1479,18 @@ export default function Factors() {
   )
 
   return (
-    <div style={{ display: 'flex', gap: 0, height: 'calc(100vh - 100px)', minHeight: 0 }}>
+    <div style={{ display: 'flex', gap: 0, height: isMobile ? 'calc(100dvh - 80px)' : 'calc(100vh - 100px)', minHeight: 0, flexDirection: isMobile ? 'column' : 'row' }}>
+      {/* Mobile: back button when detail is showing */}
+      {isMobile && mobileShowDetail && (
+        <button onClick={() => setMobileShowDetail(false)} style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+          background: 'none', border: 'none', borderBottom: '1px solid #334155',
+          color: '#38bdf8', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+        }}>← Back to factor sets</button>
+      )}
 
-      {/* Sidebar */}
-      <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', background: C.surf1, borderRight: `1px solid ${C.border2}`, borderRadius: '8px 0 0 8px', overflow: 'hidden' }}>
+      {/* Sidebar — hidden on mobile when detail is showing */}
+      <div style={{ width: isMobile ? '100%' : 260, flexShrink: 0, display: isMobile && mobileShowDetail ? 'none' : 'flex', flexDirection: 'column', background: C.surf1, borderRight: isMobile ? 'none' : `1px solid ${C.border2}`, borderRadius: isMobile ? 8 : '8px 0 0 8px', overflow: 'hidden' }}>
 
         {/* Brand + stats */}
         <div style={{ padding: '18px 14px 12px', borderBottom: `1px solid ${C.border2}` }}>
@@ -1522,7 +1542,7 @@ export default function Factors() {
                 borderLeft: `3px solid ${selectedId === fs.id ? C.blue : 'transparent'}`,
                 background: selectedId === fs.id ? C.blueDim : 'transparent',
               }}
-              onClick={() => { setShowCreate(false); setSelectedId(fs.id) }}
+              onClick={() => { setShowCreate(false); setSelectedId(fs.id); if (isMobile) setMobileShowDetail(true) }}
             >
               <div style={{ fontSize: 12, fontWeight: 600, color: C.text1, display: 'flex', alignItems: 'center', gap: 5 }}>
                 {fs.name}
@@ -1542,8 +1562,8 @@ export default function Factors() {
         </div>
       </div>
 
-      {/* Main */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: C.bg, border: `1px solid ${C.border2}`, borderLeft: 'none', borderRadius: '0 8px 8px 0', overflow: 'hidden' }}>
+      {/* Main — hidden on mobile when list is showing */}
+      <div style={{ flex: 1, display: isMobile && !mobileShowDetail ? 'none' : 'flex', flexDirection: 'column', minWidth: 0, background: C.bg, border: `1px solid ${C.border2}`, borderLeft: isMobile ? undefined : 'none', borderRadius: isMobile ? 8 : '0 8px 8px 0', overflow: 'hidden' }}>
         {!selected && !showCreate && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 60 }}>
             <div style={{ fontSize: 40, opacity: .2 }}>⚙</div>

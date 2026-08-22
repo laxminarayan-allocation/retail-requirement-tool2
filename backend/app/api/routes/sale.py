@@ -268,24 +268,24 @@ async def get_sale_filters():
         from app.core.parquet_cache import has_output, read_cache
         from app.repositories.store_repository import StoreRepository
 
-        store_df = StoreRepository().get_all_stores(active_only=False)
-
         def uniq(df, col):
             if col in df.columns:
                 return sorted(df[col].dropna().unique().tolist())
             return []
 
-        cluster  = uniq(store_df, "cluster_type")
-        region   = uniq(store_df, "region_type") if "region_type" in store_df.columns else []
-
-        # If cache is ready, pull filters from actual sale data
-        attribute1 = []
-        store_statuses = ["ACTIVE", "INACTIVE"]
+        cluster, region, attribute1, store_statuses = [], [], [], ["ACTIVE", "INACTIVE"]
         if has_output(*_CACHE_TY):
             df = read_cache(*_CACHE_TY)
             if df is not None:
+                cluster        = uniq(df, "cluster_type")
+                region         = uniq(df, "region_type")
                 attribute1     = uniq(df, "attribute1")
                 store_statuses = uniq(df, "store_status")
+        else:
+            from app.repositories.store_repository import StoreRepository
+            store_df = StoreRepository().get_all_stores(active_only=False)
+            cluster  = uniq(store_df, "cluster_type")
+            region   = uniq(store_df, "region_type") if "region_type" in store_df.columns else []
 
         return APIResponse.ok(data={
             "cluster_type": cluster,

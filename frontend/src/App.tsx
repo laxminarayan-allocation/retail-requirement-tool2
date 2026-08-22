@@ -14,6 +14,7 @@ import AdminPanel from '@/pages/AdminPanel'
 import UserManual from '@/pages/UserManual'
 import Procedures from '@/pages/Procedures'
 import NSODashboard from '@/pages/NSODashboard'
+import SaleDashboard from '@/pages/SaleDashboard'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="manual" element={<UserManual />} />
             <Route path="procedures" element={<Procedures />} />
             <Route path="nso" element={<NSODashboard />} />
+            <Route path="sale" element={<SaleDashboard />} />
           </Route>
         </Routes>
       </BrowserRouter>

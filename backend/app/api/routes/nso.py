@@ -1,13 +1,18 @@
 """
 NSO Dashboard — New Store Opening performance tracker.
 
-Queries V_NSO (Oracle view) with optional filters.
-All queries are parameterized — no raw string interpolation of user input.
+Data source priority:
+  1. Parquet cache (CK_A2166__V_NSO.parquet) — instant, served in <50ms
+  2. Oracle V_NSO view — slow (~3-5 min), writes parquet for future loads
+
+Master data enrichment: merges STORE_MASTER_NSO parquet on store_name to
+add region_type, store_tag, gm_grade, festival_grouping, bd_tier, asp_tier.
 """
 import logging
 import time
 from typing import Optional
 
+import pandas as pd
 from fastapi import APIRouter, Query, HTTPException
 
 from app.models.response_models import APIResponse
@@ -17,89 +22,147 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nso", tags=["NSO Dashboard"])
 
+_NSO_OWNER = "CK_A2166"
+_NSO_VIEW  = "V_NSO"
+_STR_OWNER = "CK_A2166"
+_STR_TABLE = "STORE_MASTER_NSO"
+
+# Extra columns pulled from STORE_MASTER_NSO and merged into V_NSO rows
+_MASTER_COLS = [
+    "store_name", "region_type", "store_tag", "gm_grade", "bd_tier",
+    "asp_tier", "festival_grouping", "holi_group", "focus_store",
+    "store_desc_filter", "dc_transit_days",
+]
+
 
 def _require_oracle():
     if not settings.is_oracle_configured:
         raise HTTPException(status_code=503, detail="Oracle not configured")
 
 
-def _col_names(cursor) -> list[str]:
-    """Extract column names from cursor description."""
-    return [d[0].upper() for d in cursor.description]
+def _enrich(df: pd.DataFrame) -> pd.DataFrame:
+    """Merge V_NSO rows with STORE_MASTER_NSO parquet for extra master fields."""
+    try:
+        from app.core.parquet_cache import has_output, read_cache
+        if not has_output(_STR_OWNER, _STR_TABLE):
+            return df
+        sm = read_cache(_STR_OWNER, _STR_TABLE)
+        if sm is None:
+            return df
+        # keep only extra cols not already in V_NSO
+        merge_cols = [c for c in _MASTER_COLS if c in sm.columns and c not in df.columns or c == "store_name"]
+        sm_sub = sm[list(dict.fromkeys(merge_cols))].drop_duplicates("store_name")
+        merged = df.merge(sm_sub, on="store_name", how="left")
+        return merged
+    except Exception as e:
+        logger.warning("NSO enrich failed (non-fatal): %s", e)
+        return df
 
 
-_NSO_OWNER = "CK_A2166"
-_NSO_VIEW  = "V_NSO"
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/cache-status", response_model=APIResponse)
+async def get_nso_cache_status():
+    """Return whether the V_NSO Parquet cache is ready, and its row count."""
+    _require_oracle()
+    try:
+        from app.core.parquet_cache import has_output, get_meta
+        ready = has_output(_NSO_OWNER, _NSO_VIEW)
+        meta  = get_meta(_NSO_OWNER, _NSO_VIEW) if ready else {}
+        str_ready = has_output(_STR_OWNER, _STR_TABLE)
+        return APIResponse.ok(data={
+            "ready":          ready,
+            "rows":           meta.get("rows", 0),
+            "store_master_ready": str_ready,
+            "source":         "parquet" if ready else "oracle_needed",
+        })
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/data", response_model=APIResponse)
 async def get_nso_data(
-    attribute1: Optional[str] = Query(None),
+    attribute1:   Optional[str] = Query(None),
     store_status: Optional[str] = Query(None),
-    division: Optional[str] = Query(None),
-    force_refresh: bool = Query(False),
-    limit: int = Query(5000, ge=1, le=50000),
+    division:     Optional[str] = Query(None),
+    region_type:  Optional[str] = Query(None),
+    cluster_type: Optional[str] = Query(None),
+    store_tag:    Optional[str] = Query(None),
+    store_search: Optional[str] = Query(None),
+    force_refresh: bool         = Query(False),
+    limit:         int          = Query(50000, ge=1, le=200000),
 ):
     """
-    Return rows from V_NSO.
+    Return V_NSO rows enriched with STORE_MASTER_NSO master data.
 
-    V_NSO is a complex view — querying it live is very slow.
-    On first call (or force_refresh=true) we fetch the full view into a
-    Parquet cache (same mechanism the DB Explorer uses), then filter/serve
-    from the cache on every subsequent call.  First-fetch can take a few
-    minutes; subsequent calls are instant.
+    Serves from Parquet cache (instant) if available; falls back to Oracle
+    (slow, ~3-5 min first time) and writes the cache.  force_refresh=true
+    re-fetches from Oracle regardless.
     """
     _require_oracle()
     try:
         t0 = time.perf_counter()
-        from app.core.parquet_cache import has_output, read_cache, write_cache, get_meta
+        from app.core.parquet_cache import has_output, read_cache, write_cache
         from app.repositories.base_repository import fetch_df
-        import pandas as pd
 
-        # ── 1. Serve from cache if available ──────────────────────────────
+        # ── 1. Load from parquet (fast) ────────────────────────────────────
         if not force_refresh and has_output(_NSO_OWNER, _NSO_VIEW):
             df = read_cache(_NSO_OWNER, _NSO_VIEW)
             if df is None:
                 return APIResponse.fail(message="Cache read error — try ?force_refresh=true")
-            served_from = "cache"
+            served_from = "parquet"
         else:
-            # ── 2. Full fetch — may take several minutes ───────────────────
-            logger.info("NSO: fetching full V_NSO from Oracle (first load / refresh)")
+            # ── 2. Fetch from Oracle (slow first load) ─────────────────────
+            logger.info("NSO: fetching full V_NSO from Oracle")
             sql = f'SELECT * FROM "{_NSO_OWNER}"."{_NSO_VIEW}"'
             with get_connection() as conn:
                 df = fetch_df(conn, sql, label="V_NSO_full")
             write_cache(_NSO_OWNER, _NSO_VIEW, df)
             served_from = "oracle"
-            logger.info("NSO: cached %d rows", len(df))
+            logger.info("NSO: cached %d rows from Oracle", len(df))
 
-        # ── 3. Filter in-memory (pandas — instant) ────────────────────────
+        # ── 3. Enrich with STORE_MASTER_NSO parquet ────────────────────────
+        df = _enrich(df)
+
+        # ── 4. Filter ──────────────────────────────────────────────────────
         mask = pd.Series([True] * len(df), index=df.index)
+
+        def col(name: str):
+            return next((c for c in df.columns if c.lower() == name.lower()), None)
+
         if attribute1:
-            col = next((c for c in df.columns if c.upper() == "ATTRIBUTE1"), None)
-            if col:
-                mask &= df[col].str.upper() == attribute1.upper()
+            c = col("attribute1")
+            if c: mask &= df[c].str.upper() == attribute1.upper()
         if store_status and store_status != "-":
-            col = next((c for c in df.columns if c.upper() == "STORE_STATUS"), None)
-            if col:
-                mask &= df[col] == store_status
+            c = col("store_status")
+            if c: mask &= df[c].str.upper() == store_status.upper()
         if division:
-            col = next((c for c in df.columns if c.upper() == "DIVISION"), None)
-            if col:
-                mask &= df[col].str.upper() == division.upper()
+            c = col("division")
+            if c: mask &= df[c].str.upper() == division.upper()
+        if region_type:
+            c = col("region_type")
+            if c: mask &= df[c].str.upper() == region_type.upper()
+        if cluster_type:
+            c = col("cluster_type")
+            if c: mask &= df[c].str.upper() == cluster_type.upper()
+        if store_tag:
+            c = col("store_tag")
+            if c: mask &= df[c].str.upper() == store_tag.upper()
+        if store_search:
+            c = col("store_f_name") or col("store_name")
+            if c: mask &= df[c].str.upper().str.contains(store_search.upper(), na=False)
 
         filtered = df[mask].head(limit)
         filtered = filtered.where(filtered.notna(), None)
-        rows = filtered.to_dict(orient="records")
-        cols = list(df.columns)
 
         elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return APIResponse.ok(data={
-            "rows": rows,
-            "count": len(rows),
+            "rows":         filtered.to_dict(orient="records"),
+            "count":        len(filtered),
             "total_cached": len(df),
-            "columns": cols,
-            "elapsed_ms": elapsed,
-            "served_from": served_from,
+            "columns":      list(filtered.columns),
+            "elapsed_ms":   elapsed,
+            "served_from":  served_from,
         })
 
     except Exception as exc:
@@ -107,9 +170,65 @@ async def get_nso_data(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/filters", response_model=APIResponse)
+async def get_nso_filters():
+    """
+    Return distinct filter values — from parquet caches (instant, no Oracle scan).
+    Includes V_NSO filters + extra master filters from STORE_MASTER_NSO.
+    """
+    _require_oracle()
+    try:
+        t0 = time.perf_counter()
+        from app.core.parquet_cache import has_output, read_cache
+
+        def uniq(df, col):
+            c = next((x for x in df.columns if x.lower() == col.lower()), None)
+            return sorted(df[c].dropna().unique().tolist()) if c else []
+
+        attr1, division, store_status = [], [], ["ACTIVE", "UPCOMING_STORE"]
+        cluster_type, region_type, store_tag = [], [], []
+
+        # From V_NSO parquet (if ready)
+        if has_output(_NSO_OWNER, _NSO_VIEW):
+            df = read_cache(_NSO_OWNER, _NSO_VIEW)
+            if df is not None:
+                attr1        = uniq(df, "attribute1")
+                division     = uniq(df, "division")
+                store_status = uniq(df, "store_status")
+                cluster_type = uniq(df, "cluster_type")
+        else:
+            # fallback: item_repository (in-memory)
+            from app.repositories.item_repository import ItemRepository
+            item_df = ItemRepository()._load()
+            attr1    = uniq(item_df, "attribute1")
+            division = uniq(item_df, "division")
+
+        # From STORE_MASTER_NSO parquet — extra master filters
+        if has_output(_STR_OWNER, _STR_TABLE):
+            sm = read_cache(_STR_OWNER, _STR_TABLE)
+            if sm is not None:
+                region_type = uniq(sm, "region_type")
+                store_tag   = uniq(sm, "store_tag")
+
+        elapsed = round((time.perf_counter() - t0) * 1000, 1)
+        return APIResponse.ok(data={
+            "attribute1":   attr1,
+            "store_status": store_status,
+            "division":     division,
+            "cluster_type": cluster_type,
+            "region_type":  region_type,
+            "store_tag":    store_tag,
+            "elapsed_ms":   elapsed,
+        })
+
+    except Exception as exc:
+        logger.error("NSO filters query failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/columns", response_model=APIResponse)
 async def get_nso_columns():
-    """Return V_NSO column names from the Oracle data dictionary (fast — no table scan)."""
+    """Return V_NSO column names from the Oracle data dictionary."""
     _require_oracle()
     try:
         t0 = time.perf_counter()
@@ -125,49 +244,4 @@ async def get_nso_columns():
         return APIResponse.ok(data={"columns": cols, "elapsed_ms": elapsed})
     except Exception as exc:
         logger.error("NSO columns query failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.get("/filters", response_model=APIResponse)
-async def get_nso_filters():
-    """
-    Return distinct filter values using the in-memory item/store caches — instant, no Oracle scan.
-    """
-    _require_oracle()
-    try:
-        t0 = time.perf_counter()
-        from app.repositories.item_repository import ItemRepository
-        from app.repositories.store_repository import StoreRepository
-
-        item_repo = ItemRepository()
-        store_repo = StoreRepository()
-
-        item_df = item_repo._load()
-        store_df = store_repo.get_all_stores(active_only=False)
-
-        attr1 = sorted(item_df["attribute1"].dropna().unique().tolist()) if "attribute1" in item_df.columns else []
-        division = sorted(item_df["division"].dropna().unique().tolist()) if "division" in item_df.columns else []
-
-        store_status: list = []
-        try:
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT DISTINCT STORE_STATUS FROM MISRETAIL.T_STORE_OPENING_DATE "
-                        "WHERE STORE_STATUS IS NOT NULL ORDER BY STORE_STATUS"
-                    )
-                    store_status = [r[0] for r in cur.fetchall()]
-        except Exception:
-            store_status = ["ACTIVE", "UPCOMING_STORE"]
-
-        elapsed = round((time.perf_counter() - t0) * 1000, 1)
-        return APIResponse.ok(data={
-            "attribute1": attr1,
-            "store_status": store_status,
-            "division": division,
-            "elapsed_ms": elapsed,
-        })
-
-    except Exception as exc:
-        logger.error("NSO filters query failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

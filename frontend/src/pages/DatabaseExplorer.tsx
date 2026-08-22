@@ -894,6 +894,7 @@ interface DlWinState {
 }
 
 function DownloadedFilesPanel() {
+  const isMobile = useIsMobile()
   const [files, setFiles] = useState<OutputFile[]>([])
   const [loading, setLoading] = useState(false)
   const [wins, setWins] = useState<Record<string, DlWinState>>({})

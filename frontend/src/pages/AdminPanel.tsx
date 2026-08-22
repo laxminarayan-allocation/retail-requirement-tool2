@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+import { DataGrid } from '@/components/DataGrid'
 
 type RoleRequest = {
   id: string; user_email: string; user_name: string;
@@ -550,32 +551,13 @@ export default function AdminPanel() {
         logs.length === 0
           ? <div style={S.empty}>{loading ? 'Loading…' : 'No activity yet.'}</div>
           : (
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  <th style={S.th}>User</th>
-                  <th style={S.th}>Action</th>
-                  <th style={S.th}>Details</th>
-                  <th style={S.th}>IP</th>
-                  <th style={S.th}>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map(l => (
-                  <tr key={l.id}>
-                    <td style={S.td}><span style={{ color: '#94a3b8' }}>{l.user_email}</span></td>
-                    <td style={S.td}>
-                      <code style={{ fontSize: 11, color: '#7dd3fc', background: '#0f172a', padding: '2px 6px', borderRadius: 3 }}>
-                        {l.action}
-                      </code>
-                    </td>
-                    <td style={S.td}><span style={{ color: '#475569', fontSize: 11 }}>{l.details || '—'}</span></td>
-                    <td style={S.td}><span style={{ color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>{l.ip_address || '—'}</span></td>
-                    <td style={S.td}><span style={{ color: '#334155' }}>{l.created_at?.slice(0, 16).replace('T', ' ')}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ height: 520, border: '1px solid #1e293b', borderRadius: 8, overflow: 'hidden' }}>
+              <DataGrid
+                records={logs.map(l => ({ user: l.user_email, action: l.action, details: l.details || '', ip: l.ip_address || '', time: l.created_at?.slice(0, 16).replace('T', ' ') || '' }))}
+                columns={['user', 'action', 'details', 'ip', 'time']}
+                loading={loading}
+              />
+            </div>
           )
       )}
     </div>

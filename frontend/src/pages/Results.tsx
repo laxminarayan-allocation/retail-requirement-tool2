@@ -321,6 +321,15 @@ export default function Results() {
   // Sort
   const [sortBy, setSortBy] = useState('req')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [colWidths, setColWidths] = useState<Record<string, number>>({})
+
+  function startResizeCol(col: string, e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    const startX = e.clientX; const startW = colWidths[col] ?? 100
+    function onMove(me: MouseEvent) { setColWidths(p => ({ ...p, [col]: Math.max(40, startW + me.clientX - startX) })) }
+    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+  }
 
   // Data
   const [rows, setRows] = useState<Record<string, string | number>[]>([])
@@ -519,9 +528,13 @@ export default function Results() {
                           <thead>
                             <tr>
                               {visColList.map(col => (
-                                <th key={col} style={S.th(sortBy === col)} onClick={() => handleSort(col)}>
+                                <th key={col} style={{ ...S.th(sortBy === col), position: 'relative', width: colWidths[col] }} onClick={() => handleSort(col)}>
                                   {col.toUpperCase().replace(/_/g, ' ')}
                                   {sortBy === col ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                                  <span onMouseDown={e => startResizeCol(col, e)} onClick={e => e.stopPropagation()}
+                                    style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, cursor: 'col-resize', background: 'transparent', borderRight: '2px solid transparent' }}
+                                    onMouseEnter={e => (e.currentTarget.style.borderRightColor = '#334155')}
+                                    onMouseLeave={e => (e.currentTarget.style.borderRightColor = 'transparent')} />
                                 </th>
                               ))}
                             </tr>

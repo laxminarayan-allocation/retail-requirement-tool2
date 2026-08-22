@@ -1,5 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import http from '@/api/http'
+import { DataGrid } from '@/components/DataGrid'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,10 +89,7 @@ function fmtDate(iso?: string) {
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
 }
 
-const NUMERIC = /^-?\d+(\.\d+)?$/
-function isNum(rows: Record<string, unknown>[], col: string) {
-  return rows.slice(0, 8).every(r => r[col] == null || typeof r[col] === 'number' || (typeof r[col] === 'string' && NUMERIC.test(r[col] as string)))
-}
+
 
 // ── Viz types ─────────────────────────────────────────────────────────────────
 
@@ -616,122 +614,6 @@ function VizPanel({
               </div>
             )}
           </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── DataGrid ──────────────────────────────────────────────────────────────────
-
-function DataGrid({ records, columns, loading }: {
-  records: Record<string, unknown>[]
-  columns: string[]
-  loading: boolean
-}) {
-  const [colFilter, setColFilter] = useState('')
-  const [rowFilter, setRowFilter] = useState('')
-  const [page, setPage] = useState(0)
-  const [sortCol, setSortCol] = useState<string | null>(null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const PAGE = 100
-
-  const visCols = colFilter ? columns.filter(c => c.toLowerCase().includes(colFilter.toLowerCase())) : columns
-  const numCols = new Set(visCols.filter(c => isNum(records, c)))
-
-  const filteredRows = rowFilter
-    ? records.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(rowFilter.toLowerCase())))
-    : records
-
-  const visRows = sortCol ? [...filteredRows].sort((a, b) => {
-    const av = a[sortCol]; const bv = b[sortCol]
-    if (av == null && bv == null) return 0
-    if (av == null) return 1
-    if (bv == null) return -1
-    const cmp = numCols.has(sortCol) ? (Number(av) - Number(bv)) : String(av).localeCompare(String(bv), undefined, { numeric: true })
-    return sortDir === 'asc' ? cmp : -cmp
-  }) : filteredRows
-
-  const totalPages = Math.ceil(visRows.length / PAGE)
-  const pageRows = visRows.slice(page * PAGE, (page + 1) * PAGE)
-
-  function handleSort(col: string) {
-    if (sortCol === col) {
-      if (sortDir === 'asc') setSortDir('desc')
-      else { setSortCol(null); setSortDir('asc') }
-    } else { setSortCol(col); setSortDir('asc') }
-    setPage(0)
-  }
-
-  if (loading) return (
-    <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div>
-      Downloading from Oracle… this may take up to 2 minutes for large tables.
-    </div>
-  )
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid #1e293b', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input value={rowFilter} onChange={e => { setRowFilter(e.target.value); setPage(0) }}
-          placeholder="🔍 Filter rows…"
-          style={{ flex: 1, minWidth: 140, background: '#0f172a', border: '1px solid #334155', borderRadius: 5, color: '#e2e8f0', fontSize: 11, padding: '4px 9px', outline: 'none' }} />
-        <input value={colFilter} onChange={e => setColFilter(e.target.value)}
-          placeholder="Filter columns…"
-          style={{ width: 150, background: '#0f172a', border: '1px solid #334155', borderRadius: 5, color: '#e2e8f0', fontSize: 11, padding: '4px 9px', outline: 'none' }} />
-        {sortCol && (
-          <span style={{ fontSize: 10, color: '#38bdf8', background: '#0f172a', border: '1px solid #1e40af', borderRadius: 4, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {sortCol} {sortDir === 'asc' ? '↑' : '↓'}
-            <span style={{ cursor: 'pointer', color: '#475569' }} onClick={() => { setSortCol(null); setSortDir('asc') }}>✕</span>
-          </span>
-        )}
-        <span style={{ fontSize: 11, color: '#475569' }}>
-          {visRows.length.toLocaleString()} rows · {visCols.length} cols
-          {totalPages > 1 && ` · page ${page + 1}/${totalPages}`}
-        </span>
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-              style={{ padding: '3px 9px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: page === 0 ? 'not-allowed' : 'pointer' }}>‹</button>
-            <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-              style={{ padding: '3px 9px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}>›</button>
-          </div>
-        )}
-      </div>
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
-        {records.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: '#334155', fontSize: 12 }}>No data.</div>
-        ) : (
-          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11, whiteSpace: 'nowrap' }}>
-            <thead>
-              <tr style={{ background: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
-                {visCols.map(c => {
-                  const isSorted = sortCol === c
-                  return (
-                    <th key={c} onClick={() => handleSort(c)} title={`Sort by ${c}`}
-                      style={{ padding: '5px 10px', fontWeight: 700, letterSpacing: '.04em', textAlign: numCols.has(c) ? 'right' : 'left', borderBottom: `2px solid ${isSorted ? '#38bdf8' : '#1e293b'}`, color: isSorted ? '#38bdf8' : '#64748b', cursor: 'pointer', userSelect: 'none', background: isSorted ? '#0f1f2e' : '#0f172a' }}>
-                      {c} <span style={{ fontSize: 9, opacity: isSorted ? 1 : 0.3 }}>{isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((row, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #1e293b', background: i % 2 === 0 ? 'transparent' : '#ffffff05' }}>
-                  {visCols.map(c => {
-                    const v = row[c]; const s = v == null ? '' : String(v)
-                    return (
-                      <td key={c} title={s}
-                        style={{ padding: '4px 10px', color: v == null ? '#334155' : numCols.has(c) ? '#7dd3fc' : '#94a3b8', textAlign: numCols.has(c) ? 'right' : 'left', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: numCols.has(c) ? 'monospace' : 'inherit' }}>
-                        {v == null ? <i>NULL</i> : s}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
       </div>
     </div>

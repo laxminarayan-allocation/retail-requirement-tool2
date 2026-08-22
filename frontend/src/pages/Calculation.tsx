@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ExportPanel from '@/components/ExportPanel'
 import http from '@/api/http'
+import { DataGrid } from '@/components/DataGrid'
 
 async function apiFetch<T>(method: string, url: string, data?: unknown): Promise<T> {
   const res = await http.request<{ success: boolean; data: T; message: string | null }>({ method, url, data })
@@ -229,34 +230,20 @@ function ResultGrid({ runId }: { runId: string }) {
         </div>
       </div>
 
-      {loading && <div style={S.empty}>Loading results…</div>}
-      {!loading && rows.length === 0 && <div style={S.empty}>No rows match current filters.</div>}
+      <div style={{ height: 420 }}>
+        <DataGrid
+          records={rows as Record<string, unknown>[]}
+          columns={cols}
+          loading={loading}
+          loadingMessage="Loading results…"
+        />
+      </div>
       {!loading && rows.length > 0 && (
-        <>
-          <div style={S.tblWrap}>
-            <table style={S.tbl}>
-              <thead>
-                <tr>{cols.map(c => <th key={c} style={S.th}>{c.toUpperCase()}</th>)}</tr>
-              </thead>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#0f172a22' }}>
-                    {cols.map(c => {
-                      const v = row[c]
-                      const display = v === '' || v === null || v === undefined ? '—' : (NUM_COLS.has(c) ? fmtNum(v) : String(v))
-                      return <td key={c} style={REQ_COLS.has(c) ? S.tdReq : NUM_COLS.has(c) ? S.tdNum : S.td}>{display}</td>
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ padding: '8px 14px', borderTop: '1px solid #334155', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: '#64748b' }}>
-            <span>Showing {offset + 1}–{Math.min(offset + limit, total)} of {total.toLocaleString()}</span>
-            <button style={S.btnSm} disabled={offset === 0} onClick={() => load(Math.max(0, offset - limit))}>← Prev</button>
-            <button style={S.btnSm} disabled={offset + limit >= total} onClick={() => load(offset + limit)}>Next →</button>
-          </div>
-        </>
+        <div style={{ padding: '8px 14px', borderTop: '1px solid #334155', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: '#64748b' }}>
+          <span>Showing {offset + 1}–{Math.min(offset + limit, total)} of {total.toLocaleString()}</span>
+          <button style={S.btnSm} disabled={offset === 0} onClick={() => load(Math.max(0, offset - limit))}>← Prev</button>
+          <button style={S.btnSm} disabled={offset + limit >= total} onClick={() => load(offset + limit)}>Next →</button>
+        </div>
       )}
     </div>
   )

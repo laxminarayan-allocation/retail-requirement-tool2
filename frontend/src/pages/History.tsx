@@ -280,6 +280,15 @@ export default function History() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [compareIds, setCompareIds] = useState<string[]>([])
   const [showCompare, setShowCompare] = useState(false)
+  const [colWidths, setColWidths] = useState<Record<string, number>>({})
+
+  function startResizeCol(col: string, e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    const startX = e.clientX; const startW = colWidths[col] ?? 100
+    function onMove(me: MouseEvent) { setColWidths(p => ({ ...p, [col]: Math.max(40, startW + me.clientX - startX) })) }
+    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+  }
 
   const load = useCallback(async (off = 0) => {
     setLoading(true)
@@ -400,19 +409,15 @@ export default function History() {
               <table style={S.tbl}>
                 <thead>
                   <tr>
-                    <th style={S.th}>CMP</th>
-                    <th style={S.th}>LABEL</th>
-                    <th style={S.th}>STATUS</th>
-                    <th style={S.th}>FACTOR SET</th>
-                    <th style={S.th}>ATTR1</th>
-                    <th style={S.th}>DIV / DEPT</th>
-                    <th style={S.th}>STARTED</th>
-                    <th style={S.th}>DUR (s)</th>
-                    <th style={{ ...S.th, textAlign: 'right' as const }}>TOTAL REQ</th>
-                    <th style={{ ...S.th, textAlign: 'right' as const }}>STORES</th>
-                    <th style={{ ...S.th, textAlign: 'right' as const }}>FILL %</th>
-                    <th style={S.th}>EXCEPTIONS</th>
-                    <th style={S.th}>ACTIONS</th>
+                    {(['CMP','LABEL','STATUS','FACTOR SET','ATTR1','DIV / DEPT','STARTED','DUR (s)','TOTAL REQ','STORES','FILL %','EXCEPTIONS','ACTIONS'] as const).map(col => (
+                      <th key={col} style={{ ...S.th, position: 'relative', width: colWidths[col], textAlign: ['TOTAL REQ','STORES','FILL %'].includes(col) ? 'right' as const : 'left' as const }}>
+                        {col}
+                        <span onMouseDown={e => startResizeCol(col, e)} onClick={e => e.stopPropagation()}
+                          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, cursor: 'col-resize', background: 'transparent', borderRight: '2px solid transparent' }}
+                          onMouseEnter={e => (e.currentTarget.style.borderRightColor = '#334155')}
+                          onMouseLeave={e => (e.currentTarget.style.borderRightColor = 'transparent')} />
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>

@@ -5,6 +5,16 @@
  * Polls for status, shows step-by-step progress, then renders summary + result grid + exceptions.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+  return mobile
+}
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ExportPanel from '@/components/ExportPanel'
 import http from '@/api/http'
@@ -357,6 +367,7 @@ function ExceptionsPanel({ runId }: { runId: string }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Calculation() {
+  const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
   const [factorSets, setFactorSets] = useState<FactorSetMeta[]>([])
   const [selectedFs, setSelectedFs] = useState(searchParams.get('factor_set_id') ?? '')
@@ -446,9 +457,9 @@ export default function Calculation() {
   const isRunning = activeRun?.status === 'running' || activeRun?.status === 'pending'
 
   return (
-    <div style={S.page}>
+    <div style={{ ...S.page, flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : 'calc(100vh - 100px)', overflowY: isMobile ? 'auto' : undefined }}>
       {/* ── Sidebar ── */}
-      <div style={S.sidebar}>
+      <div style={{ ...S.sidebar, width: isMobile ? '100%' : 300, flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', marginBottom: 2 }}>Calculation</div>
           <div style={{ fontSize: 12, color: '#64748b' }}>Configure and run replenishment</div>
@@ -562,14 +573,14 @@ export default function Calculation() {
             )}
 
             {/* Steps + Summary side by side */}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ ...S.card, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ ...S.card, flex: 1, minWidth: isMobile ? '100%' : 220 }}>
                 <div style={S.cardHead}><span style={S.cardTitle}>Pipeline Steps</span></div>
                 <StepList steps={activeRun.steps} running={isRunning} />
               </div>
 
               {activeRun.summary && (
-                <div style={{ ...S.card, flex: 1 }}>
+                <div style={{ ...S.card, flex: 1, minWidth: isMobile ? '100%' : 220 }}>
                   <div style={S.cardHead}><span style={S.cardTitle}>Summary</span></div>
                   <SummaryKPIs s={activeRun.summary} />
                 </div>

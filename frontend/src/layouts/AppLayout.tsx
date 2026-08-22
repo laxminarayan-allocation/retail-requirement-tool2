@@ -1,10 +1,20 @@
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
+import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth, hasRole, type Role } from '@/context/AuthContext'
 import axios from 'axios'
 import PendingPage from '@/pages/PendingPage'
 import AssistantWidget from '@/components/AssistantWidget'
 import NotificationBell from '@/components/NotificationBell'
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+  return mobile
+}
 
 const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = [
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
@@ -32,7 +42,7 @@ const styles: Record<string, React.CSSProperties> = {
   sidebar: {
     width: 220, background: '#1e293b', borderRight: '1px solid #334155',
     display: 'flex', flexDirection: 'column', flexShrink: 0,
-    height: '100vh',   /* never taller than viewport — userStrip stays pinned at bottom */
+    height: '100vh',
   },
   logo: {
     padding: '20px 16px', borderBottom: '1px solid #334155',
@@ -51,11 +61,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
   topbar: {
-    background: '#1e293b', borderBottom: '1px solid #334155', padding: '12px 24px',
+    background: '#1e293b', borderBottom: '1px solid #334155', padding: '10px 16px',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    fontSize: 13, color: '#94a3b8',
+    fontSize: 13, color: '#94a3b8', gap: 8,
   },
-  content: { flex: 1, padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
+  content: { flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
 }
 
 function NavItem({ to, label, icon }: { to: string; label: string; icon: string }) {
@@ -81,7 +91,13 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: string 
 
 export default function AppLayout() {
   const { user, token, loading, signout } = useAuth()
+  const isMobile = useIsMobile()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
   const [roleRequestOpen, setRoleRequestOpen] = useState(false)
+
+  // Close sidebar on route change on mobile
+  useEffect(() => { if (isMobile) setSidebarOpen(false) }, [location.pathname, isMobile])
   const [pendingRequest, setPendingRequest] = useState<any>(null)
   const [roleReason, setRoleReason] = useState('')
   const [tempDays, setTempDays] = useState(24)
@@ -138,7 +154,22 @@ export default function AppLayout() {
   return (
     <div style={styles.shell}>
       <AssistantWidget />
-      <aside style={styles.sidebar}>
+
+      {/* Mobile overlay backdrop */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1099,
+        }} />
+      )}
+
+      <aside style={{
+        ...styles.sidebar,
+        ...(isMobile ? {
+          position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 1100,
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s ease',
+        } : {}),
+      }}>
         <div style={styles.logo}>
           RETAIL REQ TOOL
           <div style={styles.logoSub}>v1.0 · AW26</div>
@@ -229,13 +260,21 @@ export default function AppLayout() {
 
       <main style={styles.main}>
         <div style={styles.topbar}>
-          <span>Retail Requirement &amp; Replenishment System</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: '#475569', fontSize: 11 }}>SS27 · PREWINTER AW26</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {isMobile && (
+              <button onClick={() => setSidebarOpen(o => !o)} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#94a3b8', fontSize: 20, lineHeight: 1, padding: '2px 4px', flexShrink: 0,
+              }}>☰</button>
+            )}
+            <span style={{ fontSize: isMobile ? 11 : 13 }}>Retail Requirement &amp; Replenishment System</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {!isMobile && <span style={{ color: '#475569', fontSize: 11 }}>SS27 · PREWINTER AW26</span>}
             <NotificationBell />
           </div>
         </div>
-        <div style={styles.content}>
+        <div style={{ ...styles.content, padding: isMobile ? 12 : 24 }}>
           <Outlet />
         </div>
       </main>

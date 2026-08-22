@@ -199,11 +199,11 @@ interface DashboardData {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', gap: 16 },
-  grid4: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 },
-  grid5: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 },
-  grid6: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 },
-  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
-  grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  grid4: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 },
+  grid5: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 },
+  grid6: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 },
+  grid3: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 },
+  grid2: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 },
   card: { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' },
   cardHead: { padding: '10px 14px', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontSize: 12, fontWeight: 600, color: '#94a3b8', letterSpacing: 0.5, textTransform: 'uppercase' as const },

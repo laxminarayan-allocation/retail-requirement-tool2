@@ -190,6 +190,9 @@ export default function NSODashboard() {
       .catch(e => { setError(String(e)); setLoading(false) })
   }
 
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 100
+
   // Auto-load on mount (will serve from cache if available)
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -200,6 +203,12 @@ export default function NSODashboard() {
   const visible = search.trim()
     ? rows.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
     : rows
+
+  const totalPages = Math.ceil(visible.length / PAGE_SIZE)
+  const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  // Reset to page 1 when filter/search changes
+  useEffect(() => { setPage(1) }, [visible.length])
 
   const kpis = deriveKPIs(visible)
 
@@ -359,10 +368,10 @@ export default function NSODashboard() {
                 </tr>
               </thead>
               <tbody>
-                {visible.length === 0 && (
+                {paged.length === 0 && (
                   <tr><td colSpan={cols.length} style={S.empty}>No rows match filters.</td></tr>
                 )}
-                {visible.map((row, i) => {
+                {paged.map((row, i) => {
                   const status = String(row['store_status'] ?? row['STORE_STATUS'] ?? '')
                   const rowBg = i % 2 === 0 ? statusColor(status) : 'transparent'
                   return (
@@ -391,6 +400,16 @@ export default function NSODashboard() {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 14px', borderTop: `1px solid ${C.border}`, justifyContent: 'center', fontSize: 12, color: C.text2 }}>
+              <button style={S.btnSm} disabled={page === 1} onClick={() => setPage(1)}>«</button>
+              <button style={S.btnSm} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
+              <span>{page} / {totalPages} &nbsp;({visible.length.toLocaleString()} rows)</span>
+              <button style={S.btnSm} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
+              <button style={S.btnSm} disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
+            </div>
+          )}
         </div>
       )}
 

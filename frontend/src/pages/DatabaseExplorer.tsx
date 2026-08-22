@@ -887,6 +887,17 @@ function DownloadedFilesPanel() {
   const [loading, setLoading] = useState(false)
   const [wins, setWins] = useState<Record<string, DlWinState>>({})
   const [activeWin, setActiveWin] = useState<string | null>(null)
+  const [colWidths, setColWidths] = useState<Record<string, number>>({})
+
+  function startResize(col: string, e: React.MouseEvent) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = colWidths[col] ?? 120
+    function onMove(me: MouseEvent) { setColWidths(p => ({ ...p, [col]: Math.max(40, startW + me.clientX - startX) })) }
+    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
   const [mdStatus,      setMdStatus]      = useState<Record<string, 'idle' | 'adding' | 'done' | 'exists'>>({})
   const [refreshStatus, setRefreshStatus] = useState<Record<string, 'idle' | 'refreshing' | 'done' | 'error'>>({})
   const [removeStatus,  setRemoveStatus]  = useState<Record<string, 'idle' | 'removing'>>({})
@@ -1161,10 +1172,19 @@ function DownloadedFilesPanel() {
                 {wLoading && <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>⏳ Loading…</div>}
                 {error && <div style={{ padding: 20, color: '#f87171', fontSize: 12 }}>{error}</div>}
                 {!wLoading && !error && columns.length > 0 && (
-                  <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11, whiteSpace: 'nowrap' }}>
+                  <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: columns.reduce((s, c) => s + (colWidths[c] ?? 120), 0), fontSize: 11, whiteSpace: 'nowrap' }}>
+                    <colgroup>{columns.map(c => <col key={c} style={{ width: colWidths[c] ?? 120 }} />)}</colgroup>
                     <thead>
                       <tr style={{ background: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
-                        {columns.map(c => <th key={c} style={{ padding: '5px 10px', fontWeight: 700, letterSpacing: '.04em', textAlign: numCols.has(c) ? 'right' : 'left', borderBottom: '2px solid #1e293b', color: '#64748b' }}>{c}</th>)}
+                        {columns.map(c => (
+                          <th key={c} style={{ position: 'relative', padding: '5px 10px', fontWeight: 700, letterSpacing: '.04em', textAlign: numCols.has(c) ? 'right' : 'left', borderBottom: '2px solid #1e293b', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', userSelect: 'none' }}>
+                            {c}
+                            <span onMouseDown={ev => startResize(c, ev)} onClick={ev => ev.stopPropagation()}
+                              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, cursor: 'col-resize', background: 'transparent', borderRight: '2px solid transparent' }}
+                              onMouseEnter={e => (e.currentTarget.style.borderRightColor = '#334155')}
+                              onMouseLeave={e => (e.currentTarget.style.borderRightColor = 'transparent')} />
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1172,7 +1192,7 @@ function DownloadedFilesPanel() {
                         <tr key={i} style={{ borderBottom: '1px solid #1e293b', background: i % 2 === 0 ? 'transparent' : '#ffffff05' }}>
                           {columns.map(c => {
                             const v = row[c]; const s = v == null ? '' : String(v)
-                            return <td key={c} title={s} style={{ padding: '4px 10px', color: v == null ? '#334155' : numCols.has(c) ? '#7dd3fc' : '#94a3b8', textAlign: numCols.has(c) ? 'right' : 'left', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: numCols.has(c) ? 'monospace' : 'inherit' }}>{v == null ? <i>NULL</i> : s}</td>
+                            return <td key={c} title={s} style={{ padding: '4px 10px', color: v == null ? '#334155' : numCols.has(c) ? '#7dd3fc' : '#94a3b8', textAlign: numCols.has(c) ? 'right' : 'left', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: numCols.has(c) ? 'monospace' : 'inherit' }}>{v == null ? <i>NULL</i> : s}</td>
                           })}
                         </tr>
                       ))}

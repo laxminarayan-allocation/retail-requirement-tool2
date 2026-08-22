@@ -14,7 +14,7 @@ async function apiFetch<T>(url: string, params?: Record<string, string>): Promis
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface NSOFilters { attribute1: string[]; store_status: string[]; division: string[] }
-interface NSOData { rows: Record<string, unknown>[]; columns: string[]; count: number; elapsed_ms: number }
+interface NSOData { rows: Record<string, unknown>[]; columns: string[]; count: number; total_cached: number; elapsed_ms: number; served_from: string }
 
 // ── Colour helpers ─────────────────────────────────────────────────────────────
 /** Colour a percentage cell like the Excel: red <80, yellow 80-99, green ≥100 */
@@ -34,10 +34,21 @@ function statusColor(status: string | null): string {
   return 'transparent'
 }
 
-// ── PCT columns — cells coloured by value ─────────────────────────────────────
-const PCT_COLS = new Set(['ACH_LM_%', 'ACH_%', 'FILL_RATE', 'FILL RATE', 'ACH%', 'ACH LM%', 'GM'])
-const NUM_COLS = new Set(['PBS_Q', 'TTL_STK_Q', 'PBS_V', 'TTL_STK_V', 'TO_V', 'MTD_SLV',
-  'STK_V', 'PACK_PEND_V', 'APPS', 'SLV_AVG_D', 'SLV_AVG/D', 'OPERT_DAYS', 'STORE_AREA'])
+// ── PCT / NUM columns (lowercase — Parquet cache lowercases column names) ──────
+const PCT_COLS = new Set(['achv_per', 'lm_achv_per'])
+const NUM_COLS = new Set([
+  'area', 'store_area', 'art_str',
+  'proj_q', 'proj_q_1', 'proj_q_2', 'proj_q_3', 'proj_q_4', 'proj_q_5', 'proj_q_6',
+  'proj_v', 'proj_v_1', 'proj_v_2', 'proj_v_3', 'proj_v_4', 'proj_v_5', 'proj_v_6',
+  'proj_cv', 'proj_cv_1', 'proj_cv_2', 'proj_cv_3', 'proj_cv_4', 'proj_cv_5', 'proj_cv_6',
+  'pbs_q', 'pbs_v', 'pbs_cv',
+  'ttl_stk_q', 'stk_q', 'adj_stk_q', 'in_transit_q', 'pack_pend_q',
+  'to_q', 'lm_sl_q', 'mtd_sl_q',
+  'ttl_stk_v', 'stk_v', 'adj_stk_v', 'in_transit_v', 'pack_pend_v',
+  'to_v', 'lm_sl_val', 'mtd_sl_v',
+  'tgt_v', 'sl_v', 'lm_tgt_v', 'lm_sl_v',
+  'req_q', 'req_v',
+])
 
 function fmtNum(val: unknown): string {
   const n = Number(val)
@@ -108,13 +119,17 @@ function useIsMobile() {
 function deriveKPIs(rows: Record<string, unknown>[]) {
   if (!rows.length) return null
   const num = (col: string) => rows.reduce((s, r) => s + (Number(r[col]) || 0), 0)
-  const active = rows.filter(r => String(r['STORE_STATUS'] ?? '').toUpperCase() === 'ACTIVE').length
-  const upcoming = rows.filter(r => String(r['STORE_STATUS'] ?? '').toUpperCase().includes('UPCOMING')).length
+  const stores = new Set(rows.map(r => r['store_name'] ?? r['STORE_NAME']))
+  const status = (r: Record<string, unknown>) => String(r['store_status'] ?? r['STORE_STATUS'] ?? '').toUpperCase()
+  const active = rows.filter(r => status(r) === 'ACTIVE')
+  const upcoming = rows.filter(r => status(r).includes('UPCOMING'))
   return {
-    total: rows.length, active, upcoming,
-    pbsQ: num('PBS_Q'), ttlStkQ: num('TTL_STK_Q'),
-    pbsV: num('PBS_V'), ttlStkV: num('TTL_STK_V'),
-    toV: num('TO_V'), mtdSlv: num('MTD_SLV'),
+    total: stores.size,
+    active: new Set(active.map(r => r['store_name'] ?? r['STORE_NAME'])).size,
+    upcoming: new Set(upcoming.map(r => r['store_name'] ?? r['STORE_NAME'])).size,
+    pbsQ: num('pbs_q'), ttlStkQ: num('ttl_stk_q'),
+    pbsV: num('pbs_v'), ttlStkV: num('ttl_stk_v'),
+    toV: num('to_v'), mtdSlv: num('mtd_sl_v'),
   }
 }
 
@@ -148,19 +163,20 @@ export default function NSODashboard() {
     apiFetch<NSOFilters>('/nso/filters').then(setFilters).catch(e => setError(String(e)))
   }, [])
 
-  function load() {
+  function load(forceRefresh = false) {
     setLoading(true)
     setError(null)
-    const params: Record<string, string> = { limit: '2000' }
+    const params: Record<string, string> = { limit: '50000' }
     if (selAttr)   params.attribute1    = selAttr
     if (selStatus) params.store_status  = selStatus
     if (selDiv)    params.division      = selDiv
+    if (forceRefresh) params.force_refresh = 'true'
     apiFetch<NSOData>('/nso/data', params)
       .then(d => { setData(d); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
   }
 
-  // Auto-load on mount
+  // Auto-load on mount (will serve from cache if available)
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
@@ -215,8 +231,11 @@ export default function NSODashboard() {
               <option value="">All Divisions</option>
               {filters.division.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
-            <button style={S.btn} onClick={load} disabled={loading}>
-              {loading ? '⋯' : '🔍 Load'}
+            <button style={S.btn} onClick={() => load(false)} disabled={loading}>
+              {loading ? '⋯ Loading…' : '🔍 Load'}
+            </button>
+            <button style={S.btnSm} onClick={() => load(true)} disabled={loading} title="Re-fetch V_NSO from Oracle (slow — first time only)">
+              🔄 Refresh Oracle
             </button>
             {data && <button style={S.btnSm} onClick={exportCSV}>⬇ CSV</button>}
           </div>
@@ -233,8 +252,10 @@ export default function NSODashboard() {
               style={{ ...S.select, flex: 1, maxWidth: 300 }}
             />
             <span style={{ fontSize: 11, color: C.text3 }}>
-              {visible.length.toLocaleString()} / {rows.length.toLocaleString()} stores
-              {data.elapsed_ms && ` · ${data.elapsed_ms} ms`}
+              {visible.length.toLocaleString()} / {rows.length.toLocaleString()} rows
+              {data.total_cached ? ` (${data.total_cached.toLocaleString()} cached)` : ''}
+              {` · ${data.elapsed_ms} ms`}
+              {data.served_from === 'oracle' ? ' · fetched live' : ' · from cache'}
             </span>
           </div>
         )}
@@ -294,13 +315,13 @@ export default function NSODashboard() {
                   <tr><td colSpan={cols.length} style={S.empty}>No rows match filters.</td></tr>
                 )}
                 {visible.map((row, i) => {
-                  const status = String(row['STORE_STATUS'] ?? '')
+                  const status = String(row['store_status'] ?? row['STORE_STATUS'] ?? '')
                   const rowBg = i % 2 === 0 ? statusColor(status) : 'transparent'
                   return (
                     <tr key={i} style={{ background: rowBg }}>
                       {cols.map(c => {
                         const val = row[c]
-                        if (c === 'STORE_STATUS') {
+                        if (c === 'store_status' || c === 'STORE_STATUS') {
                           return <td key={c} style={S.td}><StatusBadge status={String(val ?? '')} /></td>
                         }
                         if (isPct(c)) {
@@ -326,7 +347,9 @@ export default function NSODashboard() {
       )}
 
       {!loading && !data && !error && (
-        <div style={{ ...S.card, ...S.empty }}>Select filters and click Load to view NSO data.</div>
+        <div style={{ ...S.card, ...S.empty }}>
+          Select a <strong>Campaign</strong> from the dropdown above, then click <strong>Load</strong>.
+        </div>
       )}
     </div>
   )

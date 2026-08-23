@@ -292,7 +292,7 @@ async def table_preview(
     """
     Return a data preview for a table or view.
     Serves from the output Parquet file if it exists (unless force_refresh=true).
-    On refresh, fetches from Oracle (ROWNUM <= 5000) and overwrites the output file.
+    On refresh, fetches full data from Oracle and overwrites the output file.
     """
     _require_oracle()
     from app.core.parquet_cache import has_output, read_cache, write_cache, get_meta
@@ -305,7 +305,7 @@ async def table_preview(
     try:
         if force_refresh or not has_output(owner, object_name):
             t0 = _time.perf_counter()
-            sql = f'SELECT * FROM "{owner.upper()}"."{object_name.upper()}" WHERE ROWNUM <= 5000'
+            sql = f'SELECT * FROM "{owner.upper()}"."{object_name.upper()}"'
             with get_connection() as conn:
                 df = fetch_df(conn, sql, label=f"{owner}.{object_name}")
             fetch_ms = round((_time.perf_counter() - t0) * 1000, 1)

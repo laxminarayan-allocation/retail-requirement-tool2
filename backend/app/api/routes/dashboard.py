@@ -53,8 +53,8 @@ def _safe_oracle_stats() -> dict:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
             f_items  = ex.submit(item_repo._load)
             f_stores = ex.submit(store_repo.get_all_stores, True)
-            item_df  = f_items.result(timeout=25)
-            store_df = f_stores.result(timeout=25)
+            item_df  = f_items.result(timeout=60)
+            store_df = f_stores.result(timeout=60)
         oracle_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         # Item stats
@@ -72,19 +72,18 @@ def _safe_oracle_stats() -> dict:
         # Store stats
         active_stores = len(store_df)
 
-        # Upcoming stores live in MISRETAIL.T_STORE_OPENING_DATE, not V_STORE_MASTER
+        # Upcoming stores — from Parquet cache if available, else skip (avoid Oracle timeout)
         upcoming_stores = 0
         try:
-            from app.db.connection import get_connection
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT COUNT(*) FROM MISRETAIL.T_STORE_OPENING_DATE WHERE STORE_STATUS = 'UPCOMING_STORE'"
-                    )
-                    row = cur.fetchone()
-                    upcoming_stores = int(row[0]) if row else 0
+            from app.core.parquet_cache import has_output, read_cache
+            if has_output("MISRETAIL", "T_STORE_OPENING_DATE"):
+                sod = read_cache("MISRETAIL", "T_STORE_OPENING_DATE")
+                if sod is not None:
+                    col_status = next((c for c in sod.columns if c.lower() == "store_status"), None)
+                    if col_status:
+                        upcoming_stores = int((sod[col_status].str.upper() == "UPCOMING_STORE").sum())
         except Exception as exc:
-            logger.warning("upcoming store count query failed: %s", exc)
+            logger.warning("upcoming store count failed: %s", exc)
 
         total_all_stores = active_stores + upcoming_stores
         status_dist: dict = {"ACTIVE": active_stores}

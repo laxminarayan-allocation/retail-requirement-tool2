@@ -328,7 +328,7 @@ export default function Dashboard() {
   const load = useCallback(async (forceRefresh = false) => {
     try {
       if (forceRefresh) await http.post('/dashboard/cache/clear')
-      const res = await http.get<{ success: boolean; data: DashboardData }>('/dashboard/summary', { timeout: 90_000 })
+      const res = await http.get<{ success: boolean; data: DashboardData }>('/dashboard/summary', { timeout: 120_000 })
       if (res.data.success) {
         setData(res.data.data)
         setError(null)

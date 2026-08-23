@@ -196,6 +196,11 @@ export default function NSODashboard() {
   // Auto-load on mount (will serve from cache if available)
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-reload when any server-side filter changes (instant from Parquet)
+  useEffect(() => {
+    if (data || cacheInfo?.ready) load()
+  }, [selAttr, selStatus, selDiv, selCluster, selRegion, selTag]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Filtered rows (client-side text search)
   const rows = data?.rows ?? []
   const cols = data?.columns ?? []

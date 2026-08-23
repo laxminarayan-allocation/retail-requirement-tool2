@@ -313,7 +313,9 @@ export default function SaleDashboard() {
           ↺ Reload from DB
         </button>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>⬇ CSV</button>
-        <span style={{ opacity: .4, fontSize: 11 }}>{rows.length} stores shown</span>
+        <span style={{ opacity: .4, fontSize: 11 }}>
+          {rows.length} stores shown{allRows.length !== rows.length ? ` (of ${allRows.length})` : ''}
+        </span>
       </div>
 
       {/* Table */}

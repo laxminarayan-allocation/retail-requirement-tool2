@@ -216,6 +216,20 @@ function StoreSummary({
   const totalMtd = stores.reduce((s, r) => s + (Number(r.mtd_sl_v) || 0), 0)
   const totalPbs = stores.reduce((s, r) => s + (Number(r.pbs_v) || 0), 0)
   const totalStk = stores.reduce((s, r) => s + (Number(r.ttl_stk_v) || 0), 0)
+  // STR = stk_v / (mtd_sl_v / opert_days) — days of stock cover at current daily sales rate
+  const totalStkV = stores.reduce((s, r) => s + (Number(r.stk_v) || 0), 0)
+  const wtdDailySale = stores.reduce((s, r) => {
+    const days = Number(r.opert_days) || 0
+    const mtd = Number(r.mtd_sl_v) || 0
+    return s + (days > 0 ? mtd : 0)
+  }, 0)
+  const wtdDays = stores.reduce((s, r) => {
+    const days = Number(r.opert_days) || 0
+    const mtd = Number(r.mtd_sl_v) || 0
+    return s + (days > 0 ? days : 0)
+  }, 0)
+  const avgDailySale = wtdDays > 0 ? wtdDailySale / wtdDays : 0
+  const totalSTR = avgDailySale > 0 ? totalStkV / avgDailySale : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 10 }}>
@@ -230,6 +244,7 @@ function StoreSummary({
               { label: 'MTD Sale(L)', val: totalMtd.toFixed(2), color: C.green, suffix: '' },
               { label: 'PBS Val(L)', val: totalPbs.toFixed(2), color: C.yellow, suffix: '' },
               { label: 'Stock Val(L)', val: totalStk.toFixed(2), color: C.yellow, suffix: '' },
+              { label: 'STR (days)', val: totalSTR.toFixed(1), color: '#c084fc', suffix: '' },
             ].map(k => (
               <div key={k.label} style={S.kpi}>
                 <div style={{ ...S.kpiVal, color: k.color }}>{k.val}</div>

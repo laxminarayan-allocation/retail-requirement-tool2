@@ -106,6 +106,7 @@ const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 
   { key: 'pack_pend_v',    label: 'PACK PEND(L)', type: 'lakh' },
   { key: 'opert_days',     label: 'OPER DAYS',    type: 'qty'  },
   { key: 'sl_avg_d',       label: 'SL AVG/D(L)',  type: 'lakh' },
+  { key: 'str_days',       label: 'STR(days)',    type: 'num'  },
 ]
 
 function fmtLakh(v: unknown): string {

@@ -275,6 +275,15 @@ async def get_nso_store_summary(
                 axis=1,
             )
 
+        # STR (days) = stk_v / (mtd_sl_v / store_mtd_days)
+        # store_mtd_days = min(opert_days, days elapsed in current month)
+        mtd_days_in_month = date.today().day - 1 or 1
+        if 'stk_v' in grp.columns and 'mtd_sl_v' in grp.columns and 'opert_days' in grp.columns:
+            def _str(r):
+                store_mtd = min(int(r['opert_days'] or 0), mtd_days_in_month)
+                return round(r['stk_v'] / (r['mtd_sl_v'] / store_mtd), 1) if store_mtd > 0 and r['mtd_sl_v'] > 0 else 0
+            grp['str_days'] = grp.apply(_str, axis=1)
+
         # Sort: ACTIVE first (opening_date asc), then UPCOMING (tentetive_date asc)
         if 'store_status' in grp.columns:
             grp['_sort_status'] = grp['store_status'].str.upper().map(

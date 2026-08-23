@@ -216,20 +216,15 @@ function StoreSummary({
   const totalMtd = stores.reduce((s, r) => s + (Number(r.mtd_sl_v) || 0), 0)
   const totalPbs = stores.reduce((s, r) => s + (Number(r.pbs_v) || 0), 0)
   const totalStk = stores.reduce((s, r) => s + (Number(r.ttl_stk_v) || 0), 0)
-  // STR = stk_v / (mtd_sl_v / opert_days) — days of stock cover at current daily sales rate
+  // STR = total stk_v / sum(store daily sale rates)
+  // Each store's daily rate = mtd_sl_v / opert_days; sum gives portfolio daily rate
   const totalStkV = stores.reduce((s, r) => s + (Number(r.stk_v) || 0), 0)
-  const wtdDailySale = stores.reduce((s, r) => {
+  const portfolioDailyRate = stores.reduce((s, r) => {
     const days = Number(r.opert_days) || 0
     const mtd = Number(r.mtd_sl_v) || 0
-    return s + (days > 0 ? mtd : 0)
+    return s + (days > 0 ? mtd / days : 0)
   }, 0)
-  const wtdDays = stores.reduce((s, r) => {
-    const days = Number(r.opert_days) || 0
-    const mtd = Number(r.mtd_sl_v) || 0
-    return s + (days > 0 ? days : 0)
-  }, 0)
-  const avgDailySale = wtdDays > 0 ? wtdDailySale / wtdDays : 0
-  const totalSTR = avgDailySale > 0 ? totalStkV / avgDailySale : 0
+  const totalSTR = portfolioDailyRate > 0 ? totalStkV / portfolioDailyRate : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 10 }}>

@@ -216,11 +216,17 @@ function StoreSummary({
   const totalMtd = stores.reduce((s, r) => s + (Number(r.mtd_sl_v) || 0), 0)
   const totalPbs = stores.reduce((s, r) => s + (Number(r.pbs_v) || 0), 0)
   const totalStk = stores.reduce((s, r) => s + (Number(r.ttl_stk_v) || 0), 0)
-  // STR = stk_v / (mtd_sl_v / mtd_days)
-  // mtd_days = days elapsed in current month (same for all stores)
+  // STR = total_stk_v / portfolio_daily_rate
+  // Per-store MTD days = min(opert_days, days elapsed in month)
+  // e.g. SDH opened Aug 15 → 8 days; old store → 22 days
   const mtdDays = new Date().getDate() - 1 || 1
   const totalStkV = stores.reduce((s, r) => s + (Number(r.stk_v) || 0), 0)
-  const totalSTR = totalMtd > 0 ? (totalStkV / (totalMtd / mtdDays)) : 0
+  const portfolioDailyRate = stores.reduce((s, r) => {
+    const storeMtdDays = Math.min(Number(r.opert_days) || 0, mtdDays)
+    const mtd = Number(r.mtd_sl_v) || 0
+    return s + (storeMtdDays > 0 ? mtd / storeMtdDays : 0)
+  }, 0)
+  const totalSTR = portfolioDailyRate > 0 ? totalStkV / portfolioDailyRate : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 10 }}>

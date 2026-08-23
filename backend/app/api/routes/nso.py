@@ -162,31 +162,35 @@ async def get_nso_data(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+_ALL_VIEW = "V_ALL_WITH_NSO"
+
 @router.get("/store-summary", response_model=APIResponse)
 async def get_nso_store_summary(
     store_status: Optional[str] = Query(None),
     cluster_type: Optional[str] = Query(None),
     region_type:  Optional[str] = Query(None),
     store_tag:    Optional[str] = Query(None),
+    source:       str           = Query("nso"),   # "nso" = V_NSO, "all" = V_ALL_WITH_NSO
 ):
     """
-    Return store-level NSO summary aggregated from V_NSO parquet.
-    Groups article rows by store and computes store KPIs.
-    Sorted: ACTIVE stores first (by opening_date), then UPCOMING (by tentetive_date).
+    Return store-level NSO summary aggregated from V_NSO or V_ALL_WITH_NSO parquet.
+    source=nso  → V_NSO (NSO plan stores only)
+    source=all  → V_ALL_WITH_NSO (all stores carrying NSO articles)
     """
     _require_oracle()
+    view_name = _ALL_VIEW if source == "all" else _NSO_VIEW
     try:
         t0 = time.perf_counter()
         from app.core.parquet_cache import has_output, read_cache
 
-        if not has_output(_NSO_OWNER, _NSO_VIEW):
+        if not has_output(_NSO_OWNER, view_name):
             return APIResponse.fail(
-                message="V_NSO parquet not found. Please download it from Master Data page first."
+                message=f"{view_name} parquet not found. Please download it from Master Data page first."
             )
 
-        df = read_cache(_NSO_OWNER, _NSO_VIEW)
+        df = read_cache(_NSO_OWNER, view_name)
         if df is None:
-            return APIResponse.fail(message="Cache read error — re-download V_NSO from Master Data page.")
+            return APIResponse.fail(message=f"Cache read error — re-download {view_name} from Master Data page.")
 
         df = _enrich(df)
 
@@ -303,6 +307,8 @@ async def get_nso_store_summary(
         return APIResponse.ok(data={
             "stores": grp.to_dict(orient="records"),
             "count":  len(grp),
+            "source": source,
+            "view":   view_name,
             "elapsed_ms": elapsed,
         })
 

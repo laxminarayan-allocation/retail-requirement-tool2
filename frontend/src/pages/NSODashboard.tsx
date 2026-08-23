@@ -135,17 +135,25 @@ function StoreSummary({
   const [data, setData] = useState<StoreSummaryData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [source, setSource] = useState<'nso' | 'all'>('nso')
 
-  function load() {
+  function load(src?: 'nso' | 'all') {
     setLoading(true); setError(null)
     const params: Record<string, string> = {}
     if (selStatus)  params.store_status = selStatus
     if (selCluster) params.cluster_type = selCluster
     if (selRegion)  params.region_type  = selRegion
     if (selTag)     params.store_tag    = selTag
+    params.source = src ?? source
     apiFetch<StoreSummaryData>('/nso/store-summary', params)
       .then(d => { setData(d); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
+  }
+
+  function toggleSource() {
+    const next = source === 'nso' ? 'all' : 'nso'
+    setSource(next)
+    load(next)
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -250,6 +258,13 @@ function StoreSummary({
               </div>
             ))}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                onClick={toggleSource}
+                disabled={loading}
+                style={{ ...S.btnSm, background: source === 'all' ? '#7c3aed22' : 'transparent', color: source === 'all' ? '#c084fc' : C.text2, border: `1px solid ${source === 'all' ? '#c084fc' : C.border}` }}
+              >
+                {source === 'nso' ? 'NSO Stores' : 'All Stores'}
+              </button>
               <button style={S.btnSm} onClick={() => load()} disabled={loading}>
                 {loading ? '⋯' : '↻ Reload'}
               </button>

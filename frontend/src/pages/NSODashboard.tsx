@@ -160,7 +160,6 @@ export default function NSODashboard() {
   const [selRegion, setSelRegion]   = useState('')
   const [selTag, setSelTag]         = useState('')
   const [search, setSearch]         = useState('')
-  const [cacheInfo, setCacheInfo]   = useState<CacheStatus | null>(null)
 
   const [data, setData]     = useState<NSOData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -168,23 +167,21 @@ export default function NSODashboard() {
 
   const searchRef = useRef<HTMLInputElement>(null)
 
-  // Load filter options + cache status once
+  // Load filter options once
   useEffect(() => {
     apiFetch<NSOFilters>('/nso/filters').then(setFilters).catch(e => setError(String(e)))
-    apiFetch<CacheStatus>('/nso/cache-status').then(setCacheInfo).catch(() => {})
   }, [])
 
-  function load(forceRefresh = false) {
+  function load() {
     setLoading(true)
     setError(null)
     const params: Record<string, string> = { limit: '50000' }
-    if (selAttr)   params.attribute1    = selAttr
-    if (selStatus) params.store_status  = selStatus
-    if (selDiv)    params.division      = selDiv
+    if (selAttr)    params.attribute1   = selAttr
+    if (selStatus)  params.store_status = selStatus
+    if (selDiv)     params.division     = selDiv
     if (selCluster) params.cluster_type = selCluster
     if (selRegion)  params.region_type  = selRegion
     if (selTag)     params.store_tag    = selTag
-    if (forceRefresh) params.force_refresh = 'true'
     apiFetch<NSOData>('/nso/data', params)
       .then(d => { setData(d); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
@@ -198,7 +195,7 @@ export default function NSODashboard() {
 
   // Auto-reload when any server-side filter changes (instant from Parquet)
   useEffect(() => {
-    if (data || cacheInfo?.ready) load()
+    if (data) load()
   }, [selAttr, selStatus, selDiv, selCluster, selRegion, selTag]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
@@ -244,25 +241,8 @@ export default function NSODashboard() {
         <div style={S.cardHead}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>NSO Dashboard</div>
-            <div style={{ fontSize: 11, color: C.text3, marginTop: 2, display: 'flex', gap: 8, alignItems: 'center' }}>
-              New Store Opening — performance tracker
-              {cacheInfo && (
-                <span style={{
-                  background: cacheInfo.ready ? '#14532d' : '#1e3a5f',
-                  color: cacheInfo.ready ? '#4ade80' : '#7dd3fc',
-                  border: `1px solid ${cacheInfo.ready ? '#16a34a' : '#3b82f6'}`,
-                  borderRadius: 4, fontSize: 10, fontWeight: 700, padding: '1px 7px'
-                }}>
-                  {cacheInfo.ready
-                    ? `⚡ Parquet Cache · ${(cacheInfo.rows / 1000).toFixed(0)}K rows`
-                    : '🔴 No Cache — will fetch from Oracle'}
-                </span>
-              )}
-              {cacheInfo?.store_master_ready && (
-                <span style={{ background: '#1a2a10', color: '#86efac', border: '1px solid #16a34a', borderRadius: 4, fontSize: 10, padding: '1px 7px' }}>
-                  + Master Data linked
-                </span>
-              )}
+            <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>
+              New Store Opening — performance tracker · data from Master Data parquet
             </div>
           </div>
           <div style={S.filterRow}>
@@ -292,12 +272,8 @@ export default function NSODashboard() {
                 {filters.store_tag.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             )}
-            <button style={S.btn} onClick={() => load(false)} disabled={loading}
-              title={cacheInfo?.ready ? 'Load instantly from Parquet cache' : 'Load (will fetch from Oracle)'}>
-              {loading ? '⋯ Loading…' : cacheInfo?.ready ? '⚡ Quick Load' : '🔍 Load'}
-            </button>
-            <button style={S.btnSm} onClick={() => load(true)} disabled={loading} title="Re-fetch V_NSO from Oracle (slow)">
-              🔄 Reload Oracle
+            <button style={S.btn} onClick={() => load()} disabled={loading}>
+              {loading ? '⋯ Loading…' : '⚡ Quick Load'}
             </button>
             {data && <button style={S.btnSm} onClick={exportCSV}>⬇ CSV</button>}
           </div>

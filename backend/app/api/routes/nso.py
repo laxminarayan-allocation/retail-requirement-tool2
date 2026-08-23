@@ -94,32 +94,23 @@ async def get_nso_data(
 ):
     """
     Return V_NSO rows enriched with STORE_MASTER_NSO master data.
-
-    Serves from Parquet cache (instant) if available; falls back to Oracle
-    (slow, ~3-5 min first time) and writes the cache.  force_refresh=true
-    re-fetches from Oracle regardless.
+    Reads ONLY from Parquet cache (downloaded via Master Data page).
+    No direct Oracle fetch — refresh data from Master Data > V_NSO download.
     """
     _require_oracle()
     try:
         t0 = time.perf_counter()
-        from app.core.parquet_cache import has_output, read_cache, write_cache
-        from app.repositories.base_repository import fetch_df
+        from app.core.parquet_cache import has_output, read_cache
 
-        # ── 1. Load from parquet (fast) ────────────────────────────────────
-        if not force_refresh and has_output(_NSO_OWNER, _NSO_VIEW):
-            df = read_cache(_NSO_OWNER, _NSO_VIEW)
-            if df is None:
-                return APIResponse.fail(message="Cache read error — try ?force_refresh=true")
-            served_from = "parquet"
-        else:
-            # ── 2. Fetch from Oracle (slow first load) ─────────────────────
-            logger.info("NSO: fetching full V_NSO from Oracle")
-            sql = f'SELECT * FROM "{_NSO_OWNER}"."{_NSO_VIEW}"'
-            with get_connection() as conn:
-                df = fetch_df(conn, sql, label="V_NSO_full")
-            write_cache(_NSO_OWNER, _NSO_VIEW, df)
-            served_from = "oracle"
-            logger.info("NSO: cached %d rows from Oracle", len(df))
+        if not has_output(_NSO_OWNER, _NSO_VIEW):
+            return APIResponse.fail(
+                message="V_NSO parquet not found. Please download it from Master Data page first."
+            )
+
+        df = read_cache(_NSO_OWNER, _NSO_VIEW)
+        if df is None:
+            return APIResponse.fail(message="Cache read error — re-download V_NSO from Master Data page.")
+        served_from = "parquet"
 
         # ── 3. Enrich with STORE_MASTER_NSO parquet ────────────────────────
         df = _enrich(df)

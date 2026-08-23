@@ -1,7 +1,6 @@
 /**
  * NSO Dashboard — New Store Opening performance tracker.
- * Reads from MISRETAIL.V_NSO via /api/nso/data with optional filters.
- * Columns are discovered dynamically from the API response.
+ * Two views: Store View (Excel-style store summary) and Article Detail.
  */
 import { useEffect, useRef, useState } from 'react'
 import http from '@/api/http'
@@ -18,7 +17,6 @@ interface NSOFilters {
   cluster_type: string[]; region_type: string[]; store_tag: string[]
 }
 interface NSOData { rows: Record<string, unknown>[]; columns: string[]; count: number; total_cached: number; elapsed_ms: number; served_from: string }
-interface CacheStatus { ready: boolean; rows: number; store_master_ready: boolean; source: string }
 
 // ── Colour helpers ─────────────────────────────────────────────────────────────
 /** Colour a percentage cell like the Excel: red <80, yellow 80-99, green ≥100 */
@@ -66,6 +64,227 @@ function fmtPct(val: unknown): string {
   const n = Number(val)
   if (isNaN(n)) return val == null ? '—' : String(val)
   return n.toFixed(2) + '%'
+}
+
+// ── Store Summary Types ────────────────────────────────────────────────────────
+interface StoreRow {
+  store_name: string
+  store_f_name?: string
+  store_area?: number | string
+  store_status?: string
+  cluster_type?: string
+  region_type?: string
+  tentetive_date?: string
+  opening_date?: string
+  pbs_q?: number; ttl_stk_q?: number
+  pbs_v?: number; ttl_stk_v?: number
+  to_v?: number; mtd_sl_v?: number
+  lm_sl_val?: number; lm_tgt_v?: number
+  stk_v?: number; pack_pend_v?: number
+  opert_days?: number; sl_avg_d?: number
+  ach_pct?: number; ach_lm_pct?: number; fill_rate?: number
+  [key: string]: unknown
+}
+interface StoreSummaryData { stores: StoreRow[]; count: number; elapsed_ms: number }
+
+// ── Store Summary Component ────────────────────────────────────────────────────
+const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 'pct' | 'date' | 'qty' }[] = [
+  { key: 'tentetive_date', label: 'TENT DATE',    type: 'date' },
+  { key: 'store_area',     label: 'AREA',         type: 'qty'  },
+  { key: 'store_f_name',   label: 'STORE NAME',   type: 'text' },
+  { key: 'store_name',     label: 'CODE',         type: 'text' },
+  { key: 'pbs_q',          label: 'PBS QTY',      type: 'qty'  },
+  { key: 'ttl_stk_q',      label: 'STK QTY',      type: 'qty'  },
+  { key: 'pbs_v',          label: 'PBS VAL(L)',    type: 'lakh' },
+  { key: 'ttl_stk_v',      label: 'TTL STK(L)',   type: 'lakh' },
+  { key: 'to_v',           label: 'TO VAL(L)',    type: 'lakh' },
+  { key: 'mtd_sl_v',       label: 'MTD SALE(L)',  type: 'lakh' },
+  { key: 'ach_lm_pct',     label: 'ACH LM%',     type: 'pct'  },
+  { key: 'ach_pct',        label: 'ACH%',         type: 'pct'  },
+  { key: 'fill_rate',      label: 'FILL RATE%',   type: 'pct'  },
+  { key: 'stk_v',          label: 'STK VAL(L)',   type: 'lakh' },
+  { key: 'pack_pend_v',    label: 'PACK PEND(L)', type: 'lakh' },
+  { key: 'opert_days',     label: 'OPER DAYS',    type: 'qty'  },
+  { key: 'sl_avg_d',       label: 'SL AVG/D(L)',  type: 'lakh' },
+]
+
+function fmtLakh(v: unknown): string {
+  const n = Number(v)
+  if (isNaN(n) || v == null) return '—'
+  return (n / 100000).toFixed(2)
+}
+function fmtQty(v: unknown): string {
+  const n = Number(v)
+  if (isNaN(n) || v == null) return '—'
+  return Math.round(n).toLocaleString('en-IN')
+}
+function fmtDate(v: unknown): string {
+  if (!v) return '—'
+  const s = String(v)
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return s
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
+}
+
+function StoreSummary({
+  selStatus, selCluster, selRegion, selTag,
+}: {
+  selStatus: string; selCluster: string; selRegion: string; selTag: string
+}) {
+  const [data, setData] = useState<StoreSummaryData | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function load() {
+    setLoading(true); setError(null)
+    const params: Record<string, string> = {}
+    if (selStatus)  params.store_status = selStatus
+    if (selCluster) params.cluster_type = selCluster
+    if (selRegion)  params.region_type  = selRegion
+    if (selTag)     params.store_tag    = selTag
+    apiFetch<StoreSummaryData>('/nso/store-summary', params)
+      .then(d => { setData(d); setLoading(false) })
+      .catch(e => { setError(String(e)); setLoading(false) })
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (data) load() }, [selStatus, selCluster, selRegion, selTag]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function exportCSV() {
+    if (!data?.stores.length) return
+    const header = STORE_COLS.map(c => c.label).join(',')
+    const body = data.stores.map(r =>
+      STORE_COLS.map(c => {
+        const v = r[c.key]
+        if (c.type === 'lakh') return (Number(v) / 100000).toFixed(2)
+        if (c.type === 'pct')  return v == null ? '' : Number(v).toFixed(2)
+        if (c.type === 'qty')  return v == null ? '' : String(Math.round(Number(v)))
+        if (c.type === 'date') return fmtDate(v)
+        return v == null ? '' : String(v)
+      }).join(',')
+    ).join('\n')
+    const blob = new Blob([header + '\n' + body], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `nso_store_summary_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+  }
+
+  const stores = data?.stores ?? []
+  const active   = stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE')
+  const upcoming = stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING'))
+
+  function StoreTable({ rows, title }: { rows: StoreRow[]; title: string }) {
+    const color = title.startsWith('Active') ? C.green : '#7dd3fc'
+    return (
+      <>
+        <tr>
+          <td colSpan={STORE_COLS.length} style={{
+            background: title.startsWith('Active') ? '#052e16' : '#0c1a2e',
+            color, fontWeight: 700, fontSize: 11, padding: '6px 10px',
+            letterSpacing: 0.5,
+          }}>
+            {title} ({rows.length})
+          </td>
+        </tr>
+        {rows.map((row, i) => (
+          <tr key={row.store_name + i} style={{ background: i % 2 === 0 ? C.surf2 : C.surf1 }}>
+            {STORE_COLS.map(col => {
+              const v = row[col.key]
+              if (col.type === 'pct') {
+                const n = Number(v)
+                return (
+                  <td key={col.key} style={{ ...S.tdPct, color: pctColor(isNaN(n) ? null : n) }}>
+                    {v == null ? '—' : n.toFixed(1) + '%'}
+                  </td>
+                )
+              }
+              if (col.type === 'lakh') return <td key={col.key} style={S.tdNum}>{fmtLakh(v)}</td>
+              if (col.type === 'qty')  return <td key={col.key} style={S.tdNum}>{fmtQty(v)}</td>
+              if (col.type === 'date') return <td key={col.key} style={{ ...S.td, color: C.text2 }}>{fmtDate(v)}</td>
+              if (col.key === 'store_name') return <td key={col.key} style={{ ...S.td, fontWeight: 700, color: C.blue }}>{String(v ?? '—')}</td>
+              if (col.key === 'store_f_name') return <td key={col.key} style={{ ...S.td, minWidth: 160 }}>{String(v ?? '—')}</td>
+              return <td key={col.key} style={S.td}>{v == null ? '—' : String(v)}</td>
+            })}
+          </tr>
+        ))}
+      </>
+    )
+  }
+
+  // KPIs from store summary
+  const totalMtd = stores.reduce((s, r) => s + (Number(r.mtd_sl_v) || 0), 0)
+  const totalPbs = stores.reduce((s, r) => s + (Number(r.pbs_v) || 0), 0)
+  const totalStk = stores.reduce((s, r) => s + (Number(r.ttl_stk_v) || 0), 0)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 10 }}>
+      {/* Store KPI row */}
+      {data && (
+        <div style={{ ...S.card, flexShrink: 0 }}>
+          <div style={S.kpiRow}>
+            {[
+              { label: 'Total Stores', val: stores.length, color: C.blue, suffix: '' },
+              { label: 'Active', val: active.length, color: C.green, suffix: '' },
+              { label: 'Upcoming', val: upcoming.length, color: '#7dd3fc', suffix: '' },
+              { label: 'MTD Sale(L)', val: (totalMtd / 100000).toFixed(2), color: C.green, suffix: '' },
+              { label: 'PBS Val(L)', val: (totalPbs / 100000).toFixed(2), color: C.yellow, suffix: '' },
+              { label: 'Stock Val(L)', val: (totalStk / 100000).toFixed(2), color: C.yellow, suffix: '' },
+            ].map(k => (
+              <div key={k.label} style={S.kpi}>
+                <div style={{ ...S.kpiVal, color: k.color }}>{k.val}</div>
+                <div style={S.kpiLabel}>{k.label}</div>
+              </div>
+            ))}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button style={S.btnSm} onClick={() => load()} disabled={loading}>
+                {loading ? '⋯' : '↻ Reload'}
+              </button>
+              {data && <button style={S.btnSm} onClick={exportCSV}>⬇ CSV</button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ ...S.card, background: '#450a0a', border: `1px solid ${C.red}` }}>
+          <div style={{ padding: '12px 14px', color: C.red, fontSize: 13 }}>
+            <strong>Error:</strong> {error}
+          </div>
+        </div>
+      )}
+
+      {loading && <div style={{ ...S.card, ...S.empty }}>Loading store summary…</div>}
+
+      {!loading && data && (
+        <div style={{ ...S.card, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ ...S.tblWrap }}>
+            <table style={{ ...S.tbl, minWidth: 1600 }}>
+              <thead>
+                <tr>
+                  {STORE_COLS.map(col => (
+                    <th key={col.key} style={col.type === 'text' || col.type === 'date' ? S.th : S.thNum}>
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {active.length > 0 && <StoreTable rows={active} title="Active Stores" />}
+                {upcoming.length > 0 && <StoreTable rows={upcoming} title="Upcoming Stores" />}
+                {stores.length === 0 && (
+                  <tr><td colSpan={STORE_COLS.length} style={S.empty}>No stores found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ padding: '6px 14px', borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.text3 }}>
+            {stores.length} stores · {data.elapsed_ms} ms · V_NSO article aggregation · MTD sale = NSO-plan articles only
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -161,6 +380,7 @@ export default function NSODashboard() {
   const [selTag, setSelTag]         = useState('')
   const [search, setSearch]         = useState('')
 
+  const [tab, setTab]       = useState<'store' | 'article'>('store')
   const [data, setData]     = useState<NSOData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]   = useState<string | null>(null)
@@ -246,17 +466,21 @@ export default function NSODashboard() {
             </div>
           </div>
           <div style={S.filterRow}>
-            <select style={S.select} value={selAttr} onChange={e => setSelAttr(e.target.value)}>
-              <option value="">All Campaigns</option>
-              {filters.attribute1.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
+            {/* Tab switcher */}
+            {(['store', 'article'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                ...S.btnSm,
+                background: tab === t ? C.blue : 'transparent',
+                color: tab === t ? '#fff' : C.text2,
+                fontWeight: tab === t ? 700 : 400,
+              }}>
+                {t === 'store' ? '📊 Store View' : '📋 Article Detail'}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: C.border }} />
             <select style={S.select} value={selStatus} onChange={e => setSelStatus(e.target.value)}>
               <option value="">All Status</option>
               {filters.store_status.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <select style={S.select} value={selDiv} onChange={e => setSelDiv(e.target.value)}>
-              <option value="">All Divisions</option>
-              {filters.division.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
             <select style={S.select} value={selCluster} onChange={e => setSelCluster(e.target.value)}>
               <option value="">All Zones</option>
@@ -272,10 +496,22 @@ export default function NSODashboard() {
                 {filters.store_tag.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             )}
-            <button style={S.btn} onClick={() => load()} disabled={loading}>
-              {loading ? '⋯ Loading…' : '⚡ Quick Load'}
-            </button>
-            {data && <button style={S.btnSm} onClick={exportCSV}>⬇ CSV</button>}
+            {tab === 'article' && (
+              <>
+                <select style={S.select} value={selAttr} onChange={e => setSelAttr(e.target.value)}>
+                  <option value="">All Campaigns</option>
+                  {filters.attribute1.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <select style={S.select} value={selDiv} onChange={e => setSelDiv(e.target.value)}>
+                  <option value="">All Divisions</option>
+                  {filters.division.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <button style={S.btn} onClick={() => load()} disabled={loading}>
+                  {loading ? '⋯ Loading…' : '⚡ Load'}
+                </button>
+                {data && <button style={S.btnSm} onClick={exportCSV}>⬇ CSV</button>}
+              </>
+            )}
           </div>
         </div>
 
@@ -299,105 +535,133 @@ export default function NSODashboard() {
         )}
       </div>
 
-      {/* ── KPI strip ── */}
-      {kpis && (
-        <div style={{ ...S.card, flexShrink: 0 }}>
-          <div style={S.kpiRow}>
-            {[
-              { label: 'Total Stores', val: kpis.total.toLocaleString(), color: C.blue },
-              { label: 'Active', val: kpis.active.toLocaleString(), color: C.green },
-              { label: 'Upcoming', val: kpis.upcoming.toLocaleString(), color: '#7dd3fc' },
-              { label: 'PBS Qty', val: (kpis.pbsQ / 1000).toFixed(1) + 'K', color: C.blue },
-              { label: 'Stock Qty', val: (kpis.ttlStkQ / 1000).toFixed(1) + 'K', color: C.blue },
-              { label: 'PBS Value (L)', val: (kpis.pbsV / 100000).toFixed(2), color: C.yellow },
-              { label: 'Stock Value (L)', val: (kpis.ttlStkV / 100000).toFixed(2), color: C.yellow },
-              { label: 'Turnover (L)', val: (kpis.toV / 100000).toFixed(2), color: C.green },
-              { label: 'MTD Sales (L)', val: (kpis.mtdSlv / 100000).toFixed(2), color: C.green },
-            ].map(k => (
-              <div key={k.label} style={S.kpi}>
-                <div style={{ ...S.kpiVal, color: k.color }}>{k.val}</div>
-                <div style={S.kpiLabel}>{k.label}</div>
+      {/* ── Store View Tab ── */}
+      {tab === 'store' && (
+        <StoreSummary
+          selStatus={selStatus}
+          selCluster={selCluster}
+          selRegion={selRegion}
+          selTag={selTag}
+        />
+      )}
+
+      {/* ── Article Detail Tab ── */}
+      {tab === 'article' && (
+        <>
+          {/* KPI strip */}
+          {kpis && (
+            <div style={{ ...S.card, flexShrink: 0 }}>
+              <div style={S.kpiRow}>
+                {[
+                  { label: 'Total Stores', val: kpis.total.toLocaleString(), color: C.blue },
+                  { label: 'Active', val: kpis.active.toLocaleString(), color: C.green },
+                  { label: 'Upcoming', val: kpis.upcoming.toLocaleString(), color: '#7dd3fc' },
+                  { label: 'PBS Qty', val: (kpis.pbsQ / 1000).toFixed(1) + 'K', color: C.blue },
+                  { label: 'Stock Qty', val: (kpis.ttlStkQ / 1000).toFixed(1) + 'K', color: C.blue },
+                  { label: 'PBS Value (L)', val: (kpis.pbsV / 100000).toFixed(2), color: C.yellow },
+                  { label: 'Stock Value (L)', val: (kpis.ttlStkV / 100000).toFixed(2), color: C.yellow },
+                  { label: 'Turnover (L)', val: (kpis.toV / 100000).toFixed(2), color: C.green },
+                  { label: 'MTD Sales (L)', val: (kpis.mtdSlv / 100000).toFixed(2), color: C.green },
+                ].map(k => (
+                  <div key={k.label} style={S.kpi}>
+                    <div style={{ ...S.kpiVal, color: k.color }}>{k.val}</div>
+                    <div style={S.kpiLabel}>{k.label}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Error ── */}
-      {error && (
-        <div style={{ ...S.card, background: '#450a0a', border: `1px solid ${C.red}` }}>
-          <div style={{ padding: '12px 14px', color: C.red, fontSize: 13 }}>
-            <strong>Error:</strong> {error}
-          </div>
-        </div>
-      )}
-
-      {/* ── Table ── */}
-      {loading && (
-        <div style={{ ...S.card, ...S.empty }}>Loading V_NSO data…</div>
-      )}
-
-      {!loading && data && cols.length > 0 && (
-        <div style={{ ...S.card, ...(isMobile ? {} : { flex: 1, minHeight: 0 }), display: 'flex', flexDirection: 'column' }}>
-          <div style={{ ...S.tblWrap, ...(isMobile ? { overflowY: 'visible', flex: 'unset', minHeight: 'unset' } : {}) }}>
-            <table style={S.tbl}>
-              <thead>
-                <tr>
-                  {cols.map(c => (
-                    <th key={c} style={isPct(c) || isNum(c) ? S.thNum : S.th}>{c.replace(/_/g, ' ')}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paged.length === 0 && (
-                  <tr><td colSpan={cols.length} style={S.empty}>No rows match filters.</td></tr>
-                )}
-                {paged.map((row, i) => {
-                  const status = String(row['store_status'] ?? row['STORE_STATUS'] ?? '')
-                  const rowBg = i % 2 === 0 ? statusColor(status) : 'transparent'
-                  return (
-                    <tr key={i} style={{ background: rowBg }}>
-                      {cols.map(c => {
-                        const val = row[c]
-                        if (c === 'store_status' || c === 'STORE_STATUS') {
-                          return <td key={c} style={S.td}><StatusBadge status={String(val ?? '')} /></td>
-                        }
-                        if (isPct(c)) {
-                          const n = Number(val)
-                          return (
-                            <td key={c} style={{ ...S.tdPct, color: pctColor(isNaN(n) ? null : n) }}>
-                              {fmtPct(val)}
-                            </td>
-                          )
-                        }
-                        if (isNum(c)) {
-                          return <td key={c} style={S.tdNum}>{fmtNum(val)}</td>
-                        }
-                        return <td key={c} style={S.td}>{val == null ? '—' : String(val)}</td>
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 14px', borderTop: `1px solid ${C.border}`, justifyContent: 'center', fontSize: 12, color: C.text2 }}>
-              <button style={S.btnSm} disabled={page === 1} onClick={() => setPage(1)}>«</button>
-              <button style={S.btnSm} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
-              <span>{page} / {totalPages} &nbsp;({visible.length.toLocaleString()} rows)</span>
-              <button style={S.btnSm} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
-              <button style={S.btnSm} disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
             </div>
           )}
-        </div>
-      )}
 
-      {!loading && !data && !error && (
-        <div style={{ ...S.card, ...S.empty }}>
-          Select a <strong>Campaign</strong> from the dropdown above, then click <strong>Load</strong>.
-        </div>
+          {error && (
+            <div style={{ ...S.card, background: '#450a0a', border: `1px solid ${C.red}` }}>
+              <div style={{ padding: '12px 14px', color: C.red, fontSize: 13 }}>
+                <strong>Error:</strong> {error}
+              </div>
+            </div>
+          )}
+
+          {/* Search */}
+          {data && (
+            <div style={{ ...S.card, padding: '8px 14px', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+              <input
+                ref={searchRef}
+                placeholder="Search store name, status…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ ...S.select, flex: 1, maxWidth: 300 }}
+              />
+              <span style={{ fontSize: 11, color: C.text3 }}>
+                {visible.length.toLocaleString()} / {rows.length.toLocaleString()} rows
+                {data.total_cached ? ` (${data.total_cached.toLocaleString()} cached)` : ''}
+                {` · ${data.elapsed_ms} ms`}
+              </span>
+            </div>
+          )}
+
+          {loading && <div style={{ ...S.card, ...S.empty }}>Loading V_NSO data…</div>}
+
+          {!loading && data && cols.length > 0 && (
+            <div style={{ ...S.card, ...(isMobile ? {} : { flex: 1, minHeight: 0 }), display: 'flex', flexDirection: 'column' }}>
+              <div style={{ ...S.tblWrap, ...(isMobile ? { overflowY: 'visible', flex: 'unset', minHeight: 'unset' } : {}) }}>
+                <table style={S.tbl}>
+                  <thead>
+                    <tr>
+                      {cols.map(c => (
+                        <th key={c} style={isPct(c) || isNum(c) ? S.thNum : S.th}>{c.replace(/_/g, ' ')}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paged.length === 0 && (
+                      <tr><td colSpan={cols.length} style={S.empty}>No rows match filters.</td></tr>
+                    )}
+                    {paged.map((row, i) => {
+                      const status = String(row['store_status'] ?? row['STORE_STATUS'] ?? '')
+                      const rowBg = i % 2 === 0 ? statusColor(status) : 'transparent'
+                      return (
+                        <tr key={i} style={{ background: rowBg }}>
+                          {cols.map(c => {
+                            const val = row[c]
+                            if (c === 'store_status' || c === 'STORE_STATUS') {
+                              return <td key={c} style={S.td}><StatusBadge status={String(val ?? '')} /></td>
+                            }
+                            if (isPct(c)) {
+                              const n = Number(val)
+                              return (
+                                <td key={c} style={{ ...S.tdPct, color: pctColor(isNaN(n) ? null : n) }}>
+                                  {fmtPct(val)}
+                                </td>
+                              )
+                            }
+                            if (isNum(c)) {
+                              return <td key={c} style={S.tdNum}>{fmtNum(val)}</td>
+                            }
+                            return <td key={c} style={S.td}>{val == null ? '—' : String(val)}</td>
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '8px 14px', borderTop: `1px solid ${C.border}`, justifyContent: 'center', fontSize: 12, color: C.text2 }}>
+                  <button style={S.btnSm} disabled={page === 1} onClick={() => setPage(1)}>«</button>
+                  <button style={S.btnSm} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
+                  <span>{page} / {totalPages} &nbsp;({visible.length.toLocaleString()} rows)</span>
+                  <button style={S.btnSm} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
+                  <button style={S.btnSm} disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!loading && !data && !error && (
+            <div style={{ ...S.card, ...S.empty }}>
+              Select filters above, then click <strong>Load</strong>.
+            </div>
+          )}
+        </>
       )}
     </div>
   )

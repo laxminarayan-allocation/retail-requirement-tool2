@@ -161,6 +161,135 @@ async def get_nso_data(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/store-summary", response_model=APIResponse)
+async def get_nso_store_summary(
+    store_status: Optional[str] = Query(None),
+    cluster_type: Optional[str] = Query(None),
+    region_type:  Optional[str] = Query(None),
+    store_tag:    Optional[str] = Query(None),
+):
+    """
+    Return store-level NSO summary aggregated from V_NSO parquet.
+    Groups article rows by store and computes store KPIs.
+    Sorted: ACTIVE stores first (by opening_date), then UPCOMING (by tentetive_date).
+    """
+    _require_oracle()
+    try:
+        t0 = time.perf_counter()
+        from app.core.parquet_cache import has_output, read_cache
+
+        if not has_output(_NSO_OWNER, _NSO_VIEW):
+            return APIResponse.fail(
+                message="V_NSO parquet not found. Please download it from Master Data page first."
+            )
+
+        df = read_cache(_NSO_OWNER, _NSO_VIEW)
+        if df is None:
+            return APIResponse.fail(message="Cache read error — re-download V_NSO from Master Data page.")
+
+        df = _enrich(df)
+
+        # Normalise column names to lowercase
+        df.columns = [c.lower() for c in df.columns]
+
+        def _col(name: str):
+            return name if name in df.columns else None
+
+        # Filters
+        if store_status and store_status != "-":
+            c = _col("store_status")
+            if c: df = df[df[c].str.upper() == store_status.upper()]
+        if cluster_type:
+            c = _col("cluster_type")
+            if c: df = df[df[c].str.upper() == cluster_type.upper()]
+        if region_type:
+            c = _col("region_type")
+            if c: df = df[df[c].str.upper() == region_type.upper()]
+        if store_tag:
+            c = _col("store_tag")
+            if c: df = df[df[c].str.upper() == store_tag.upper()]
+
+        # Columns to aggregate — sums and firsts
+        SUM_COLS   = [c for c in [
+            'pbs_q', 'ttl_stk_q', 'pbs_v', 'ttl_stk_v',
+            'to_v', 'mtd_sl_v', 'lm_sl_val', 'lm_tgt_v', 'lm_sl_v',
+            'tgt_v', 'sl_v', 'pack_pend_v', 'stk_v',
+        ] if c in df.columns]
+        FIRST_COLS = [c for c in [
+            'opening_date', 'tentetive_date', 'store_status',
+            'store_area', 'store_f_name', 'cluster_type',
+            'region_type', 'store_tag',
+        ] if c in df.columns]
+
+        agg_dict = {c: 'sum' for c in SUM_COLS}
+        agg_dict.update({c: 'first' for c in FIRST_COLS})
+
+        grp = df.groupby('store_name', as_index=False).agg(agg_dict)
+
+        # Derived metrics
+        today = pd.Timestamp(date.today())
+        if 'opening_date' in grp.columns:
+            od = pd.to_datetime(grp['opening_date'], errors='coerce')
+            grp['opert_days'] = (today - od).dt.days.clip(lower=0).fillna(0).astype(int)
+        else:
+            grp['opert_days'] = 0
+
+        if 'mtd_sl_v' in grp.columns:
+            grp['sl_avg_d'] = grp.apply(
+                lambda r: round(r['mtd_sl_v'] / r['opert_days'], 2) if r['opert_days'] > 0 else 0,
+                axis=1,
+            )
+        else:
+            grp['sl_avg_d'] = 0
+
+        # ACH% = mtd_sl_v / pbs_v * 100  (both in same unit rupees)
+        if 'mtd_sl_v' in grp.columns and 'pbs_v' in grp.columns:
+            grp['ach_pct'] = grp.apply(
+                lambda r: round(r['mtd_sl_v'] / r['pbs_v'] * 100, 2) if r['pbs_v'] > 0 else 0,
+                axis=1,
+            )
+
+        # ACH_LM% = lm_sl_val / lm_tgt_v * 100
+        if 'lm_sl_val' in grp.columns and 'lm_tgt_v' in grp.columns:
+            grp['ach_lm_pct'] = grp.apply(
+                lambda r: round(r['lm_sl_val'] / r['lm_tgt_v'] * 100, 2) if r['lm_tgt_v'] > 0 else 0,
+                axis=1,
+            )
+
+        # FILL RATE = ttl_stk_q / pbs_q * 100
+        if 'ttl_stk_q' in grp.columns and 'pbs_q' in grp.columns:
+            grp['fill_rate'] = grp.apply(
+                lambda r: round(r['ttl_stk_q'] / r['pbs_q'] * 100, 2) if r['pbs_q'] > 0 else 0,
+                axis=1,
+            )
+
+        # Sort: ACTIVE first (opening_date asc), then UPCOMING (tentetive_date asc)
+        if 'store_status' in grp.columns:
+            grp['_sort_status'] = grp['store_status'].str.upper().map(
+                lambda s: 0 if s == 'ACTIVE' else 1
+            )
+            if 'opening_date' in grp.columns:
+                grp['_sort_date'] = pd.to_datetime(
+                    grp.apply(
+                        lambda r: r['opening_date'] if r['_sort_status'] == 0 else r.get('tentetive_date', None),
+                        axis=1,
+                    ), errors='coerce'
+                )
+            grp = grp.sort_values(['_sort_status', '_sort_date']).drop(columns=['_sort_status', '_sort_date'], errors='ignore')
+
+        grp = grp.where(grp.notna(), None)
+        elapsed = round((time.perf_counter() - t0) * 1000, 1)
+        return APIResponse.ok(data={
+            "stores": grp.to_dict(orient="records"),
+            "count":  len(grp),
+            "elapsed_ms": elapsed,
+        })
+
+    except Exception as exc:
+        logger.error("NSO store-summary failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/filters", response_model=APIResponse)
 async def get_nso_filters():
     """

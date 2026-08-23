@@ -10,6 +10,7 @@ add region_type, store_tag, gm_grade, festival_grouping, bd_tier, asp_tier.
 """
 import logging
 import time
+from datetime import date
 from typing import Optional
 
 import pandas as pd
@@ -226,7 +227,17 @@ async def get_nso_store_summary(
 
         grp = df.groupby('store_name', as_index=False).agg(agg_dict)
 
-        # Derived metrics
+        # ── Unit normalisation ─────────────────────────────────────────────────
+        # V_NSO mixes units: some value cols are in Rupees, others in Lakhs.
+        # Rupees → Lakhs: divide by 100_000.
+        # Lakhs already: pbs_v, sl_v, tgt_v, lm_sl_v, lm_tgt_v  (small numbers ~0-100)
+        # Rupees:         ttl_stk_v, stk_v, to_v, mtd_sl_v, lm_sl_val, pack_pend_v
+        RS_TO_L = 100_000
+        for col in ['ttl_stk_v', 'stk_v', 'to_v', 'mtd_sl_v', 'lm_sl_val', 'pack_pend_v']:
+            if col in grp.columns:
+                grp[col] = (grp[col] / RS_TO_L).round(4)
+
+        # ── Derived metrics (all values now in Lakhs) ──────────────────────────
         today = pd.Timestamp(date.today())
         if 'opening_date' in grp.columns:
             od = pd.to_datetime(grp['opening_date'], errors='coerce')
@@ -234,29 +245,30 @@ async def get_nso_store_summary(
         else:
             grp['opert_days'] = 0
 
-        if 'mtd_sl_v' in grp.columns:
+        # SL AVG/D = sl_v (lakhs) / opert_days
+        if 'sl_v' in grp.columns:
             grp['sl_avg_d'] = grp.apply(
-                lambda r: round(r['mtd_sl_v'] / r['opert_days'], 2) if r['opert_days'] > 0 else 0,
+                lambda r: round(r['sl_v'] / r['opert_days'], 4) if r['opert_days'] > 0 else 0,
                 axis=1,
             )
         else:
             grp['sl_avg_d'] = 0
 
-        # ACH% = mtd_sl_v / pbs_v * 100  (both in same unit rupees)
-        if 'mtd_sl_v' in grp.columns and 'pbs_v' in grp.columns:
+        # ACH% = sl_v / tgt_v * 100  (both in Lakhs)
+        if 'sl_v' in grp.columns and 'tgt_v' in grp.columns:
             grp['ach_pct'] = grp.apply(
-                lambda r: round(r['mtd_sl_v'] / r['pbs_v'] * 100, 2) if r['pbs_v'] > 0 else 0,
+                lambda r: round(r['sl_v'] / r['tgt_v'] * 100, 2) if r['tgt_v'] > 0 else 0,
                 axis=1,
             )
 
-        # ACH_LM% = lm_sl_val / lm_tgt_v * 100
-        if 'lm_sl_val' in grp.columns and 'lm_tgt_v' in grp.columns:
+        # ACH_LM% = lm_sl_v / lm_tgt_v * 100  (both in Lakhs)
+        if 'lm_sl_v' in grp.columns and 'lm_tgt_v' in grp.columns:
             grp['ach_lm_pct'] = grp.apply(
-                lambda r: round(r['lm_sl_val'] / r['lm_tgt_v'] * 100, 2) if r['lm_tgt_v'] > 0 else 0,
+                lambda r: round(r['lm_sl_v'] / r['lm_tgt_v'] * 100, 2) if r['lm_tgt_v'] > 0 else 0,
                 axis=1,
             )
 
-        # FILL RATE = ttl_stk_q / pbs_q * 100
+        # FILL RATE = ttl_stk_q / pbs_q * 100  (both qty in pieces)
         if 'ttl_stk_q' in grp.columns and 'pbs_q' in grp.columns:
             grp['fill_rate'] = grp.apply(
                 lambda r: round(r['ttl_stk_q'] / r['pbs_q'] * 100, 2) if r['pbs_q'] > 0 else 0,

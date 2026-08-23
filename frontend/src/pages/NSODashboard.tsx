@@ -111,7 +111,7 @@ const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 
 function fmtLakh(v: unknown): string {
   const n = Number(v)
   if (isNaN(n) || v == null) return '—'
-  return (n / 100000).toFixed(2)
+  return n.toFixed(2)  // values already normalized to Lakhs by backend
 }
 function fmtQty(v: unknown): string {
   const n = Number(v)
@@ -156,7 +156,7 @@ function StoreSummary({
     const body = data.stores.map(r =>
       STORE_COLS.map(c => {
         const v = r[c.key]
-        if (c.type === 'lakh') return (Number(v) / 100000).toFixed(2)
+        if (c.type === 'lakh') return Number(v).toFixed(2)  // already in Lakhs
         if (c.type === 'pct')  return v == null ? '' : Number(v).toFixed(2)
         if (c.type === 'qty')  return v == null ? '' : String(Math.round(Number(v)))
         if (c.type === 'date') return fmtDate(v)
@@ -227,9 +227,9 @@ function StoreSummary({
               { label: 'Total Stores', val: stores.length, color: C.blue, suffix: '' },
               { label: 'Active', val: active.length, color: C.green, suffix: '' },
               { label: 'Upcoming', val: upcoming.length, color: '#7dd3fc', suffix: '' },
-              { label: 'MTD Sale(L)', val: (totalMtd / 100000).toFixed(2), color: C.green, suffix: '' },
-              { label: 'PBS Val(L)', val: (totalPbs / 100000).toFixed(2), color: C.yellow, suffix: '' },
-              { label: 'Stock Val(L)', val: (totalStk / 100000).toFixed(2), color: C.yellow, suffix: '' },
+              { label: 'MTD Sale(L)', val: totalMtd.toFixed(2), color: C.green, suffix: '' },
+              { label: 'PBS Val(L)', val: totalPbs.toFixed(2), color: C.yellow, suffix: '' },
+              { label: 'Stock Val(L)', val: totalStk.toFixed(2), color: C.yellow, suffix: '' },
             ].map(k => (
               <div key={k.label} style={S.kpi}>
                 <div style={{ ...S.kpiVal, color: k.color }}>{k.val}</div>

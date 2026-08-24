@@ -173,12 +173,144 @@ function MultiSelect({
   )
 }
 
+// ── Mobile KPI strip ──────────────────────────────────────────────────────────
+function MobileKPIStrip({ items }: { items: { label: string; val: string; color: string }[] }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 12px', scrollbarWidth: 'none' }}>
+      {items.map(k => (
+        <div key={k.label} style={{
+          flexShrink: 0, background: '#1e293b', borderRadius: 10, padding: '8px 14px',
+          border: '1px solid #334155', textAlign: 'center', minWidth: 90,
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: k.color, lineHeight: 1 }}>{k.val}</div>
+          <div style={{ fontSize: 9, color: '#64748b', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.5 }}>{k.label}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Mobile store card ──────────────────────────────────────────────────────────
+function MobileStoreCard({ row, str }: { row: StoreRow; str?: number }) {
+  const status = String(row.store_status ?? '').toUpperCase()
+  const isActive = status === 'ACTIVE'
+  const borderColor = isActive ? '#16a34a' : '#3b82f6'
+  const statusColor = isActive ? '#4ade80' : '#7dd3fc'
+  const statusBg = isActive ? '#14532d' : '#1e3a5f'
+  return (
+    <div style={{
+      background: '#1e293b', border: `1px solid ${borderColor}22`,
+      borderLeft: `3px solid ${borderColor}`, borderRadius: 10, padding: '12px 14px',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      {/* Top row: name + status */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e8f0', lineHeight: 1.3 }}>
+          {row.store_f_name || row.store_name}
+        </div>
+        <span style={{
+          fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+          background: statusBg, color: statusColor, border: `1px solid ${borderColor}`,
+          whiteSpace: 'nowrap', flexShrink: 0,
+        }}>{row.store_status}</span>
+      </div>
+      {/* Opening date + code */}
+      <div style={{ fontSize: 10, color: '#64748b', display: 'flex', gap: 10 }}>
+        <span>📅 {fmtDate(row.opening_date || row.tentetive_date)}</span>
+        <span>🏪 {row.store_name}</span>
+        {row.opert_days != null && <span>⏱ {row.opert_days}d</span>}
+      </div>
+      {/* Metrics grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        {[
+          { label: 'MTD Sale', val: fmtLakh(row.mtd_sl_v) + ' L', color: '#4ade80' },
+          { label: 'PBS Val', val: fmtLakh(row.pbs_v) + ' L', color: '#facc15' },
+          { label: 'Stk Val', val: fmtLakh(row.ttl_stk_v) + ' L', color: '#7dd3fc' },
+          { label: 'STR', val: str != null ? str.toFixed(1) + 'd' : '—', color: '#c084fc' },
+          { label: 'Ach%', val: row.ach_pct != null ? Number(row.ach_pct).toFixed(1) + '%' : '—', color: pctColor(row.ach_pct != null ? Number(row.ach_pct) : null) },
+          { label: 'Fill%', val: row.fill_rate != null ? Number(row.fill_rate).toFixed(1) + '%' : '—', color: pctColor(row.fill_rate != null ? Number(row.fill_rate) : null) },
+        ].map(m => (
+          <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '5px 8px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}</div>
+            <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>{m.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Mobile filter drawer ───────────────────────────────────────────────────────
+function MobileFilterDrawer({ open, onClose, children, activeCount }: {
+  open: boolean; onClose: () => void; children: React.ReactNode; activeCount: number
+}) {
+  if (!open) return null
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000 }} />
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001,
+        background: '#1e293b', borderTop: '1px solid #334155',
+        borderRadius: '16px 16px 0 0', padding: '0 0 24px',
+        maxHeight: '80vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #334155' }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0' }}>
+            Filters {activeCount > 0 && <span style={{ background: '#1d4ed8', color: '#fff', fontSize: 10, padding: '2px 7px', borderRadius: 10, marginLeft: 6 }}>{activeCount}</span>}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>✕</button>
+        </div>
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {children}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Mobile full-width MultiSelect ──────────────────────────────────────────────
+function MobileMultiSelect({ label, options, selected, onChange }: {
+  label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const toggle = useCallback((v: string) => {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+  }, [selected, onChange])
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: '100%', textAlign: 'left', background: selected.length > 0 ? '#1e3a5f' : '#0f172a',
+        border: `1px solid ${selected.length > 0 ? '#3b82f6' : '#334155'}`, borderRadius: 8,
+        color: selected.length > 0 ? '#7dd3fc' : '#94a3b8', fontSize: 13, padding: '10px 12px',
+        cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
+      }}>
+        <span>{selected.length === 0 ? `All ${label}` : selected.length === 1 ? selected[0] : `${selected.length} selected`}</span>
+        <span>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
+          {selected.length > 0 && (
+            <div onClick={() => onChange([])} style={{ padding: '8px 12px', fontSize: 12, color: '#f87171', cursor: 'pointer' }}>✕ Clear all</div>
+          )}
+          {options.map(v => (
+            <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#94a3b8', borderTop: '1px solid #1e293b' }}>
+              <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} style={{ accentColor: '#3b82f6', width: 16, height: 16 }} />
+              {v}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StoreSummary({
-  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns, source, onToggleSource,
+  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns, source, onToggleSource, isMobile,
 }: {
   selStatus: string; selCluster: string; selRegion: string; selTag: string
   selDivisions: string[]; selCampaigns: string[]
-  source: 'nso' | 'all'; onToggleSource: () => void
+  source: 'nso' | 'all'; onToggleSource: () => void; isMobile: boolean
 }) {
   const [data, setData] = useState<StoreSummaryData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -366,7 +498,38 @@ function StoreSummary({
 
       {loading && <div style={{ ...S.card, ...S.empty }}>Loading store summary…</div>}
 
-      {!loading && data && (
+      {/* ── Mobile store cards ── */}
+      {isMobile && !loading && data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 80 }}>
+          {stores.length === 0 && <div style={{ ...S.card, ...S.empty }}>No stores found.</div>}
+          {active.length > 0 && (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.green, textTransform: 'uppercase', letterSpacing: 0.8, paddingLeft: 4 }}>
+                ● Active ({active.length})
+              </div>
+              {active.map((row, i) => {
+                const storeMtdDays = Math.min(Number(row.opert_days) || 0, mtdDays)
+                const dailyRate = storeMtdDays > 0 ? (Number(row.mtd_sl_v) || 0) / storeMtdDays : 0
+                const str = dailyRate > 0 ? (Number(row.stk_v) || 0) / dailyRate : undefined
+                return <MobileStoreCard key={row.store_name + i} row={row} str={str} />
+              })}
+            </>
+          )}
+          {upcoming.length > 0 && (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#7dd3fc', textTransform: 'uppercase', letterSpacing: 0.8, paddingLeft: 4, marginTop: 6 }}>
+                ● Upcoming ({upcoming.length})
+              </div>
+              {upcoming.map((row, i) => (
+                <MobileStoreCard key={row.store_name + i} row={row} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Desktop store table ── */}
+      {!isMobile && !loading && data && (
         <div style={{ ...S.card, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ ...S.tblWrap }}>
             <table style={{ ...S.tbl, minWidth: 1600 }}>
@@ -491,8 +654,6 @@ export default function NSODashboard() {
   const [filters, setFilters] = useState<NSOFilters>({
     attribute1: [], store_status: [], division: [], cluster_type: [], region_type: [], store_tag: []
   })
-  const [selAttr, setSelAttr]           = useState('')      // article view single
-  const [selDiv, setSelDiv]             = useState('')       // article view single
   const [selStatuses, setSelStatuses]   = useState<string[]>([])
   const [selClusters, setSelClusters]   = useState<string[]>([])
   const [selRegions, setSelRegions]     = useState<string[]>([])
@@ -510,6 +671,7 @@ export default function NSODashboard() {
   const [artSortDir, setArtSortDir] = useState<'asc' | 'desc'>('asc')
 
   function toggleSource() { setSource(s => s === 'nso' ? 'all' : 'nso') }
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -595,8 +757,203 @@ export default function NSODashboard() {
     a.click()
   }
 
+  const activeFilterCount = selStatuses.length + selClusters.length + selRegions.length + selTags.length + selDivisions.length + selCampaigns.length
+
+  // ── Mobile layout ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 0 }}>
+
+        {/* Mobile header */}
+        <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '10px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0' }}>NSO Dashboard</div>
+              <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>New Store Opening Tracker</div>
+            </div>
+            {/* NSO/All pill */}
+            <div onClick={toggleSource} style={{
+              display: 'flex', alignItems: 'center',
+              border: `1px solid ${source === 'all' ? '#c084fc' : '#334155'}`,
+              borderRadius: 20, overflow: 'hidden', cursor: 'pointer',
+              fontSize: 11, fontWeight: 700, userSelect: 'none',
+            }}>
+              <span style={{ padding: '5px 12px', background: source === 'nso' ? '#0ea5e9' : 'transparent', color: source === 'nso' ? '#fff' : '#64748b' }}>NSO</span>
+              <span style={{ padding: '5px 12px', background: source === 'all' ? '#7c3aed' : 'transparent', color: source === 'all' ? '#fff' : '#64748b' }}>All Chain</span>
+            </div>
+          </div>
+          {/* Tab + Filter row */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {(['store', 'article'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                background: tab === t ? '#0ea5e9' : '#0f172a',
+                color: tab === t ? '#fff' : '#64748b',
+              }}>
+                {t === 'store' ? '📊 Store' : '📋 Articles'}
+              </button>
+            ))}
+            <button onClick={() => setFilterDrawerOpen(true)} style={{
+              padding: '8px 14px', borderRadius: 8, border: `1px solid ${activeFilterCount > 0 ? '#3b82f6' : '#334155'}`,
+              background: activeFilterCount > 0 ? '#1e3a5f' : '#0f172a',
+              color: activeFilterCount > 0 ? '#7dd3fc' : '#64748b', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            }}>
+              ⚙ {activeFilterCount > 0 ? activeFilterCount : ''} Filters
+            </button>
+            {tab === 'article' && (
+              <button onClick={() => load()} disabled={loading} style={{
+                padding: '8px 14px', borderRadius: 8, border: 'none',
+                background: '#0ea5e9', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+              }}>
+                {loading ? '⋯' : '⚡'}
+              </button>
+            )}
+          </div>
+          {/* Active filter chips */}
+          {activeFilterCount > 0 && (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+              {[
+                ...selStatuses.map(v => ({ label: v, clear: () => setSelStatuses(s => s.filter(x => x !== v)) })),
+                ...selClusters.map(v => ({ label: `Zone: ${v}`, clear: () => setSelClusters(s => s.filter(x => x !== v)) })),
+                ...selRegions.map(v => ({ label: `Rgn: ${v}`, clear: () => setSelRegions(s => s.filter(x => x !== v)) })),
+                ...selDivisions.map(v => ({ label: `Div: ${v}`, clear: () => setSelDivisions(s => s.filter(x => x !== v)) })),
+                ...selCampaigns.map(v => ({ label: `Camp: ${v}`, clear: () => setSelCampaigns(s => s.filter(x => x !== v)) })),
+              ].map((chip, i) => (
+                <span key={i} onClick={chip.clear} style={{
+                  fontSize: 10, padding: '3px 8px', borderRadius: 10, cursor: 'pointer',
+                  background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6',
+                }}>
+                  {chip.label} ✕
+                </span>
+              ))}
+            </div>
+          )}
+          {/* Search (article tab) */}
+          {tab === 'article' && data && (
+            <input
+              ref={searchRef}
+              placeholder="Search store or article…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ ...S.select, width: '100%', marginTop: 8, boxSizing: 'border-box' as const, fontSize: 13, padding: '9px 12px' }}
+            />
+          )}
+        </div>
+
+        {/* Mobile filter drawer */}
+        <MobileFilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} activeCount={activeFilterCount}>
+          <MobileMultiSelect label="Status"    options={filters.store_status} selected={selStatuses}  onChange={setSelStatuses}  />
+          <MobileMultiSelect label="Zones"     options={filters.cluster_type} selected={selClusters}  onChange={setSelClusters}  />
+          <MobileMultiSelect label="Regions"   options={filters.region_type}  selected={selRegions}   onChange={setSelRegions}   />
+          {filters.store_tag.length > 0 && <MobileMultiSelect label="Tags" options={filters.store_tag} selected={selTags} onChange={setSelTags} />}
+          <MobileMultiSelect label="Divisions" options={filters.division}     selected={selDivisions} onChange={setSelDivisions} />
+          <MobileMultiSelect label="Campaigns" options={filters.attribute1}   selected={selCampaigns} onChange={setSelCampaigns} />
+          <button onClick={() => { setFilterDrawerOpen(false) }} style={{
+            width: '100%', padding: '12px', borderRadius: 10, border: 'none',
+            background: '#0ea5e9', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 4,
+          }}>Apply Filters</button>
+          {activeFilterCount > 0 && (
+            <button onClick={() => { setSelStatuses([]); setSelClusters([]); setSelRegions([]); setSelTags([]); setSelDivisions([]); setSelCampaigns([]) }} style={{
+              width: '100%', padding: '10px', borderRadius: 10, border: '1px solid #334155',
+              background: 'transparent', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>Clear All Filters</button>
+          )}
+        </MobileFilterDrawer>
+
+        {/* Store View */}
+        {tab === 'store' && (
+          <div style={{ padding: '10px 12px', paddingBottom: 20 }}>
+            <StoreSummary
+              selStatus={selStatuses.join(',')} selCluster={selClusters.join(',')}
+              selRegion={selRegions.join(',')} selTag={selTags.join(',')}
+              selDivisions={selDivisions} selCampaigns={selCampaigns}
+              source={source} onToggleSource={toggleSource} isMobile={true}
+            />
+          </div>
+        )}
+
+        {/* Article View mobile */}
+        {tab === 'article' && (
+          <div style={{ padding: '10px 12px', paddingBottom: 20 }}>
+            {/* KPI strip */}
+            {kpis && (
+              <MobileKPIStrip items={[
+                { label: 'Stores', val: kpis.total.toString(), color: '#38bdf8' },
+                { label: 'Active', val: kpis.active.toString(), color: '#4ade80' },
+                { label: 'PBS Val', val: (kpis.pbsV / 100000).toFixed(1) + 'L', color: '#facc15' },
+                { label: 'Stk Val', val: (kpis.ttlStkV / 100000).toFixed(1) + 'L', color: '#7dd3fc' },
+                { label: 'MTD Sale', val: (kpis.mtdSlv / 100000).toFixed(1) + 'L', color: '#4ade80' },
+                { label: 'TO Val', val: (kpis.toV / 100000).toFixed(1) + 'L', color: '#c084fc' },
+              ]} />
+            )}
+            {!data && !loading && !error && (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569', fontSize: 14 }}>
+                Tap ⚡ to load article data
+              </div>
+            )}
+            {loading && <div style={{ textAlign: 'center', padding: '40px 20px', color: '#38bdf8', fontSize: 14 }}>Loading…</div>}
+            {error && <div style={{ background: '#450a0a', border: '1px solid #f87171', borderRadius: 10, padding: 14, color: '#f87171', fontSize: 13 }}>{error}</div>}
+            {data && !loading && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                <div style={{ fontSize: 10, color: '#64748b', paddingLeft: 2 }}>
+                  {visible.length.toLocaleString()} rows · ⚡ Parquet
+                </div>
+                {paged.map((row, i) => {
+                  const artName = row['article_name'] ?? row['ARTICLE_NAME'] ?? ''
+                  const storeName = row['store_f_name'] ?? row['store_name'] ?? ''
+                  const div = row['division'] ?? ''
+                  const camp = row['attribute1'] ?? ''
+                  const status = String(row['store_status'] ?? '')
+                  const isActive = status.toUpperCase() === 'ACTIVE'
+                  return (
+                    <div key={i} style={{
+                      background: '#1e293b', border: `1px solid ${isActive ? '#16a34a33' : '#3b82f633'}`,
+                      borderLeft: `3px solid ${isActive ? '#16a34a' : '#3b82f6'}`,
+                      borderRadius: 10, padding: '10px 12px',
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: '#e2e8f0', marginBottom: 4 }}>{String(artName || '—')}</div>
+                      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                        <span>🏪 {String(storeName)}</span>
+                        {div && <span>📁 {String(div)}</span>}
+                        {camp && <span>🏷 {String(camp)}</span>}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+                        {[
+                          { label: 'PBS Q', val: fmtQty(row['pbs_q']) },
+                          { label: 'Stk Q', val: fmtQty(row['ttl_stk_q'] ?? row['stk_q']) },
+                          { label: 'MTD Sl', val: fmtQty(row['mtd_sl_q']) },
+                          { label: 'PBS V(L)', val: fmtLakh(row['pbs_v']) },
+                          { label: 'Stk V(L)', val: fmtLakh(row['ttl_stk_v'] ?? row['stk_v']) },
+                          { label: 'TO V(L)', val: fmtLakh(row['to_v']) },
+                        ].map(m => (
+                          <div key={m.label} style={{ background: '#0f172a', borderRadius: 5, padding: '4px 6px' }}>
+                            <div style={{ fontSize: 11, color: '#7dd3fc', fontWeight: 600 }}>{m.val}</div>
+                            <div style={{ fontSize: 9, color: '#475569' }}>{m.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', padding: '12px 0', alignItems: 'center' }}>
+                    <button style={{ ...S.btnSm, padding: '6px 14px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
+                    <span style={{ fontSize: 12, color: '#64748b' }}>{page}/{totalPages}</span>
+                    <button style={{ ...S.btnSm, padding: '6px 14px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next ›</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
-    <div style={{ ...S.page, height: isMobile ? 'auto' : 'calc(100vh - 100px)' }}>
+    <div style={{ ...S.page, height: 'calc(100vh - 100px)' }}>
 
       {/* ── Header + filters ── */}
       <div style={S.card}>
@@ -654,38 +1011,15 @@ export default function NSODashboard() {
             )}
           </div>
         </div>
-
-        {/* Search */}
-        {data && (
-          <div style={{ padding: '8px 14px', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input
-              ref={searchRef}
-              placeholder="Search store name, status…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ ...S.select, flex: 1, maxWidth: 300 }}
-            />
-            <span style={{ fontSize: 11, color: C.text3 }}>
-              {visible.length.toLocaleString()} / {rows.length.toLocaleString()} rows
-              {data.total_cached ? ` (${data.total_cached.toLocaleString()} cached)` : ''}
-              {` · ${data.elapsed_ms} ms`}
-              {data.served_from === 'oracle' ? ' · 🔴 fetched live from Oracle' : ' · ⚡ from Parquet cache'}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* ── Store View Tab ── */}
       {tab === 'store' && (
         <StoreSummary
-          selStatus={selStatuses.join(',')}
-          selCluster={selClusters.join(',')}
-          selRegion={selRegions.join(',')}
-          selTag={selTags.join(',')}
-          selDivisions={selDivisions}
-          selCampaigns={selCampaigns}
-          source={source}
-          onToggleSource={toggleSource}
+          selStatus={selStatuses.join(',')} selCluster={selClusters.join(',')}
+          selRegion={selRegions.join(',')} selTag={selTags.join(',')}
+          selDivisions={selDivisions} selCampaigns={selCampaigns}
+          source={source} onToggleSource={toggleSource} isMobile={false}
         />
       )}
 

@@ -186,6 +186,35 @@ export default function SaleDashboard() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const activeFilterCount = [selCluster, selRegion, selStatus, ...selAttrs, ...selDivisions, dateFrom || dateTo ? '1' : '', customLY ? '1' : ''].filter(Boolean).length
 
+  // ── Tab state ───────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'summary' | 'daily' | 'comparison'>('summary')
+  const [dailyRows, setDailyRows] = useState<Row[]>([])
+  const [dailyLoading, setDailyLoading] = useState(false)
+
+  const loadDailyData = useCallback(async () => {
+    setDailyLoading(true)
+    try {
+      const params: Record<string, string> = { by_date: 'true' }
+      if (selCluster) params.cluster_type = selCluster
+      if (selRegion)  params.region_type  = selRegion
+      if (selStatus && selStatus !== '-') params.store_status = selStatus
+      if (selAttrs.length)     params.attribute1 = selAttrs.join(',')
+      if (selDivisions.length) params.division   = selDivisions.join(',')
+      if (dateFrom) params.date_from = dateFrom
+      if (dateTo)   params.date_to   = dateTo
+      if (customLY && lyDateFrom) params.ly_date_from = lyDateFrom
+      if (customLY && lyDateTo)   params.ly_date_to   = lyDateTo
+      const res = await axios.get('/api/sale/data', { params, timeout: 30000 })
+      const d = res.data?.data
+      if (d && !d.loading) setDailyRows(d.rows || [])
+    } catch { /* ignore */ }
+    finally { setDailyLoading(false) }
+  }, [selCluster, selRegion, selStatus, selAttrs, selDivisions, dateFrom, dateTo, customLY, lyDateFrom, lyDateTo])
+
+  useEffect(() => {
+    if (activeTab === 'daily') loadDailyData()
+  }, [activeTab, loadDailyData])
+
   // Reusable inline multi-select toggle
   function toggleMulti<T extends string>(arr: T[], val: T, set: (v: T[]) => void) {
     set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val])
@@ -616,10 +645,25 @@ export default function SaleDashboard() {
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>⬇ CSV</button>
         {activeFilterCount > 0 && <button className="btn" onClick={() => { setSelCluster(''); setSelRegion(''); setSelStatus(''); setSelAttrs([]); setSelDivisions([]); setDateFrom(''); setDateTo(''); setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }} style={{ color: '#f87171' }}>✕ Clear</button>}
         <span style={{ opacity: .4, fontSize: 11 }}>{rows.length} stores shown{allRows.length !== rows.length ? ` (of ${allRows.length})` : ''}</span>
+
+        {/* Tab switcher */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 0, border: '1px solid #2a3a55', borderRadius: 8, overflow: 'hidden' }}>
+          {([
+            { key: 'summary',    label: 'Store Summary' },
+            { key: 'daily',      label: 'Daily Trend' },
+            { key: 'comparison', label: 'TY vs LY' },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+              padding: '5px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              background: activeTab === t.key ? '#0ea5e9' : '#0f1724',
+              color: activeTab === t.key ? '#fff' : '#64748b',
+            }}>{t.label}</button>
+          ))}
+        </div>
       </div>
 
-      {/* Table */}
-      {loading && !fetching ? (
+      {/* ── Summary Tab ──────────────────────────────────────────────────────── */}
+      {activeTab === 'summary' && (loading && !fetching ? (
         <div className="loading-bar">Loading…</div>
       ) : (
         <div className="tbl-scroll">
@@ -641,7 +685,7 @@ export default function SaleDashboard() {
             </thead>
             <tbody>
               {paged.length === 0 && !loading && !fetching && (
-                <tr><td colSpan={11} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
+                <tr><td colSpan={13} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
                   {allRows.length === 0 ? 'No data — click Refresh' : 'No stores match filters'}
                 </td></tr>
               )}
@@ -664,7 +708,95 @@ export default function SaleDashboard() {
             </tbody>
           </table>
         </div>
+      ))}
+
+      {/* ── Daily Tab ────────────────────────────────────────────────────────── */}
+      {activeTab === 'daily' && (
+        dailyLoading ? <div className="loading-bar">Loading daily data…</div> : (
+          <div className="tbl-scroll">
+            <table className="sale-table">
+              <thead>
+                <tr className="group-header">
+                  <th colSpan={1}></th>
+                  <th colSpan={4} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
+                  <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
+                  <th colSpan={1} style={{ borderLeft: '1px solid #2a3a55' }}>Perf</th>
+                </tr>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Date</th>
+                  <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><th>Sale Qty</th><th>Target</th><th>Achv%</th>
+                  <th style={{ borderLeft: '1px solid #2a3a55' }}>LY Sale ₹</th><th>LY Target</th><th>LY Achv%</th>
+                  <th style={{ borderLeft: '1px solid #2a3a55' }}>Growth%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyRows.length === 0 && (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
+                    No data — apply a date filter and refresh
+                  </td></tr>
+                )}
+                {dailyRows.map((r, i) => {
+                  const tyAchv = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
+                  const lyAchv = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
+                  return (
+                    <tr key={i}>
+                      <td style={{ textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{String(r.SALE_DATE || '—')}</td>
+                      <td>{fmt(r.TY_V)}</td><td>{fmt(r.TY_QTY)}</td><td>{fmt(r.TY_TGT_V)}</td><td><AchvBadge val={tyAchv} /></td>
+                      <td>{fmt(r.LY_V)}</td><td>{fmt(r.LY_TGT_V)}</td><td><AchvBadge val={lyAchv} /></td>
+                      <td><GrowthBadge val={r.GRWTH_PCT} /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
+
+      {/* ── TY vs LY Comparison Tab ──────────────────────────────────────────── */}
+      {activeTab === 'comparison' && (loading && !fetching ? (
+        <div className="loading-bar">Loading…</div>
+      ) : (
+        <div className="tbl-scroll">
+          <table className="sale-table">
+            <thead>
+              <tr className="group-header">
+                <th colSpan={2}></th>
+                <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
+                <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
+                <th colSpan={1} style={{ borderLeft: '1px solid #2a3a55' }}>Growth</th>
+              </tr>
+              <tr>
+                <Th col="STORE_NAME" label="Store" />
+                <th>Zone</th>
+                <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><Th col="TY_TGT_V" label="Target" /><th>Achv%</th>
+                <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><Th col="LY_TGT_V" label="Target" /><th>LY Achv%</th>
+                <th style={{ borderLeft: '1px solid #2a3a55' }}>Growth%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paged.length === 0 && !loading && !fetching && (
+                <tr><td colSpan={9} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
+                  {allRows.length === 0 ? 'No data — click Refresh' : 'No stores match filters'}
+                </td></tr>
+              )}
+              {paged.map((r, i) => {
+                const tyAchv = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
+                const lyAchv = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
+                return (
+                  <tr key={i}>
+                    <td>{String(r.STORE_NAME || '—')}</td>
+                    <td style={{ textAlign: 'center' }}>{String(r.CLUSTER_TYPE || '—')}</td>
+                    <td>{fmt(r.TY_V)}</td><td>{fmt(r.TY_TGT_V)}</td><td><AchvBadge val={tyAchv} /></td>
+                    <td>{fmt(r.LY_V)}</td><td>{fmt(r.LY_TGT_V)}</td><td><AchvBadge val={lyAchv} /></td>
+                    <td><GrowthBadge val={r.GRWTH_PCT} /></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
 
       {/* Pagination */}
       {totalPages > 1 && (

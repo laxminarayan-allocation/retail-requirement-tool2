@@ -130,6 +130,7 @@ async def get_sale_data(
     date_to:       Optional[str] = Query(None, description="TY date to YYYY-MM-DD"),
     ly_date_from:  Optional[str] = Query(None, description="LY date from YYYY-MM-DD (defaults to date_from -1yr)"),
     ly_date_to:    Optional[str] = Query(None, description="LY date to YYYY-MM-DD (defaults to date_to -1yr)"),
+    by_date:       bool          = Query(False, description="Aggregate by date instead of store"),
     force_refresh: bool          = Query(False),
     limit:         int           = Query(5000, ge=1, le=50000),
 ):
@@ -201,48 +202,63 @@ async def get_sale_data(
         ty_f = df_ty[_base_mask(df_ty) & _date_mask(df_ty, date_from, date_to)].copy()
         ly_f = df_ly[_base_mask(df_ly) & _date_mask(df_ly, eff_ly_from, eff_ly_to)].copy()
 
-        # Aggregate to store level for TY vs LY table
-        # DIVISION in cache → group by it so we can filter; sum across divisions for store-total
-        base_keys = ["store_name", "cluster_type", "store_status", "region_type"]
-        div_key = "division" if "division" in ty_f.columns else None
-        grp_keys = base_keys + ([div_key] if div_key else [])
+        if by_date:
+            # ── Date-wise aggregation ──────────────────────────────────────────
+            ty_d = ty_f.groupby("sale_date", as_index=False).agg(
+                TY_QTY=("sl_qty", "sum"), TY_V=("sl_v", "sum"),
+                TY_TGT_Q=("tgt_q", "sum"), TY_TGT_V=("tgt_v", "sum"))
+            ly_d = ly_f.groupby("sale_date", as_index=False).agg(
+                LY_QTY=("sl_qty", "sum"), LY_V=("sl_v", "sum"),
+                LY_TGT_Q=("tgt_q", "sum"), LY_TGT_V=("tgt_v", "sum"))
+            merged = pd.merge(ty_d, ly_d, on="sale_date", how="outer").fillna(0)
+            merged = merged.rename(columns={"sale_date": "SALE_DATE"})
+            merged["SALE_DATE"] = merged["SALE_DATE"].astype(str)
+            merged = merged.sort_values("SALE_DATE")
+            merged["ACHV_PCT"]  = (merged["TY_V"] / merged["TY_TGT_V"].replace(0, pd.NA) * 100).round(1)
+            merged["GRWTH_PCT"] = ((merged["TY_V"] - merged["LY_V"]) / merged["LY_V"].replace(0, pd.NA) * 100).round(1)
+            merged = merged.where(merged.notna(), None)
+            merged = merged.head(limit)
+        else:
+            # ── Store-wise aggregation (default) ──────────────────────────────
+            base_keys = ["store_name", "cluster_type", "store_status", "region_type"]
+            div_key = "division" if "division" in ty_f.columns else None
+            grp_keys = base_keys + ([div_key] if div_key else [])
 
-        ty_agg = ty_f.groupby(grp_keys, as_index=False).agg(
-            TY_QTY=("sl_qty", "sum"), TY_V=("sl_v", "sum"),
-            TY_TGT_Q=("tgt_q", "sum"), TY_TGT_V=("tgt_v", "sum"))
-        ly_agg = ly_f.groupby(base_keys, as_index=False).agg(
-            LY_QTY=("sl_qty", "sum"), LY_V=("sl_v", "sum"),
-            LY_TGT_Q=("tgt_q", "sum"), LY_TGT_V=("tgt_v", "sum"))
+            ty_agg = ty_f.groupby(grp_keys, as_index=False).agg(
+                TY_QTY=("sl_qty", "sum"), TY_V=("sl_v", "sum"),
+                TY_TGT_Q=("tgt_q", "sum"), TY_TGT_V=("tgt_v", "sum"))
+            ly_agg = ly_f.groupby(base_keys, as_index=False).agg(
+                LY_QTY=("sl_qty", "sum"), LY_V=("sl_v", "sum"),
+                LY_TGT_Q=("tgt_q", "sum"), LY_TGT_V=("tgt_v", "sum"))
 
-        merged = pd.merge(ty_agg, ly_agg, on=base_keys, how="outer").fillna(0)
-        rename_map = {
-            "store_name": "STORE_NAME", "cluster_type": "CLUSTER_TYPE",
-            "store_status": "STORE_STATUS", "region_type": "REGION_TYPE",
-        }
-        if div_key:
-            rename_map[div_key] = "DIVISION"
-        merged = merged.rename(columns=rename_map)
+            merged = pd.merge(ty_agg, ly_agg, on=base_keys, how="outer").fillna(0)
+            rename_map = {
+                "store_name": "STORE_NAME", "cluster_type": "CLUSTER_TYPE",
+                "store_status": "STORE_STATUS", "region_type": "REGION_TYPE",
+            }
+            if div_key:
+                rename_map[div_key] = "DIVISION"
+            merged = merged.rename(columns=rename_map)
 
-        # Enrich with OPERT_DAYS from store master (opening_date)
-        try:
-            from app.repositories.store_repository import StoreRepository
-            from datetime import date as _date
-            store_df = StoreRepository().get_all_stores(active_only=False)
-            if store_df is not None and len(store_df) > 0:
-                store_df.columns = [c.lower() for c in store_df.columns]
-                if "opening_date" in store_df.columns:
-                    od_map = store_df.set_index("store_name")["opening_date"].to_dict()
-                    today = pd.Timestamp(_date.today())
-                    od = pd.to_datetime(merged["STORE_NAME"].map(od_map), errors="coerce")
-                    merged["OPERT_DAYS"] = (today - od).dt.days.clip(lower=0).fillna(0).astype(int)
-        except Exception as enrich_err:
-            logger.warning("Store master enrich failed: %s", enrich_err)
+            # Enrich with OPERT_DAYS from store master
+            try:
+                from app.repositories.store_repository import StoreRepository
+                from datetime import date as _date
+                store_df = StoreRepository().get_all_stores(active_only=False)
+                if store_df is not None and len(store_df) > 0:
+                    store_df.columns = [c.lower() for c in store_df.columns]
+                    if "opening_date" in store_df.columns:
+                        od_map = store_df.set_index("store_name")["opening_date"].to_dict()
+                        today = pd.Timestamp(_date.today())
+                        od = pd.to_datetime(merged["STORE_NAME"].map(od_map), errors="coerce")
+                        merged["OPERT_DAYS"] = (today - od).dt.days.clip(lower=0).fillna(0).astype(int)
+            except Exception as enrich_err:
+                logger.warning("Store master enrich failed: %s", enrich_err)
 
-        # Derived columns
-        merged["ACHV_PCT"]  = (merged["TY_V"] / merged["TY_TGT_V"].replace(0, pd.NA) * 100).round(1)
-        merged["GRWTH_PCT"] = ((merged["TY_V"] - merged["LY_V"]) / merged["LY_V"].replace(0, pd.NA) * 100).round(1)
-        merged = merged.where(merged.notna(), None)
-        merged = merged.head(limit)
+            merged["ACHV_PCT"]  = (merged["TY_V"] / merged["TY_TGT_V"].replace(0, pd.NA) * 100).round(1)
+            merged["GRWTH_PCT"] = ((merged["TY_V"] - merged["LY_V"]) / merged["LY_V"].replace(0, pd.NA) * 100).round(1)
+            merged = merged.where(merged.notna(), None)
+            merged = merged.head(limit)
 
         elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return APIResponse.ok(data={

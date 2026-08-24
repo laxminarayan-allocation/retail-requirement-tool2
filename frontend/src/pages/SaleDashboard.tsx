@@ -286,19 +286,22 @@ export default function SaleDashboard() {
             {(filters.attribute1 || []).map(v => <option key={v}>{v}</option>)}
           </select>
         </div>
-        <div className="date-group" style={{ background: (dateFrom || dateTo) ? '#1e3a5f55' : undefined, borderRadius: 8, padding: (dateFrom || dateTo) ? '4px 8px' : undefined, border: (dateFrom || dateTo) ? '1px solid #3b82f6' : undefined }}>
-          <label style={{ fontWeight: 600, color: '#7dd3fc' }}>Sale Date</label>
+        <div className="date-group" style={{ background: (dateFrom || dateTo) ? '#1e3a5f55' : '#ffffff08', borderRadius: 8, padding: '5px 10px', border: `1px solid ${(dateFrom || dateTo) ? '#3b82f6' : '#2a3a55'}` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#7dd3fc', letterSpacing: 0.3 }}>TY Period</span>
+            <span style={{ fontSize: 9, color: '#94a3b8', lineHeight: 1.2 }}>LY = same dates<br/>−1 year</span>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
             <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>From</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Sale date from (start)" />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="TY sale from date (LY = same date last year)" />
           </div>
           <span style={{ opacity: .4, alignSelf: 'flex-end', paddingBottom: 3 }}>→</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
             <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>To</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="Sale date to (end)" />
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="TY sale to date (LY = same date last year)" />
           </div>
           {(dateFrom || dateTo) && (
-            <button className="btn" style={{ alignSelf: 'flex-end' }} onClick={() => { setDateFrom(''); setDateTo('') }} title="Clear date filter">✕ Clear</button>
+            <button className="btn" style={{ alignSelf: 'flex-end' }} onClick={() => { setDateFrom(''); setDateTo('') }} title="Clear date filter">✕</button>
           )}
         </div>
         <input

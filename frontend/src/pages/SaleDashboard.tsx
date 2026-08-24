@@ -237,6 +237,7 @@ export default function SaleDashboard() {
         <div className="kpi">
           <div className="kpi-label">LY Sale</div>
           <div className="kpi-val">{fmt(lyTotal)}</div>
+          <div className="kpi-sub">{allRows.filter(r => Number(r.LY_V) > 0).length} stores</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Target</div>

@@ -627,16 +627,16 @@ export default function SaleDashboard() {
             <thead>
               <tr className="group-header">
                 <th colSpan={5}></th>
-                <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
+                <th colSpan={4} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
                 <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
-                <th colSpan={2} style={{ borderLeft: '1px solid #2a3a55' }}>Performance</th>
+                <th colSpan={1} style={{ borderLeft: '1px solid #2a3a55' }}>Perf</th>
               </tr>
               <tr>
                 <Th col="STORE_NAME" label="Store" />
                 <th>Division</th><th>Zone</th><th>Region</th><th>Oper Days</th>
-                <Th col="TY_V" label="Sale ₹" /><Th col="TY_QTY" label="Sale Qty" /><th>Achv%</th>
+                <Th col="TY_V" label="Sale ₹" /><Th col="TY_QTY" label="Sale Qty" /><Th col="TY_TGT_V" label="Target" /><th>Achv%</th>
                 <Th col="LY_V" label="Sale ₹" /><Th col="LY_TGT_V" label="Target" /><th>LY Achv%</th>
-                <th>Growth%</th><Th col="TY_TGT_V" label="TY Target" />
+                <th>Growth%</th>
               </tr>
             </thead>
             <tbody>
@@ -655,9 +655,9 @@ export default function SaleDashboard() {
                     <td style={{ textAlign: 'center' }}>{String(r.CLUSTER_TYPE || '—')}</td>
                     <td style={{ textAlign: 'center' }}>{String(r.REGION_TYPE || '—')}</td>
                     <td style={{ textAlign: 'center' }}>{r.OPERT_DAYS != null ? String(r.OPERT_DAYS) + 'd' : '—'}</td>
-                    <td>{fmt(r.TY_V)}</td><td>{fmt(r.TY_QTY)}</td><td><AchvBadge val={tyAchv} /></td>
+                    <td>{fmt(r.TY_V)}</td><td>{fmt(r.TY_QTY)}</td><td>{fmt(r.TY_TGT_V)}</td><td><AchvBadge val={tyAchv} /></td>
                     <td>{fmt(r.LY_V)}</td><td>{fmt(r.LY_TGT_V)}</td><td><AchvBadge val={lyAchv} /></td>
-                    <td><GrowthBadge val={r.GRWTH_PCT} /></td><td>{fmt(r.TY_TGT_V)}</td>
+                    <td><GrowthBadge val={r.GRWTH_PCT} /></td>
                   </tr>
                 )
               })}

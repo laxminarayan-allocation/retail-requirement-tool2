@@ -183,6 +183,8 @@ function StoreSummary({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [source, setSource] = useState<'nso' | 'all'>('nso')
+  const [sortCol, setSortCol] = useState<string>('mtd_sl_v')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   function load(src?: 'nso' | 'all') {
     setLoading(true); setError(null)
@@ -233,8 +235,26 @@ function StoreSummary({
   }
 
   const stores = data?.stores ?? []
-  const active   = stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE')
-  const upcoming = stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING'))
+
+  function sortRows(rows: StoreRow[]) {
+    return [...rows].sort((a, b) => {
+      const av = a[sortCol], bv = b[sortCol]
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      const an = Number(av), bn = Number(bv)
+      const cmp = !isNaN(an) && !isNaN(bn) ? an - bn : String(av).localeCompare(String(bv))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }
+
+  function handleSort(key: string) {
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(key); setSortDir('desc') }
+  }
+
+  const active   = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE'))
+  const upcoming = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING')))
 
   function StoreTable({ rows, title }: { rows: StoreRow[]; title: string }) {
     const color = title.startsWith('Active') ? C.green : '#7dd3fc'
@@ -359,8 +379,17 @@ function StoreSummary({
               <thead>
                 <tr>
                   {STORE_COLS.map(col => (
-                    <th key={col.key} style={col.type === 'text' || col.type === 'date' ? S.th : S.thNum}>
-                      {col.label}
+                    <th key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      style={{
+                        ...(col.type === 'text' || col.type === 'date' ? S.th : S.thNum),
+                        cursor: 'pointer', userSelect: 'none',
+                        background: sortCol === col.key ? '#1e3a5f' : undefined,
+                        color: sortCol === col.key ? '#7dd3fc' : undefined,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
                     </th>
                   ))}
                 </tr>
@@ -468,12 +497,12 @@ export default function NSODashboard() {
   const [filters, setFilters] = useState<NSOFilters>({
     attribute1: [], store_status: [], division: [], cluster_type: [], region_type: [], store_tag: []
   })
-  const [selAttr, setSelAttr]           = useState('')
-  const [selStatus, setSelStatus]       = useState('')
-  const [selDiv, setSelDiv]             = useState('')
-  const [selCluster, setSelCluster]     = useState('')
-  const [selRegion, setSelRegion]       = useState('')
-  const [selTag, setSelTag]             = useState('')
+  const [selAttr, setSelAttr]           = useState('')      // article view single
+  const [selDiv, setSelDiv]             = useState('')       // article view single
+  const [selStatuses, setSelStatuses]   = useState<string[]>([])
+  const [selClusters, setSelClusters]   = useState<string[]>([])
+  const [selRegions, setSelRegions]     = useState<string[]>([])
+  const [selTags, setSelTags]           = useState<string[]>([])
   const [selDivisions, setSelDivisions] = useState<string[]>([])
   const [selCampaigns, setSelCampaigns] = useState<string[]>([])
   const [search, setSearch]         = useState('')
@@ -494,12 +523,12 @@ export default function NSODashboard() {
     setLoading(true)
     setError(null)
     const params: Record<string, string> = { limit: '50000' }
-    if (selAttr)    params.attribute1   = selAttr
-    if (selStatus)  params.store_status = selStatus
-    if (selDiv)     params.division     = selDiv
-    if (selCluster) params.cluster_type = selCluster
-    if (selRegion)  params.region_type  = selRegion
-    if (selTag)     params.store_tag    = selTag
+    if (selAttr)               params.attribute1   = selAttr
+    if (selDiv)                params.division     = selDiv
+    if (selStatuses.length)    params.store_status = selStatuses.join(',')
+    if (selClusters.length)    params.cluster_type = selClusters.join(',')
+    if (selRegions.length)     params.region_type  = selRegions.join(',')
+    if (selTags.length)        params.store_tag    = selTags.join(',')
     apiFetch<NSOData>('/nso/data', params)
       .then(d => { setData(d); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
@@ -514,7 +543,7 @@ export default function NSODashboard() {
   // Auto-reload when any server-side filter changes (only if data already loaded)
   useEffect(() => {
     if (data && tab === 'article') load()
-  }, [selAttr, selStatus, selDiv, selCluster, selRegion, selTag]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selAttr, selDiv, selStatuses, selClusters, selRegions, selTags]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
   const rows = data?.rows ?? []
@@ -578,27 +607,15 @@ export default function NSODashboard() {
               </button>
             ))}
             <div style={{ width: 1, height: 20, background: C.border }} />
-            <select style={S.select} value={selStatus} onChange={e => setSelStatus(e.target.value)}>
-              <option value="">All Status</option>
-              {filters.store_status.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <select style={S.select} value={selCluster} onChange={e => setSelCluster(e.target.value)}>
-              <option value="">All Zones</option>
-              {filters.cluster_type.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <select style={S.select} value={selRegion} onChange={e => setSelRegion(e.target.value)}>
-              <option value="">All Regions</option>
-              {filters.region_type.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
+            <MultiSelect label="Status"   options={filters.store_status} selected={selStatuses}  onChange={setSelStatuses}  />
+            <MultiSelect label="Zones"    options={filters.cluster_type} selected={selClusters}  onChange={setSelClusters}  />
+            <MultiSelect label="Regions"  options={filters.region_type}  selected={selRegions}   onChange={setSelRegions}   />
             {filters.store_tag.length > 0 && (
-              <select style={S.select} value={selTag} onChange={e => setSelTag(e.target.value)}>
-                <option value="">All Tags</option>
-                {filters.store_tag.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
+              <MultiSelect label="Tags" options={filters.store_tag} selected={selTags} onChange={setSelTags} />
             )}
             {tab === 'store' && (
               <>
-                <MultiSelect label="Divisions" options={filters.division} selected={selDivisions} onChange={setSelDivisions} />
+                <MultiSelect label="Divisions" options={filters.division}   selected={selDivisions} onChange={setSelDivisions} />
                 <MultiSelect label="Campaigns" options={filters.attribute1} selected={selCampaigns} onChange={setSelCampaigns} />
               </>
             )}
@@ -644,10 +661,10 @@ export default function NSODashboard() {
       {/* ── Store View Tab ── */}
       {tab === 'store' && (
         <StoreSummary
-          selStatus={selStatus}
-          selCluster={selCluster}
-          selRegion={selRegion}
-          selTag={selTag}
+          selStatus={selStatuses.join(',')}
+          selCluster={selClusters.join(',')}
+          selRegion={selRegions.join(',')}
+          selTag={selTags.join(',')}
           selDivisions={selDivisions}
           selCampaigns={selCampaigns}
         />

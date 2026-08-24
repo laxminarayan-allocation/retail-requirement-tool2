@@ -122,24 +122,19 @@ async def get_nso_data(
         def col(name: str):
             return next((c for c in df.columns if c.lower() == name.lower()), None)
 
-        if attribute1:
-            c = col("attribute1")
-            if c: mask &= df[c].str.upper() == attribute1.upper()
-        if store_status and store_status != "-":
-            c = col("store_status")
-            if c: mask &= df[c].str.upper() == store_status.upper()
-        if division:
-            c = col("division")
-            if c: mask &= df[c].str.upper() == division.upper()
-        if region_type:
-            c = col("region_type")
-            if c: mask &= df[c].str.upper() == region_type.upper()
-        if cluster_type:
-            c = col("cluster_type")
-            if c: mask &= df[c].str.upper() == cluster_type.upper()
-        if store_tag:
-            c = col("store_tag")
-            if c: mask &= df[c].str.upper() == store_tag.upper()
+        def _isin_mask(param, col_name):
+            nonlocal mask
+            if not param: return
+            vals = [v.strip().upper() for v in param.split(',') if v.strip() and v.strip() != '-']
+            c = col(col_name)
+            if c and vals: mask &= df[c].str.upper().isin(vals)
+
+        _isin_mask(attribute1,   "attribute1")
+        _isin_mask(store_status, "store_status")
+        _isin_mask(division,     "division")
+        _isin_mask(region_type,  "region_type")
+        _isin_mask(cluster_type, "cluster_type")
+        _isin_mask(store_tag,    "store_tag")
         if store_search:
             c = col("store_f_name") or col("store_name")
             if c: mask &= df[c].str.upper().str.contains(store_search.upper(), na=False)
@@ -203,26 +198,18 @@ async def get_nso_store_summary(
             return name if name in df.columns else None
 
         # Filters
-        if store_status and store_status != "-":
-            c = _col("store_status")
-            if c: df = df[df[c].str.upper() == store_status.upper()]
-        if cluster_type:
-            c = _col("cluster_type")
-            if c: df = df[df[c].str.upper() == cluster_type.upper()]
-        if region_type:
-            c = _col("region_type")
-            if c: df = df[df[c].str.upper() == region_type.upper()]
-        if store_tag:
-            c = _col("store_tag")
-            if c: df = df[df[c].str.upper() == store_tag.upper()]
-        if division:
-            vals = [v.strip().upper() for v in division.split(',') if v.strip()]
-            c = _col("division")
-            if c and vals: df = df[df[c].str.upper().isin(vals)]
-        if attribute1:
-            vals = [v.strip().upper() for v in attribute1.split(',') if v.strip()]
-            c = _col("attribute1")
-            if c and vals: df = df[df[c].str.upper().isin(vals)]
+        def _isin_filter(df, col_name, param):
+            if not param: return df
+            vals = [v.strip().upper() for v in param.split(',') if v.strip() and v.strip() != '-']
+            c = _col(col_name)
+            return df[df[c].str.upper().isin(vals)] if c and vals else df
+
+        df = _isin_filter(df, "store_status", store_status)
+        df = _isin_filter(df, "cluster_type", cluster_type)
+        df = _isin_filter(df, "region_type",  region_type)
+        df = _isin_filter(df, "store_tag",    store_tag)
+        df = _isin_filter(df, "division",     division)
+        df = _isin_filter(df, "attribute1",   attribute1)
 
         # Columns to aggregate — sums and firsts
         SUM_COLS   = [c for c in [

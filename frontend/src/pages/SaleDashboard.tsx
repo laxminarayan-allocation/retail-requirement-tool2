@@ -191,7 +191,7 @@ export default function SaleDashboard() {
         .filters input[type=date] { background: var(--input-bg, #0f1724); border: 1px solid #2a3a55;
           border-radius: 6px; padding: 5px 8px; color: inherit; font-size: 12px; }
         .filters label { font-size: 11px; opacity: .6; margin-right: 2px; }
-        .date-group { display: flex; gap: 4px; align-items: center; }
+        .date-group { display: flex; gap: 6px; align-items: flex-end; }
         .sale-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .sale-table th { background: #0f1724; padding: 7px 8px; text-align: right; border-bottom: 1px solid #2a3a55; font-size: 11px; }
         .sale-table th:first-child { text-align: left; }
@@ -286,13 +286,19 @@ export default function SaleDashboard() {
             {(filters.attribute1 || []).map(v => <option key={v}>{v}</option>)}
           </select>
         </div>
-        <div className="date-group">
-          <label>Date</label>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-          <span style={{ opacity: .4 }}>–</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+        <div className="date-group" style={{ background: (dateFrom || dateTo) ? '#1e3a5f55' : undefined, borderRadius: 8, padding: (dateFrom || dateTo) ? '4px 8px' : undefined, border: (dateFrom || dateTo) ? '1px solid #3b82f6' : undefined }}>
+          <label style={{ fontWeight: 600, color: '#7dd3fc' }}>Sale Date</label>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+            <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>From</span>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Sale date from (start)" />
+          </div>
+          <span style={{ opacity: .4, alignSelf: 'flex-end', paddingBottom: 3 }}>→</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+            <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>To</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="Sale date to (end)" />
+          </div>
           {(dateFrom || dateTo) && (
-            <button className="btn" onClick={() => { setDateFrom(''); setDateTo('') }}>✕</button>
+            <button className="btn" style={{ alignSelf: 'flex-end' }} onClick={() => { setDateFrom(''); setDateTo('') }} title="Clear date filter">✕ Clear</button>
           )}
         </div>
         <input

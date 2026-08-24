@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 
 const PAGE_SIZE = 20
@@ -34,6 +34,82 @@ function GrowthBadge({ val }: { val: unknown }) {
   if (isNaN(n) || val === null || val === undefined) return <span className="achv-na">—</span>
   const cls = n >= 0 ? 'achv-green' : 'achv-red'
   return <span className={cls}>{n > 0 ? '+' : ''}{n.toFixed(1)}%</span>
+}
+
+function MultiSelectDropdown({
+  label, options, selected, onToggle, onClear,
+}: {
+  label: string; options: string[]; selected: string[]
+  onToggle: (v: string) => void; onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        background: selected.length > 0 ? '#1e3a5f' : '#0f1724',
+        border: `1px solid ${selected.length > 0 ? '#3b82f6' : '#2a3a55'}`,
+        borderRadius: 6, padding: '5px 10px', color: selected.length > 0 ? '#7dd3fc' : 'inherit',
+        cursor: 'pointer', fontSize: 12, display: 'flex', gap: 5, alignItems: 'center', whiteSpace: 'nowrap',
+      }}>
+        {label}
+        {selected.length > 0 && (
+          <span style={{ background: '#3b82f6', borderRadius: 10, padding: '1px 6px', fontSize: 10, color: '#fff', fontWeight: 700 }}>
+            {selected.length}
+          </span>
+        )}
+        <span style={{ opacity: 0.4, fontSize: 9 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 9999,
+          background: '#1e293b', border: '1px solid #2a3a55', borderRadius: 8,
+          minWidth: 180, maxHeight: 300, overflowY: 'auto',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #1a2540', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#1e293b' }}>
+            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {selected.length > 0 ? `${selected.length} selected` : `All ${label}`}
+            </span>
+            {selected.length > 0 && (
+              <button onClick={() => { onClear(); setOpen(false) }} style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>
+                Clear all
+              </button>
+            )}
+          </div>
+          {options.map(v => {
+            const checked = selected.includes(v)
+            return (
+              <div key={v} onClick={() => onToggle(v)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer',
+                background: checked ? '#1a3050' : 'transparent', fontSize: 12,
+                borderBottom: '1px solid #1a2540',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = checked ? '#1a3050' : '#0f172a')}
+                onMouseLeave={e => (e.currentTarget.style.background = checked ? '#1a3050' : 'transparent')}
+              >
+                <span style={{
+                  width: 15, height: 15, border: `2px solid ${checked ? '#3b82f6' : '#475569'}`,
+                  borderRadius: 3, background: checked ? '#3b82f6' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  fontSize: 10, color: '#fff', fontWeight: 700,
+                }}>
+                  {checked ? '✓' : ''}
+                </span>
+                <span style={{ color: checked ? '#7dd3fc' : '#cbd5e1' }}>{v}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 type Row = Record<string, unknown>
@@ -571,35 +647,25 @@ export default function SaleDashboard() {
             {(filters.store_status || ['ACTIVE', 'INACTIVE']).map(v => <option key={v}>{v}</option>)}
           </select>
         </div>
-        {/* Division multi-select pills */}
+        {/* Division dropdown */}
         {(filters.division || []).length > 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, opacity: 0.5 }}>Div:</span>
-            {(filters.division || []).map(v => (
-              <button key={v} onClick={() => toggleMulti(selDivisions, v, setSelDivisions)} style={{
-                fontSize: 10, padding: '3px 8px', borderRadius: 8, cursor: 'pointer',
-                border: `1px solid ${selDivisions.includes(v) ? '#3b82f6' : '#2a3a55'}`,
-                background: selDivisions.includes(v) ? '#1e3a5f' : '#0f1724',
-                color: selDivisions.includes(v) ? '#7dd3fc' : '#94a3b8',
-              }}>{v}</button>
-            ))}
-            {selDivisions.length > 0 && <button onClick={() => setSelDivisions([])} style={{ fontSize: 10, padding: '3px 6px', background: 'none', border: 'none', color: '#f87171', cursor: 'pointer' }}>✕</button>}
-          </div>
+          <MultiSelectDropdown
+            label="Division"
+            options={filters.division || []}
+            selected={selDivisions}
+            onToggle={v => toggleMulti(selDivisions, v, setSelDivisions)}
+            onClear={() => setSelDivisions([])}
+          />
         )}
-        {/* Campaign multi-select pills */}
+        {/* Campaign dropdown */}
         {(filters.attribute1 || []).length > 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, opacity: 0.5 }}>Camp:</span>
-            {(filters.attribute1 || []).slice(0, 10).map(v => (
-              <button key={v} onClick={() => toggleMulti(selAttrs, v, setSelAttrs)} style={{
-                fontSize: 10, padding: '3px 8px', borderRadius: 8, cursor: 'pointer',
-                border: `1px solid ${selAttrs.includes(v) ? '#3b82f6' : '#2a3a55'}`,
-                background: selAttrs.includes(v) ? '#1e3a5f' : '#0f1724',
-                color: selAttrs.includes(v) ? '#7dd3fc' : '#94a3b8',
-              }}>{v}</button>
-            ))}
-            {selAttrs.length > 0 && <button onClick={() => setSelAttrs([])} style={{ fontSize: 10, padding: '3px 6px', background: 'none', border: 'none', color: '#f87171', cursor: 'pointer' }}>✕</button>}
-          </div>
+          <MultiSelectDropdown
+            label="Campaign"
+            options={filters.attribute1 || []}
+            selected={selAttrs}
+            onToggle={v => toggleMulti(selAttrs, v, setSelAttrs)}
+            onClear={() => setSelAttrs([])}
+          />
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#ffffff08', borderRadius: 8, padding: '6px 10px', border: `1px solid ${(dateFrom || dateTo || (customLY && (lyDateFrom || lyDateTo))) ? '#3b82f6' : '#2a3a55'}` }}>
           <div className="date-group" style={{ gap: 6 }}>

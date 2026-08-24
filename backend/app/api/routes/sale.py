@@ -32,16 +32,18 @@ _fetch_lock   = threading.Lock()
 _fetch_active = False
 _fetch_error  = ""
 
-# Aggregation SQL — store × date × attribute1 level (18s total for both tables)
+# Aggregation SQL — store × date × division × attribute1 level
 _AGG_SQL = """
-    SELECT STORE_NAME, CLUSTER_TYPE, STORE_STATUS, REGION_TYPE, ATTRIBUTE1,
+    SELECT STORE_NAME, CLUSTER_TYPE, STORE_STATUS, REGION_TYPE,
+           DIVISION, ATTRIBUTE1,
            TRUNC(BILLDATE) as SALE_DATE,
            SUM(SL_QTY) as SL_QTY,
            SUM(SL_V)   as SL_V,
            SUM(TGT_Q)  as TGT_Q,
            SUM(TGT_V)  as TGT_V
     FROM MISRETAIL."{table}"
-    GROUP BY STORE_NAME, CLUSTER_TYPE, STORE_STATUS, REGION_TYPE, ATTRIBUTE1,
+    GROUP BY STORE_NAME, CLUSTER_TYPE, STORE_STATUS, REGION_TYPE,
+             DIVISION, ATTRIBUTE1,
              TRUNC(BILLDATE)
 """
 
@@ -121,7 +123,8 @@ async def get_sale_data(
     cluster_type:  Optional[str] = Query(None),
     region_type:   Optional[str] = Query(None),
     store_status:  Optional[str] = Query(None),
-    attribute1:    Optional[str] = Query(None),
+    attribute1:    Optional[str] = Query(None, description="Comma-separated campaign values"),
+    division:      Optional[str] = Query(None, description="Comma-separated division values"),
     store_search:  Optional[str] = Query(None),
     date_from:     Optional[str] = Query(None, description="TY date from YYYY-MM-DD"),
     date_to:       Optional[str] = Query(None, description="TY date to YYYY-MM-DD"),
@@ -164,6 +167,9 @@ async def get_sale_data(
         if df_ty is None or df_ly is None:
             return APIResponse.fail(message="Cache read error — try force_refresh=true")
 
+        attr_vals = [v.strip().upper() for v in attribute1.split(",")] if attribute1 else []
+        div_vals  = [v.strip().upper() for v in division.split(",")]  if division  else []
+
         def _base_mask(df: pd.DataFrame) -> pd.Series:
             m = pd.Series([True] * len(df), index=df.index)
             if cluster_type:
@@ -172,8 +178,10 @@ async def get_sale_data(
                 m &= df["region_type"].str.upper() == region_type.upper()
             if store_status and store_status != "-":
                 m &= df["store_status"] == store_status
-            if attribute1:
-                m &= df["attribute1"].str.upper() == attribute1.upper()
+            if attr_vals:
+                m &= df["attribute1"].str.upper().isin(attr_vals)
+            if div_vals and "division" in df.columns:
+                m &= df["division"].str.upper().isin(div_vals)
             if store_search:
                 m &= df["store_name"].str.upper().str.contains(store_search.upper(), na=False)
             return m
@@ -194,26 +202,41 @@ async def get_sale_data(
         ly_f = df_ly[_base_mask(df_ly) & _date_mask(df_ly, eff_ly_from, eff_ly_to)].copy()
 
         # Aggregate to store level for TY vs LY table
-        ty_agg = ty_f.groupby(
-            ["store_name", "cluster_type", "store_status", "region_type"],
-            as_index=False
-        ).agg(TY_QTY=("sl_qty", "sum"), TY_V=("sl_v", "sum"),
-              TY_TGT_Q=("tgt_q", "sum"), TY_TGT_V=("tgt_v", "sum"))
+        # DIVISION in cache → group by it so we can filter; sum across divisions for store-total
+        base_keys = ["store_name", "cluster_type", "store_status", "region_type"]
+        div_key = "division" if "division" in ty_f.columns else None
+        grp_keys = base_keys + ([div_key] if div_key else [])
 
-        ly_agg = ly_f.groupby(
-            ["store_name", "cluster_type", "store_status", "region_type"],
-            as_index=False
-        ).agg(LY_QTY=("sl_qty", "sum"), LY_V=("sl_v", "sum"),
-              LY_TGT_Q=("tgt_q", "sum"), LY_TGT_V=("tgt_v", "sum"))
+        ty_agg = ty_f.groupby(grp_keys, as_index=False).agg(
+            TY_QTY=("sl_qty", "sum"), TY_V=("sl_v", "sum"),
+            TY_TGT_Q=("tgt_q", "sum"), TY_TGT_V=("tgt_v", "sum"))
+        ly_agg = ly_f.groupby(base_keys, as_index=False).agg(
+            LY_QTY=("sl_qty", "sum"), LY_V=("sl_v", "sum"),
+            LY_TGT_Q=("tgt_q", "sum"), LY_TGT_V=("tgt_v", "sum"))
 
-        merged = pd.merge(ty_agg, ly_agg,
-                          on=["store_name", "cluster_type", "store_status", "region_type"],
-                          how="outer").fillna(0)
-
-        merged = merged.rename(columns={
+        merged = pd.merge(ty_agg, ly_agg, on=base_keys, how="outer").fillna(0)
+        rename_map = {
             "store_name": "STORE_NAME", "cluster_type": "CLUSTER_TYPE",
             "store_status": "STORE_STATUS", "region_type": "REGION_TYPE",
-        })
+        }
+        if div_key:
+            rename_map[div_key] = "DIVISION"
+        merged = merged.rename(columns=rename_map)
+
+        # Enrich with OPERT_DAYS from store master (opening_date)
+        try:
+            from app.repositories.store_repository import StoreRepository
+            from datetime import date as _date
+            store_df = StoreRepository().get_all_stores(active_only=False)
+            if store_df is not None and len(store_df) > 0:
+                store_df.columns = [c.lower() for c in store_df.columns]
+                if "opening_date" in store_df.columns:
+                    od_map = store_df.set_index("store_name")["opening_date"].to_dict()
+                    today = pd.Timestamp(_date.today())
+                    od = pd.to_datetime(merged["STORE_NAME"].map(od_map), errors="coerce")
+                    merged["OPERT_DAYS"] = (today - od).dt.days.clip(lower=0).fillna(0).astype(int)
+        except Exception as enrich_err:
+            logger.warning("Store master enrich failed: %s", enrich_err)
 
         # Derived columns
         merged["ACHV_PCT"]  = (merged["TY_V"] / merged["TY_TGT_V"].replace(0, pd.NA) * 100).round(1)
@@ -283,13 +306,14 @@ async def get_sale_filters():
                 return sorted(df[col].dropna().unique().tolist())
             return []
 
-        cluster, region, attribute1, store_statuses = [], [], [], ["ACTIVE", "INACTIVE"]
+        cluster, region, attribute1, division, store_statuses = [], [], [], [], ["ACTIVE", "INACTIVE"]
         if has_output(*_CACHE_TY):
             df = read_cache(*_CACHE_TY)
             if df is not None:
                 cluster        = uniq(df, "cluster_type")
                 region         = uniq(df, "region_type")
                 attribute1     = uniq(df, "attribute1")
+                division       = uniq(df, "division")
                 store_statuses = uniq(df, "store_status")
         else:
             from app.repositories.store_repository import StoreRepository
@@ -301,6 +325,7 @@ async def get_sale_filters():
             "cluster_type": cluster,
             "region_type":  region,
             "attribute1":   attribute1,
+            "division":     division,
             "store_status": store_statuses,
         })
 

@@ -52,10 +52,11 @@ export default function SaleDashboard() {
   const [sortCol, setSortCol]       = useState('TY_V')
   const [sortDir, setSortDir]       = useState<'asc'|'desc'>('desc')
   const [storeSearch, setStoreSearch] = useState('')
-  const [selCluster, setSelCluster] = useState('')
-  const [selRegion, setSelRegion]   = useState('')
-  const [selStatus, setSelStatus]   = useState('')
-  const [selAttr, setSelAttr]       = useState('')
+  const [selCluster, setSelCluster]       = useState('')
+  const [selRegion, setSelRegion]         = useState('')
+  const [selStatus, setSelStatus]         = useState('')
+  const [selAttrs, setSelAttrs]           = useState<string[]>([])
+  const [selDivisions, setSelDivisions]   = useState<string[]>([])
   const [dateFrom, setDateFrom]         = useState('')
   const [dateTo, setDateTo]             = useState('')
   const [lyDateFrom, setLyDateFrom]     = useState('')
@@ -73,11 +74,12 @@ export default function SaleDashboard() {
     setError('')
     try {
       const params: Record<string, string> = {}
-      if (selCluster) params.cluster_type = selCluster
-      if (selRegion)  params.region_type  = selRegion
+      if (selCluster)          params.cluster_type = selCluster
+      if (selRegion)           params.region_type  = selRegion
       if (selStatus && selStatus !== '-') params.store_status = selStatus
-      if (selAttr)    params.attribute1   = selAttr
-      if (storeSearch) params.store_search = storeSearch
+      if (selAttrs.length)     params.attribute1   = selAttrs.join(',')
+      if (selDivisions.length) params.division     = selDivisions.join(',')
+      if (storeSearch)         params.store_search = storeSearch
       if (dateFrom)              params.date_from    = dateFrom
       if (dateTo)                params.date_to      = dateTo
       if (customLY && lyDateFrom) params.ly_date_from = lyDateFrom
@@ -100,7 +102,7 @@ export default function SaleDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [selCluster, selRegion, selStatus, selAttr, storeSearch, dateFrom, dateTo, stopPolling])
+  }, [selCluster, selRegion, selStatus, selAttrs, selDivisions, storeSearch, dateFrom, dateTo, stopPolling])
 
   const startPolling = useCallback(() => {
     if (pollRef) return
@@ -129,7 +131,7 @@ export default function SaleDashboard() {
   // Re-load when server-side filters change
   useEffect(() => {
     if (cacheInfo?.ready || allRows.length > 0) loadData()
-  }, [selCluster, selRegion, selStatus, selAttr, dateFrom, dateTo, lyDateFrom, lyDateTo, customLY]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selCluster, selRegion, selStatus, selAttrs, selDivisions, dateFrom, dateTo, lyDateFrom, lyDateTo, customLY]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Client-side search + sort
   useEffect(() => {
@@ -181,6 +183,264 @@ export default function SaleDashboard() {
     axios.get('/api/sale/data', { params: { force_refresh: true } }).catch(() => {})
   }
 
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  const activeFilterCount = [selCluster, selRegion, selStatus, ...selAttrs, ...selDivisions, dateFrom || dateTo ? '1' : '', customLY ? '1' : ''].filter(Boolean).length
+
+  // Reusable inline multi-select toggle
+  function toggleMulti<T extends string>(arr: T[], val: T, set: (v: T[]) => void) {
+    set(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val])
+  }
+
+  const achvColor = (pct: number | null) => pct === null ? '#64748b' : pct >= 100 ? '#22c55e' : pct >= 80 ? '#f59e0b' : '#ef4444'
+
+  const sharedStyle = `
+    .sd-btn { background:#1a2235; border:1px solid #2a3a55; border-radius:6px; padding:5px 12px; color:inherit; cursor:pointer; font-size:12px; }
+    .sd-btn:hover { background:#243050; }
+    .sd-btn:disabled { opacity:.4; cursor:default; }
+    .achv-green{color:#22c55e;font-weight:600} .achv-amber{color:#f59e0b;font-weight:600}
+    .achv-red{color:#ef4444;font-weight:600} .achv-na{opacity:.35}
+  `
+
+  // ── Mobile layout ───────────────────────────────────────────────────────────
+  if (isMobile) return (
+    <div style={{ display: 'flex', flexDirection: 'column', background: '#0f172a', minHeight: '100vh' }}>
+      <style>{sharedStyle}</style>
+
+      {/* Mobile header */}
+      <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '10px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0' }}>Sale Dashboard</div>
+            <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>Store-wise TY vs LY</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="sd-btn" onClick={loadData} disabled={loading || fetching} style={{ padding: '6px 12px' }}>
+              {loading ? '…' : '⟳'}
+            </button>
+            <button onClick={() => setFilterDrawerOpen(true)} style={{
+              padding: '6px 12px', borderRadius: 8, border: `1px solid ${activeFilterCount > 0 ? '#3b82f6' : '#334155'}`,
+              background: activeFilterCount > 0 ? '#1e3a5f' : '#0f172a',
+              color: activeFilterCount > 0 ? '#7dd3fc' : '#64748b', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}>
+              ⚙ {activeFilterCount > 0 ? activeFilterCount : ''} Filters
+            </button>
+          </div>
+        </div>
+        {/* Search */}
+        <input
+          type="text" placeholder="Search store…" value={storeSearch}
+          onChange={e => setStoreSearch(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box' as const, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none' }}
+        />
+        {/* Active filter chips */}
+        {activeFilterCount > 0 && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const, marginTop: 8 }}>
+            {selCluster && <span onClick={() => setSelCluster('')} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6', cursor: 'pointer' }}>Zone: {selCluster} ✕</span>}
+            {selRegion  && <span onClick={() => setSelRegion('')}  style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6', cursor: 'pointer' }}>Region: {selRegion} ✕</span>}
+            {selStatus  && <span onClick={() => setSelStatus('')}  style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6', cursor: 'pointer' }}>{selStatus} ✕</span>}
+            {selAttrs.map(v => <span key={v} onClick={() => setSelAttrs(a => a.filter(x => x !== v))} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6', cursor: 'pointer' }}>Camp: {v} ✕</span>)}
+            {selDivisions.map(v => <span key={v} onClick={() => setSelDivisions(a => a.filter(x => x !== v))} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6', cursor: 'pointer' }}>Div: {v} ✕</span>)}
+            {(dateFrom || dateTo) && <span onClick={() => { setDateFrom(''); setDateTo('') }} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#1e3a5f', color: '#7dd3fc', border: '1px solid #3b82f6', cursor: 'pointer' }}>📅 TY Period ✕</span>}
+            {customLY && <span onClick={() => { setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, background: '#312e0a', color: '#f59e0b', border: '1px solid #f59e0b', cursor: 'pointer' }}>📅 LY Custom ✕</span>}
+          </div>
+        )}
+      </div>
+
+      {/* KPI horizontal scroll */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 12px', scrollbarWidth: 'none' as const }}>
+        {[
+          { label: 'TY Sale', val: fmt(tyTotal), sub: `${allRows.length} stores`, color: '#38bdf8' },
+          { label: 'LY Sale', val: fmt(lyTotal), sub: `${allRows.filter(r => Number(r.LY_V) > 0).length} stores`, color: '#7dd3fc' },
+          { label: 'Target', val: fmt(tgtTotal), sub: '', color: '#facc15' },
+          { label: 'Achv%', val: achvPct !== null ? achvPct.toFixed(1) + '%' : '—', sub: '', color: achvColor(achvPct) },
+          { label: 'Growth', val: grwthPct !== null ? (grwthPct > 0 ? '+' : '') + grwthPct.toFixed(1) + '%' : '—', sub: '', color: grwthPct !== null && grwthPct >= 0 ? '#22c55e' : '#ef4444' },
+        ].map(k => (
+          <div key={k.label} style={{ flexShrink: 0, background: '#1e293b', borderRadius: 10, padding: '8px 14px', border: '1px solid #334155', textAlign: 'center', minWidth: 90 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: k.color, lineHeight: 1 }}>{k.val}</div>
+            {k.sub && <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>{k.sub}</div>}
+            <div style={{ fontSize: 9, color: '#64748b', marginTop: 3, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Banners */}
+      <div style={{ padding: '0 12px' }}>
+        {fetching && !error && (
+          <div style={{ background: '#1a2a10', border: '1px solid #2d5a1a', borderRadius: 8, padding: '10px 14px', marginBottom: 8, fontSize: 12 }}>
+            ⏳ Fetching from Oracle…
+          </div>
+        )}
+        {error && <div style={{ background: '#2a1010', border: '1px solid #5a1a1a', borderRadius: 8, padding: 10, marginBottom: 8, fontSize: 12, color: '#f87171' }}>⚠ {error}</div>}
+      </div>
+
+      {/* Store cards */}
+      <div style={{ padding: '0 12px 80px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {loading && !fetching && <div style={{ textAlign: 'center', padding: 40, color: '#475569' }}>Loading…</div>}
+        {!loading && paged.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
+            {allRows.length === 0 ? 'No data — tap ⟳ to refresh' : 'No stores match filters'}
+          </div>
+        )}
+        {paged.map((r, i) => {
+          const tyAchv = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
+          const growth = Number(r.GRWTH_PCT)
+          const achvC = achvColor(tyAchv)
+          return (
+            <div key={i} style={{
+              background: '#1e293b', borderRadius: 10, padding: '12px 14px',
+              border: `1px solid #334155`, borderLeft: `3px solid ${achvC}`,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e8f0', flex: 1 }}>{String(r.STORE_NAME || '—')}</div>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
+                  {!!r.DIVISION     && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#1e3a5f', color: '#7dd3fc' }}>{String(r.DIVISION)}</span>}
+                  {!!r.CLUSTER_TYPE && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#0f172a', color: '#64748b' }}>{String(r.CLUSTER_TYPE)}</span>}
+                  {!!r.REGION_TYPE  && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#0f172a', color: '#64748b' }}>{String(r.REGION_TYPE)}</span>}
+                </div>
+              </div>
+              {r.OPERT_DAYS != null && <div style={{ fontSize: 9, color: '#64748b', marginBottom: 6 }}>⏱ Oper Days: <span style={{ color: '#94a3b8', fontWeight: 700 }}>{String(r.OPERT_DAYS)}d</span></div>}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+                {[
+                  { label: 'TY Sale', val: fmt(r.TY_V), color: '#38bdf8' },
+                  { label: 'TY Qty', val: fmt(r.TY_QTY), color: '#7dd3fc' },
+                  { label: 'TY Achv', val: tyAchv !== null ? tyAchv.toFixed(1) + '%' : '—', color: achvC },
+                  { label: 'LY Sale', val: fmt(r.LY_V), color: '#94a3b8' },
+                  { label: 'TY Target', val: fmt(r.TY_TGT_V), color: '#facc15' },
+                  { label: 'Growth', val: !isNaN(growth) ? (growth > 0 ? '+' : '') + growth.toFixed(1) + '%' : '—', color: !isNaN(growth) && growth >= 0 ? '#22c55e' : '#ef4444' },
+                ].map(m => (
+                  <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '5px 8px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}</div>
+                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '12px 0', alignItems: 'center' }}>
+            <button className="sd-btn" style={{ padding: '8px 18px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
+            <span style={{ fontSize: 12, color: '#64748b' }}>{page} / {totalPages} &nbsp;({rows.length} stores)</span>
+            <button className="sd-btn" style={{ padding: '8px 18px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next ›</button>
+          </div>
+        )}
+      </div>
+
+      {/* Filter Drawer */}
+      {filterDrawerOpen && (
+        <>
+          <div onClick={() => setFilterDrawerOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000 }} />
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001, background: '#1e293b', borderTop: '1px solid #334155', borderRadius: '16px 16px 0 0', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #334155' }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0' }}>Filters</span>
+              <button onClick={() => setFilterDrawerOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Single-select filters */}
+              {[
+                { label: 'Zone', val: selCluster, set: setSelCluster, opts: filters.cluster_type || [] },
+                { label: 'Region', val: selRegion, set: setSelRegion, opts: filters.region_type || [] },
+                { label: 'Status', val: selStatus, set: setSelStatus, opts: filters.store_status || ['ACTIVE', 'INACTIVE'] },
+              ].map(f => (
+                <div key={f.label}>
+                  <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{f.label}</div>
+                  <select value={f.val} onChange={e => f.set(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: '#e2e8f0', fontSize: 13 }}>
+                    <option value=''>All {f.label}s</option>
+                    {f.opts.map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </div>
+              ))}
+              {/* Multi-select: Division */}
+              {(filters.division || []).length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Division {selDivisions.length > 0 && <span style={{ color: '#7dd3fc' }}>({selDivisions.length})</span>}</div>
+                    {selDivisions.length > 0 && <button onClick={() => setSelDivisions([])} style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear</button>}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
+                    {(filters.division || []).map(v => (
+                      <button key={v} onClick={() => toggleMulti(selDivisions, v, setSelDivisions)} style={{
+                        fontSize: 11, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                        border: `1px solid ${selDivisions.includes(v) ? '#3b82f6' : '#334155'}`,
+                        background: selDivisions.includes(v) ? '#1e3a5f' : '#0f172a',
+                        color: selDivisions.includes(v) ? '#7dd3fc' : '#64748b', fontWeight: 600,
+                      }}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Multi-select: Campaign/Attribute */}
+              {(filters.attribute1 || []).length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Campaign {selAttrs.length > 0 && <span style={{ color: '#7dd3fc' }}>({selAttrs.length})</span>}</div>
+                    {selAttrs.length > 0 && <button onClick={() => setSelAttrs([])} style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear</button>}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
+                    {(filters.attribute1 || []).map(v => (
+                      <button key={v} onClick={() => toggleMulti(selAttrs, v, setSelAttrs)} style={{
+                        fontSize: 11, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                        border: `1px solid ${selAttrs.includes(v) ? '#3b82f6' : '#334155'}`,
+                        background: selAttrs.includes(v) ? '#1e3a5f' : '#0f172a',
+                        color: selAttrs.includes(v) ? '#7dd3fc' : '#64748b', fontWeight: 600,
+                      }}>{v}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* TY Date Range */}
+              <div>
+                <div style={{ fontSize: 10, color: '#7dd3fc', marginBottom: 6, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>TY Period (This Year)</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>FROM</div>
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>TO</div>
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                  </div>
+                </div>
+                {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo('') }} style={{ marginTop: 6, fontSize: 11, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✕ Clear TY dates</button>}
+              </div>
+              {/* LY Custom Dates */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: customLY ? '#f59e0b' : '#64748b', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>LY Custom (Festival)</div>
+                  <button onClick={() => { setCustomLY(c => !c); if (customLY) { setLyDateFrom(''); setLyDateTo('') } }}
+                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${customLY ? '#f59e0b' : '#334155'}`, background: 'none', color: customLY ? '#f59e0b' : '#64748b', cursor: 'pointer' }}>
+                    {customLY ? 'Remove' : '+ Add'}
+                  </button>
+                </div>
+                {customLY && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>FROM</div>
+                      <input type="date" value={lyDateFrom} onChange={e => setLyDateFrom(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #f59e0b44', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>TO</div>
+                      <input type="date" value={lyDateTo} onChange={e => setLyDateTo(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #f59e0b44', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setFilterDrawerOpen(false)} style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: '#0ea5e9', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>Apply</button>
+              {activeFilterCount > 0 && (
+                <button onClick={() => { setSelCluster(''); setSelRegion(''); setSelStatus(''); setSelAttrs([]); setSelDivisions([]); setDateFrom(''); setDateTo(''); setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }}
+                  style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid #334155', background: 'transparent', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
+  // ── Desktop layout ──────────────────────────────────────────────────────────
   return (
     <div className="sale-dash">
       <style>{`
@@ -203,10 +463,7 @@ export default function SaleDashboard() {
         .sale-table td { padding: 6px 8px; border-bottom: 1px solid #1a2540; text-align: right; }
         .sale-table td:first-child { text-align: left; font-weight: 600; }
         .sale-table tr:hover td { background: #1a2a40; }
-        .achv-green { color: #22c55e; font-weight: 600; }
-        .achv-amber { color: #f59e0b; font-weight: 600; }
-        .achv-red   { color: #ef4444; font-weight: 600; }
-        .achv-na    { opacity: .35; }
+        ${sharedStyle}
         .pagination { display: flex; gap: 6px; align-items: center; margin-top: 10px; justify-content: center; font-size: 12px; }
         .pagination button { background: #1a2235; border: 1px solid #2a3a55; border-radius: 4px;
           padding: 3px 10px; color: inherit; cursor: pointer; }
@@ -285,15 +542,37 @@ export default function SaleDashboard() {
             {(filters.store_status || ['ACTIVE', 'INACTIVE']).map(v => <option key={v}>{v}</option>)}
           </select>
         </div>
-        <div>
-          <label>Attribute</label>
-          <select value={selAttr} onChange={e => setSelAttr(e.target.value)}>
-            <option value=''>All</option>
-            {(filters.attribute1 || []).map(v => <option key={v}>{v}</option>)}
-          </select>
-        </div>
+        {/* Division multi-select pills */}
+        {(filters.division || []).length > 0 && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, opacity: 0.5 }}>Div:</span>
+            {(filters.division || []).map(v => (
+              <button key={v} onClick={() => toggleMulti(selDivisions, v, setSelDivisions)} style={{
+                fontSize: 10, padding: '3px 8px', borderRadius: 8, cursor: 'pointer',
+                border: `1px solid ${selDivisions.includes(v) ? '#3b82f6' : '#2a3a55'}`,
+                background: selDivisions.includes(v) ? '#1e3a5f' : '#0f1724',
+                color: selDivisions.includes(v) ? '#7dd3fc' : '#94a3b8',
+              }}>{v}</button>
+            ))}
+            {selDivisions.length > 0 && <button onClick={() => setSelDivisions([])} style={{ fontSize: 10, padding: '3px 6px', background: 'none', border: 'none', color: '#f87171', cursor: 'pointer' }}>✕</button>}
+          </div>
+        )}
+        {/* Campaign multi-select pills */}
+        {(filters.attribute1 || []).length > 0 && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, opacity: 0.5 }}>Camp:</span>
+            {(filters.attribute1 || []).slice(0, 10).map(v => (
+              <button key={v} onClick={() => toggleMulti(selAttrs, v, setSelAttrs)} style={{
+                fontSize: 10, padding: '3px 8px', borderRadius: 8, cursor: 'pointer',
+                border: `1px solid ${selAttrs.includes(v) ? '#3b82f6' : '#2a3a55'}`,
+                background: selAttrs.includes(v) ? '#1e3a5f' : '#0f1724',
+                color: selAttrs.includes(v) ? '#7dd3fc' : '#94a3b8',
+              }}>{v}</button>
+            ))}
+            {selAttrs.length > 0 && <button onClick={() => setSelAttrs([])} style={{ fontSize: 10, padding: '3px 6px', background: 'none', border: 'none', color: '#f87171', cursor: 'pointer' }}>✕</button>}
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#ffffff08', borderRadius: 8, padding: '6px 10px', border: `1px solid ${(dateFrom || dateTo || (customLY && (lyDateFrom || lyDateTo))) ? '#3b82f6' : '#2a3a55'}` }}>
-          {/* TY row */}
           <div className="date-group" style={{ gap: 6 }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#7dd3fc', minWidth: 22 }}>TY</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -307,16 +586,10 @@ export default function SaleDashboard() {
             </div>
             {(dateFrom || dateTo) && <button className="btn" style={{ alignSelf: 'flex-end', padding: '2px 6px' }} onClick={() => { setDateFrom(''); setDateTo('') }}>✕</button>}
           </div>
-          {/* LY row — toggle */}
           <div className="date-group" style={{ gap: 6 }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: customLY ? '#f59e0b' : '#64748b', minWidth: 22 }}>LY</span>
             {!customLY ? (
-              <button
-                className="btn"
-                style={{ fontSize: 10, padding: '2px 8px', background: 'transparent', border: '1px dashed #3b82f6', color: '#7dd3fc' }}
-                onClick={() => setCustomLY(true)}
-                title="Set custom LY date range (e.g. for Holi, Diwali shifted dates)"
-              >+ Custom LY dates (festival)</button>
+              <button className="btn" style={{ fontSize: 10, padding: '2px 8px', background: 'transparent', border: '1px dashed #3b82f6', color: '#7dd3fc' }} onClick={() => setCustomLY(true)}>+ Custom LY dates (festival)</button>
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -328,32 +601,21 @@ export default function SaleDashboard() {
                   <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase' }}>To</span>
                   <input type="date" value={lyDateTo} onChange={e => setLyDateTo(e.target.value)} />
                 </div>
-                <button className="btn" style={{ alignSelf: 'flex-end', padding: '2px 6px', background: '#7c2d12' }} onClick={() => { setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }} title="Remove custom LY dates">✕</button>
+                <button className="btn" style={{ alignSelf: 'flex-end', padding: '2px 6px', background: '#7c2d12' }} onClick={() => { setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }}>✕</button>
               </>
             )}
           </div>
         </div>
-        <input
-          type="text"
-          placeholder="Search store…"
-          value={storeSearch}
-          onChange={e => setStoreSearch(e.target.value)}
-          style={{ minWidth: isMobile ? 100 : 150 }}
-        />
+        <input type="text" placeholder="Search store…" value={storeSearch} onChange={e => setStoreSearch(e.target.value)} style={{ minWidth: 150 }} />
       </div>
 
       {/* Actions */}
       <div className="actions">
-        <button className="btn" onClick={loadData} disabled={loading || fetching}>
-          {loading ? '…' : '⟳ Refresh'}
-        </button>
-        <button className="btn" onClick={forceReload} disabled={fetching} title="Re-fetch from Oracle">
-          ↺ Reload from DB
-        </button>
+        <button className="btn" onClick={loadData} disabled={loading || fetching}>{loading ? '…' : '⟳ Refresh'}</button>
+        <button className="btn" onClick={forceReload} disabled={fetching}>↺ Reload from DB</button>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>⬇ CSV</button>
-        <span style={{ opacity: .4, fontSize: 11 }}>
-          {rows.length} stores shown{allRows.length !== rows.length ? ` (of ${allRows.length})` : ''}
-        </span>
+        {activeFilterCount > 0 && <button className="btn" onClick={() => { setSelCluster(''); setSelRegion(''); setSelStatus(''); setSelAttrs([]); setSelDivisions([]); setDateFrom(''); setDateTo(''); setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }} style={{ color: '#f87171' }}>✕ Clear</button>}
+        <span style={{ opacity: .4, fontSize: 11 }}>{rows.length} stores shown{allRows.length !== rows.length ? ` (of ${allRows.length})` : ''}</span>
       </div>
 
       {/* Table */}
@@ -364,23 +626,17 @@ export default function SaleDashboard() {
           <table className="sale-table">
             <thead>
               <tr className="group-header">
-                <th colSpan={3}></th>
+                <th colSpan={5}></th>
                 <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
                 <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
                 <th colSpan={2} style={{ borderLeft: '1px solid #2a3a55' }}>Performance</th>
               </tr>
               <tr>
-                <Th col="STORE_NAME"  label="Store" />
-                <th>Zone</th>
-                <th>Region</th>
-                <Th col="TY_V"     label="Sale ₹" />
-                <Th col="TY_TGT_V" label="Target" />
-                <th>Achv%</th>
-                <Th col="LY_V"     label="Sale ₹" />
-                <Th col="LY_TGT_V" label="Target" />
-                <th>LY Achv%</th>
-                <th>Growth%</th>
-                <Th col="TY_QTY"   label="TY Qty" />
+                <Th col="STORE_NAME" label="Store" />
+                <th>Division</th><th>Zone</th><th>Region</th><th>Oper Days</th>
+                <Th col="TY_V" label="Sale ₹" /><Th col="TY_QTY" label="Sale Qty" /><th>Achv%</th>
+                <Th col="LY_V" label="Sale ₹" /><Th col="LY_TGT_V" label="Target" /><th>LY Achv%</th>
+                <th>Growth%</th><Th col="TY_TGT_V" label="TY Target" />
               </tr>
             </thead>
             <tbody>
@@ -390,21 +646,18 @@ export default function SaleDashboard() {
                 </td></tr>
               )}
               {paged.map((r, i) => {
-                const tyAchv  = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
-                const lyAchv  = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
+                const tyAchv = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
+                const lyAchv = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
                 return (
                   <tr key={i}>
                     <td>{String(r.STORE_NAME || '—')}</td>
+                    <td style={{ textAlign: 'center' }}>{String(r.DIVISION || '—')}</td>
                     <td style={{ textAlign: 'center' }}>{String(r.CLUSTER_TYPE || '—')}</td>
                     <td style={{ textAlign: 'center' }}>{String(r.REGION_TYPE || '—')}</td>
-                    <td>{fmt(r.TY_V)}</td>
-                    <td>{fmt(r.TY_TGT_V)}</td>
-                    <td><AchvBadge val={tyAchv} /></td>
-                    <td>{fmt(r.LY_V)}</td>
-                    <td>{fmt(r.LY_TGT_V)}</td>
-                    <td><AchvBadge val={lyAchv} /></td>
-                    <td><GrowthBadge val={r.GRWTH_PCT} /></td>
-                    <td>{fmt(r.TY_QTY)}</td>
+                    <td style={{ textAlign: 'center' }}>{r.OPERT_DAYS != null ? String(r.OPERT_DAYS) + 'd' : '—'}</td>
+                    <td>{fmt(r.TY_V)}</td><td>{fmt(r.TY_QTY)}</td><td><AchvBadge val={tyAchv} /></td>
+                    <td>{fmt(r.LY_V)}</td><td>{fmt(r.LY_TGT_V)}</td><td><AchvBadge val={lyAchv} /></td>
+                    <td><GrowthBadge val={r.GRWTH_PCT} /></td><td>{fmt(r.TY_TGT_V)}</td>
                   </tr>
                 )
               })}

@@ -226,9 +226,10 @@ function MobileStoreCard({ row, str }: { row: StoreRow; str?: number }) {
           { label: 'MTD Sale', val: fmtLakh(row.mtd_sl_v) + ' L', color: '#4ade80' },
           { label: 'PBS Val', val: fmtLakh(row.pbs_v) + ' L', color: '#facc15' },
           { label: 'Stk Val', val: fmtLakh(row.ttl_stk_v) + ' L', color: '#7dd3fc' },
-          { label: 'STR', val: str != null ? str.toFixed(1) + 'd' : '—', color: '#c084fc' },
+          { label: 'Oper Days', val: row.opert_days != null ? String(row.opert_days) + 'd' : '—', color: '#94a3b8' },
           { label: 'Ach%', val: row.ach_pct != null ? Number(row.ach_pct).toFixed(1) + '%' : '—', color: pctColor(row.ach_pct != null ? Number(row.ach_pct) : null) },
           { label: 'Fill%', val: row.fill_rate != null ? Number(row.fill_rate).toFixed(1) + '%' : '—', color: pctColor(row.fill_rate != null ? Number(row.fill_rate) : null) },
+          { label: 'STR', val: str != null ? str.toFixed(1) + 'd' : '—', color: '#c084fc' },
         ].map(m => (
           <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '5px 8px' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}</div>
@@ -501,6 +502,27 @@ function StoreSummary({
       {/* ── Mobile store cards ── */}
       {isMobile && !loading && data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 80 }}>
+          {/* Sort selector row */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: '#64748b', flexShrink: 0 }}>Sort:</span>
+            {[
+              { key: 'mtd_sl_v',  label: 'MTD Sale' },
+              { key: 'ach_pct',   label: 'Ach%' },
+              { key: 'fill_rate', label: 'Fill%' },
+              { key: 'pbs_v',     label: 'PBS Val' },
+              { key: 'ttl_stk_v', label: 'Stk Val' },
+              { key: 'opert_days',label: 'Oper Days' },
+            ].map(opt => (
+              <button key={opt.key} onClick={() => handleSort(opt.key)} style={{
+                fontSize: 10, padding: '4px 9px', borderRadius: 10, cursor: 'pointer',
+                border: `1px solid ${sortCol === opt.key ? '#3b82f6' : '#334155'}`,
+                background: sortCol === opt.key ? '#1e3a5f' : '#0f172a',
+                color: sortCol === opt.key ? '#7dd3fc' : '#64748b', fontWeight: 600,
+              }}>
+                {opt.label}{sortCol === opt.key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+              </button>
+            ))}
+          </div>
           {stores.length === 0 && <div style={{ ...S.card, ...S.empty }}>No stores found.</div>}
           {active.length > 0 && (
             <>

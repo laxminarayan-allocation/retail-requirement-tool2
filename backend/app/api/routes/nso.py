@@ -90,27 +90,29 @@ async def get_nso_data(
     cluster_type: Optional[str] = Query(None),
     store_tag:    Optional[str] = Query(None),
     store_search: Optional[str] = Query(None),
+    source:        str          = Query("nso", description="'nso'=V_NSO, 'all'=V_ALL_WITH_NSO"),
     force_refresh: bool         = Query(False),
     limit:         int          = Query(50000, ge=1, le=200000),
 ):
     """
-    Return V_NSO rows enriched with STORE_MASTER_NSO master data.
-    Reads ONLY from Parquet cache (downloaded via Master Data page).
-    No direct Oracle fetch — refresh data from Master Data > V_NSO download.
+    Return V_NSO or V_ALL_WITH_NSO rows enriched with STORE_MASTER_NSO master data.
+    source=nso  → V_NSO (NSO plan stores only)
+    source=all  → V_ALL_WITH_NSO (all stores carrying NSO articles)
     """
     _require_oracle()
+    view_name = _ALL_VIEW if source == "all" else _NSO_VIEW
     try:
         t0 = time.perf_counter()
         from app.core.parquet_cache import has_output, read_cache
 
-        if not has_output(_NSO_OWNER, _NSO_VIEW):
+        if not has_output(_NSO_OWNER, view_name):
             return APIResponse.fail(
-                message="V_NSO parquet not found. Please download it from Master Data page first."
+                message=f"{view_name} parquet not found. Please download it from Master Data page first."
             )
 
-        df = read_cache(_NSO_OWNER, _NSO_VIEW)
+        df = read_cache(_NSO_OWNER, view_name)
         if df is None:
-            return APIResponse.fail(message="Cache read error — re-download V_NSO from Master Data page.")
+            return APIResponse.fail(message=f"Cache read error — re-download {view_name} from Master Data page.")
         served_from = "parquet"
 
         # ── 3. Enrich with STORE_MASTER_NSO parquet ────────────────────────

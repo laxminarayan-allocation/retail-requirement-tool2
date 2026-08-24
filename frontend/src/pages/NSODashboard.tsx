@@ -174,15 +174,15 @@ function MultiSelect({
 }
 
 function StoreSummary({
-  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns,
+  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns, source, onToggleSource,
 }: {
   selStatus: string; selCluster: string; selRegion: string; selTag: string
   selDivisions: string[]; selCampaigns: string[]
+  source: 'nso' | 'all'; onToggleSource: () => void
 }) {
   const [data, setData] = useState<StoreSummaryData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [source, setSource] = useState<'nso' | 'all'>('nso')
   const [sortCol, setSortCol] = useState<string>('mtd_sl_v')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -201,18 +201,12 @@ function StoreSummary({
       .catch(e => { setError(String(e)); setLoading(false) })
   }
 
-  function toggleSource() {
-    const next = source === 'nso' ? 'all' : 'nso'
-    setSource(next)
-    load(next)
-  }
-
   const mountedRef = useRef(false)
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return }
     load()
-  }, [selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns, source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function exportCSV() {
     if (!data?.stores.length) return
@@ -333,7 +327,7 @@ function StoreSummary({
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
               {/* Toggle pill: NSO ↔ All Chain */}
               <div
-                onClick={!loading ? toggleSource : undefined}
+                onClick={!loading ? onToggleSource : undefined}
                 title={source === 'nso' ? 'Showing NSO stores only — click to switch to All Chain stores' : 'Showing All Chain stores — click to switch to NSO stores only'}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 0,
@@ -508,11 +502,14 @@ export default function NSODashboard() {
   const [search, setSearch]         = useState('')
 
   const [tab, setTab]           = useState<'store' | 'article'>('store')
+  const [source, setSource]     = useState<'nso' | 'all'>('nso')
   const [data, setData]         = useState<NSOData | null>(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [artSortCol, setArtSortCol] = useState('')
   const [artSortDir, setArtSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function toggleSource() { setSource(s => s === 'nso' ? 'all' : 'nso') }
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -524,7 +521,7 @@ export default function NSODashboard() {
   function load() {
     setLoading(true)
     setError(null)
-    const params: Record<string, string> = { limit: '50000' }
+    const params: Record<string, string> = { limit: '50000', source }
     if (selCampaigns.length)   params.attribute1   = selCampaigns.join(',')
     if (selDivisions.length)   params.division     = selDivisions.join(',')
     if (selStatuses.length)    params.store_status = selStatuses.join(',')
@@ -542,10 +539,10 @@ export default function NSODashboard() {
   // Load article data only when user switches to article tab (lazy)
   useEffect(() => { if (tab === 'article') load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-reload when any server-side filter changes (only if data already loaded)
+  // Auto-reload when any server-side filter or source changes (only if data already loaded)
   useEffect(() => {
     if (data && tab === 'article') load()
-  }, [selCampaigns, selDivisions, selStatuses, selClusters, selRegions, selTags]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selCampaigns, selDivisions, selStatuses, selClusters, selRegions, selTags, source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
   const rows = data?.rows ?? []
@@ -624,6 +621,20 @@ export default function NSODashboard() {
                 {t === 'store' ? '📊 Store View' : '📋 Article Detail'}
               </button>
             ))}
+            {/* NSO / All Chain pill — visible on both tabs */}
+            <div
+              onClick={toggleSource}
+              title={source === 'nso' ? 'NSO stores only — click for All Chain' : 'All Chain stores — click for NSO only'}
+              style={{
+                display: 'flex', alignItems: 'center',
+                border: `1px solid ${source === 'all' ? '#c084fc' : C.border}`,
+                borderRadius: 20, overflow: 'hidden', cursor: 'pointer',
+                fontSize: 11, fontWeight: 700, userSelect: 'none',
+              }}
+            >
+              <span style={{ padding: '4px 10px', background: source === 'nso' ? C.blue : 'transparent', color: source === 'nso' ? '#fff' : C.text3 }}>NSO</span>
+              <span style={{ padding: '4px 10px', background: source === 'all' ? '#7c3aed' : 'transparent', color: source === 'all' ? '#fff' : C.text3 }}>All Chain</span>
+            </div>
             <div style={{ width: 1, height: 20, background: C.border }} />
             <MultiSelect label="Status"   options={filters.store_status} selected={selStatuses}  onChange={setSelStatuses}  />
             <MultiSelect label="Zones"    options={filters.cluster_type} selected={selClusters}  onChange={setSelClusters}  />
@@ -673,6 +684,8 @@ export default function NSODashboard() {
           selTag={selTags.join(',')}
           selDivisions={selDivisions}
           selCampaigns={selCampaigns}
+          source={source}
+          onToggleSource={toggleSource}
         />
       )}
 

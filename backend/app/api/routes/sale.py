@@ -123,8 +123,10 @@ async def get_sale_data(
     store_status:  Optional[str] = Query(None),
     attribute1:    Optional[str] = Query(None),
     store_search:  Optional[str] = Query(None),
-    date_from:     Optional[str] = Query(None, description="YYYY-MM-DD"),
-    date_to:       Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_from:     Optional[str] = Query(None, description="TY date from YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="TY date to YYYY-MM-DD"),
+    ly_date_from:  Optional[str] = Query(None, description="LY date from YYYY-MM-DD (defaults to date_from -1yr)"),
+    ly_date_to:    Optional[str] = Query(None, description="LY date to YYYY-MM-DD (defaults to date_to -1yr)"),
     force_refresh: bool          = Query(False),
     limit:         int           = Query(5000, ge=1, le=50000),
 ):
@@ -162,7 +164,7 @@ async def get_sale_data(
         if df_ty is None or df_ly is None:
             return APIResponse.fail(message="Cache read error — try force_refresh=true")
 
-        def _mask(df: pd.DataFrame) -> pd.Series:
+        def _base_mask(df: pd.DataFrame) -> pd.Series:
             m = pd.Series([True] * len(df), index=df.index)
             if cluster_type:
                 m &= df["cluster_type"].str.upper() == cluster_type.upper()
@@ -174,14 +176,22 @@ async def get_sale_data(
                 m &= df["attribute1"].str.upper() == attribute1.upper()
             if store_search:
                 m &= df["store_name"].str.upper().str.contains(store_search.upper(), na=False)
-            if date_from:
-                m &= pd.to_datetime(df["sale_date"]) >= pd.to_datetime(date_from)
-            if date_to:
-                m &= pd.to_datetime(df["sale_date"]) <= pd.to_datetime(date_to)
             return m
 
-        ty_f = df_ty[_mask(df_ty)].copy()
-        ly_f = df_ly[_mask(df_ly)].copy()
+        def _date_mask(df: pd.DataFrame, d_from: Optional[str], d_to: Optional[str]) -> pd.Series:
+            m = pd.Series([True] * len(df), index=df.index)
+            if d_from:
+                m &= pd.to_datetime(df["sale_date"]) >= pd.to_datetime(d_from)
+            if d_to:
+                m &= pd.to_datetime(df["sale_date"]) <= pd.to_datetime(d_to)
+            return m
+
+        # LY dates: use explicit ly_date_from/to if provided, else fall back to TY dates
+        eff_ly_from = ly_date_from if ly_date_from else date_from
+        eff_ly_to   = ly_date_to   if ly_date_to   else date_to
+
+        ty_f = df_ty[_base_mask(df_ty) & _date_mask(df_ty, date_from, date_to)].copy()
+        ly_f = df_ly[_base_mask(df_ly) & _date_mask(df_ly, eff_ly_from, eff_ly_to)].copy()
 
         # Aggregate to store level for TY vs LY table
         ty_agg = ty_f.groupby(

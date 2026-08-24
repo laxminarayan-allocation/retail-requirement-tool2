@@ -56,8 +56,11 @@ export default function SaleDashboard() {
   const [selRegion, setSelRegion]   = useState('')
   const [selStatus, setSelStatus]   = useState('')
   const [selAttr, setSelAttr]       = useState('')
-  const [dateFrom, setDateFrom]     = useState('')
-  const [dateTo, setDateTo]         = useState('')
+  const [dateFrom, setDateFrom]         = useState('')
+  const [dateTo, setDateTo]             = useState('')
+  const [lyDateFrom, setLyDateFrom]     = useState('')
+  const [lyDateTo, setLyDateTo]         = useState('')
+  const [customLY, setCustomLY]         = useState(false)
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [pollRef, setPollRef]       = useState<ReturnType<typeof setInterval> | null>(null)
 
@@ -75,8 +78,10 @@ export default function SaleDashboard() {
       if (selStatus && selStatus !== '-') params.store_status = selStatus
       if (selAttr)    params.attribute1   = selAttr
       if (storeSearch) params.store_search = storeSearch
-      if (dateFrom)   params.date_from    = dateFrom
-      if (dateTo)     params.date_to      = dateTo
+      if (dateFrom)              params.date_from    = dateFrom
+      if (dateTo)                params.date_to      = dateTo
+      if (customLY && lyDateFrom) params.ly_date_from = lyDateFrom
+      if (customLY && lyDateTo)   params.ly_date_to   = lyDateTo
 
       const res = await axios.get('/api/sale/data', { params, timeout: 30000 })
       const d = res.data?.data
@@ -124,7 +129,7 @@ export default function SaleDashboard() {
   // Re-load when server-side filters change
   useEffect(() => {
     if (cacheInfo?.ready || allRows.length > 0) loadData()
-  }, [selCluster, selRegion, selStatus, selAttr, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selCluster, selRegion, selStatus, selAttr, dateFrom, dateTo, lyDateFrom, lyDateTo, customLY]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Client-side search + sort
   useEffect(() => {
@@ -286,23 +291,46 @@ export default function SaleDashboard() {
             {(filters.attribute1 || []).map(v => <option key={v}>{v}</option>)}
           </select>
         </div>
-        <div className="date-group" style={{ background: (dateFrom || dateTo) ? '#1e3a5f55' : '#ffffff08', borderRadius: 8, padding: '5px 10px', border: `1px solid ${(dateFrom || dateTo) ? '#3b82f6' : '#2a3a55'}` }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#7dd3fc', letterSpacing: 0.3 }}>TY Period</span>
-            <span style={{ fontSize: 9, color: '#94a3b8', lineHeight: 1.2 }}>LY = same dates<br/>−1 year</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#ffffff08', borderRadius: 8, padding: '6px 10px', border: `1px solid ${(dateFrom || dateTo || (customLY && (lyDateFrom || lyDateTo))) ? '#3b82f6' : '#2a3a55'}` }}>
+          {/* TY row */}
+          <div className="date-group" style={{ gap: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#7dd3fc', minWidth: 22 }}>TY</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase' }}>From</span>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            </div>
+            <span style={{ opacity: .4, alignSelf: 'flex-end', paddingBottom: 3 }}>→</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase' }}>To</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
+            {(dateFrom || dateTo) && <button className="btn" style={{ alignSelf: 'flex-end', padding: '2px 6px' }} onClick={() => { setDateFrom(''); setDateTo('') }}>✕</button>}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
-            <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>From</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="TY sale from date (LY = same date last year)" />
+          {/* LY row — toggle */}
+          <div className="date-group" style={{ gap: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: customLY ? '#f59e0b' : '#64748b', minWidth: 22 }}>LY</span>
+            {!customLY ? (
+              <button
+                className="btn"
+                style={{ fontSize: 10, padding: '2px 8px', background: 'transparent', border: '1px dashed #3b82f6', color: '#7dd3fc' }}
+                onClick={() => setCustomLY(true)}
+                title="Set custom LY date range (e.g. for Holi, Diwali shifted dates)"
+              >+ Custom LY dates (festival)</button>
+            ) : (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase' }}>From</span>
+                  <input type="date" value={lyDateFrom} onChange={e => setLyDateFrom(e.target.value)} />
+                </div>
+                <span style={{ opacity: .4, alignSelf: 'flex-end', paddingBottom: 3 }}>→</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase' }}>To</span>
+                  <input type="date" value={lyDateTo} onChange={e => setLyDateTo(e.target.value)} />
+                </div>
+                <button className="btn" style={{ alignSelf: 'flex-end', padding: '2px 6px', background: '#7c2d12' }} onClick={() => { setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }} title="Remove custom LY dates">✕</button>
+              </>
+            )}
           </div>
-          <span style={{ opacity: .4, alignSelf: 'flex-end', paddingBottom: 3 }}>→</span>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
-            <span style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>To</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="TY sale to date (LY = same date last year)" />
-          </div>
-          {(dateFrom || dateTo) && (
-            <button className="btn" style={{ alignSelf: 'flex-end' }} onClick={() => { setDateFrom(''); setDateTo('') }} title="Clear date filter">✕</button>
-          )}
         </div>
         <input
           type="text"

@@ -507,10 +507,12 @@ export default function NSODashboard() {
   const [selCampaigns, setSelCampaigns] = useState<string[]>([])
   const [search, setSearch]         = useState('')
 
-  const [tab, setTab]       = useState<'store' | 'article'>('store')
-  const [data, setData]     = useState<NSOData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState<string | null>(null)
+  const [tab, setTab]           = useState<'store' | 'article'>('store')
+  const [data, setData]         = useState<NSOData | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [artSortCol, setArtSortCol] = useState('')
+  const [artSortDir, setArtSortDir] = useState<'asc' | 'desc'>('asc')
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -523,8 +525,8 @@ export default function NSODashboard() {
     setLoading(true)
     setError(null)
     const params: Record<string, string> = { limit: '50000' }
-    if (selAttr)               params.attribute1   = selAttr
-    if (selDiv)                params.division     = selDiv
+    if (selCampaigns.length)   params.attribute1   = selCampaigns.join(',')
+    if (selDivisions.length)   params.division     = selDivisions.join(',')
     if (selStatuses.length)    params.store_status = selStatuses.join(',')
     if (selClusters.length)    params.cluster_type = selClusters.join(',')
     if (selRegions.length)     params.region_type  = selRegions.join(',')
@@ -543,15 +545,31 @@ export default function NSODashboard() {
   // Auto-reload when any server-side filter changes (only if data already loaded)
   useEffect(() => {
     if (data && tab === 'article') load()
-  }, [selAttr, selDiv, selStatuses, selClusters, selRegions, selTags]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selCampaigns, selDivisions, selStatuses, selClusters, selRegions, selTags]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
   const rows = data?.rows ?? []
   const cols = data?.columns ?? []
 
-  const visible = search.trim()
+  const filtered = search.trim()
     ? rows.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
     : rows
+
+  const visible = artSortCol
+    ? [...filtered].sort((a, b) => {
+        const av = a[artSortCol], bv = b[artSortCol]
+        if (av == null && bv == null) return 0
+        if (av == null) return 1; if (bv == null) return -1
+        const an = Number(av), bn = Number(bv)
+        const cmp = !isNaN(an) && !isNaN(bn) ? an - bn : String(av).localeCompare(String(bv))
+        return artSortDir === 'asc' ? cmp : -cmp
+      })
+    : filtered
+
+  function handleArtSort(c: string) {
+    if (artSortCol === c) setArtSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setArtSortCol(c); setArtSortDir('asc') }
+  }
 
   const totalPages = Math.ceil(visible.length / PAGE_SIZE)
   const paged = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -613,22 +631,10 @@ export default function NSODashboard() {
             {filters.store_tag.length > 0 && (
               <MultiSelect label="Tags" options={filters.store_tag} selected={selTags} onChange={setSelTags} />
             )}
-            {tab === 'store' && (
-              <>
-                <MultiSelect label="Divisions" options={filters.division}   selected={selDivisions} onChange={setSelDivisions} />
-                <MultiSelect label="Campaigns" options={filters.attribute1} selected={selCampaigns} onChange={setSelCampaigns} />
-              </>
-            )}
+            <MultiSelect label="Divisions" options={filters.division}   selected={selDivisions} onChange={setSelDivisions} />
+            <MultiSelect label="Campaigns" options={filters.attribute1} selected={selCampaigns} onChange={setSelCampaigns} />
             {tab === 'article' && (
               <>
-                <select style={S.select} value={selAttr} onChange={e => setSelAttr(e.target.value)}>
-                  <option value="">All Campaigns</option>
-                  {filters.attribute1.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-                <select style={S.select} value={selDiv} onChange={e => setSelDiv(e.target.value)}>
-                  <option value="">All Divisions</option>
-                  {filters.division.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
                 <button style={S.btn} onClick={() => load()} disabled={loading}>
                   {loading ? '⋯ Loading…' : '⚡ Load'}
                 </button>
@@ -732,7 +738,17 @@ export default function NSODashboard() {
                   <thead>
                     <tr>
                       {cols.map(c => (
-                        <th key={c} style={isPct(c) || isNum(c) ? S.thNum : S.th}>{c.replace(/_/g, ' ')}</th>
+                        <th key={c}
+                          onClick={() => handleArtSort(c)}
+                          style={{
+                            ...(isPct(c) || isNum(c) ? S.thNum : S.th),
+                            cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+                            background: artSortCol === c ? '#1e3a5f' : undefined,
+                            color: artSortCol === c ? '#7dd3fc' : undefined,
+                          }}
+                        >
+                          {c.replace(/_/g, ' ')}{artSortCol === c ? (artSortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                        </th>
                       ))}
                     </tr>
                   </thead>

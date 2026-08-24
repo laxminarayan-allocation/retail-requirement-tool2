@@ -171,6 +171,8 @@ async def get_nso_store_summary(
     region_type:  Optional[str] = Query(None),
     store_tag:    Optional[str] = Query(None),
     source:       str           = Query("nso"),   # "nso" = V_NSO, "all" = V_ALL_WITH_NSO
+    division:     Optional[str] = Query(None),   # comma-separated multi-values
+    attribute1:   Optional[str] = Query(None),   # comma-separated multi-values
 ):
     """
     Return store-level NSO summary aggregated from V_NSO or V_ALL_WITH_NSO parquet.
@@ -213,6 +215,14 @@ async def get_nso_store_summary(
         if store_tag:
             c = _col("store_tag")
             if c: df = df[df[c].str.upper() == store_tag.upper()]
+        if division:
+            vals = [v.strip().upper() for v in division.split(',') if v.strip()]
+            c = _col("division")
+            if c and vals: df = df[df[c].str.upper().isin(vals)]
+        if attribute1:
+            vals = [v.strip().upper() for v in attribute1.split(',') if v.strip()]
+            c = _col("attribute1")
+            if c and vals: df = df[df[c].str.upper().isin(vals)]
 
         # Columns to aggregate — sums and firsts
         SUM_COLS   = [c for c in [

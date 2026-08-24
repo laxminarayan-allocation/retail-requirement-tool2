@@ -2,7 +2,7 @@
  * NSO Dashboard — New Store Opening performance tracker.
  * Two views: Store View (Excel-style store summary) and Article Detail.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import http from '@/api/http'
 
 async function apiFetch<T>(url: string, params?: Record<string, string>): Promise<T> {
@@ -127,10 +127,57 @@ function fmtDate(v: unknown): string {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
 }
 
+// ── Multi-select dropdown with checkboxes ──────────────────────────────────────
+function MultiSelect({
+  label, options, selected, onChange,
+}: {
+  label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handler(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const toggle = useCallback((v: string) => {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+  }, [selected, onChange])
+  const display = selected.length === 0 ? `All ${label}` : selected.length === 1 ? selected[0] : `${selected.length} ${label}`
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        ...S.select, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap',
+        background: selected.length > 0 ? '#1e3a5f' : undefined,
+        color: selected.length > 0 ? '#7dd3fc' : C.text2,
+        border: selected.length > 0 ? '1px solid #3b82f6' : undefined,
+      }}>{display} ▾</button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 999, minWidth: 180,
+          background: C.surf1, border: `1px solid ${C.border}`, borderRadius: 6,
+          boxShadow: '0 4px 16px #0006', padding: '4px 0', maxHeight: 220, overflowY: 'auto',
+        }}>
+          {selected.length > 0 && (
+            <div onClick={() => onChange([])} style={{ padding: '4px 10px', fontSize: 11, color: '#f87171', cursor: 'pointer' }}>✕ Clear all</div>
+          )}
+          {options.map(v => (
+            <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, color: C.text2 }}>
+              <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} style={{ accentColor: C.blue }} />
+              {v}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StoreSummary({
-  selStatus, selCluster, selRegion, selTag,
+  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns,
 }: {
   selStatus: string; selCluster: string; selRegion: string; selTag: string
+  selDivisions: string[]; selCampaigns: string[]
 }) {
   const [data, setData] = useState<StoreSummaryData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -144,6 +191,8 @@ function StoreSummary({
     if (selCluster) params.cluster_type = selCluster
     if (selRegion)  params.region_type  = selRegion
     if (selTag)     params.store_tag    = selTag
+    if (selDivisions.length > 0) params.division  = selDivisions.join(',')
+    if (selCampaigns.length > 0) params.attribute1 = selCampaigns.join(',')
     params.source = src ?? source
     apiFetch<StoreSummaryData>('/nso/store-summary', params)
       .then(d => { setData(d); setLoading(false) })
@@ -156,8 +205,12 @@ function StoreSummary({
     load(next)
   }
 
+  const mountedRef = useRef(false)
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (data) load() }, [selStatus, selCluster, selRegion, selTag]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return }
+    load()
+  }, [selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function exportCSV() {
     if (!data?.stores.length) return
@@ -258,13 +311,28 @@ function StoreSummary({
               </div>
             ))}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button
-                onClick={toggleSource}
-                disabled={loading}
-                style={{ ...S.btnSm, background: source === 'all' ? '#7c3aed22' : 'transparent', color: source === 'all' ? '#c084fc' : C.text2, border: `1px solid ${source === 'all' ? '#c084fc' : C.border}` }}
+              {/* Toggle pill: NSO ↔ All Chain */}
+              <div
+                onClick={!loading ? toggleSource : undefined}
+                title={source === 'nso' ? 'Showing NSO stores only — click to switch to All Chain stores' : 'Showing All Chain stores — click to switch to NSO stores only'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 0,
+                  border: `1px solid ${source === 'all' ? '#c084fc' : C.border}`,
+                  borderRadius: 20, overflow: 'hidden', cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: 11, fontWeight: 700, userSelect: 'none',
+                }}
               >
-                {source === 'nso' ? 'NSO Stores' : 'All Stores'}
-              </button>
+                <span style={{
+                  padding: '4px 10px',
+                  background: source === 'nso' ? C.blue : 'transparent',
+                  color: source === 'nso' ? '#fff' : C.text3,
+                }}>NSO</span>
+                <span style={{
+                  padding: '4px 10px',
+                  background: source === 'all' ? '#7c3aed' : 'transparent',
+                  color: source === 'all' ? '#fff' : C.text3,
+                }}>All Chain</span>
+              </div>
               <button style={S.btnSm} onClick={() => load()} disabled={loading}>
                 {loading ? '⋯' : '↻ Reload'}
               </button>
@@ -324,10 +392,10 @@ const C = {
 }
 const S: Record<string, React.CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', gap: 12, height: 'calc(100vh - 100px)', minHeight: 0 },
-  card: { background: C.surf1, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' },
-  cardHead: { padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
+  card: { background: C.surf1, border: `1px solid ${C.border}`, borderRadius: 8 },
+  cardHead: { padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8 },
   cardTitle: { fontSize: 13, fontWeight: 600, color: C.text },
-  filterRow: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
+  filterRow: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
   select: { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, padding: '5px 10px' },
   btn: { background: C.blue, border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' },
   btnSm: { background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5, color: C.text2, fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
@@ -400,12 +468,14 @@ export default function NSODashboard() {
   const [filters, setFilters] = useState<NSOFilters>({
     attribute1: [], store_status: [], division: [], cluster_type: [], region_type: [], store_tag: []
   })
-  const [selAttr, setSelAttr]       = useState('')
-  const [selStatus, setSelStatus]   = useState('')
-  const [selDiv, setSelDiv]         = useState('')
-  const [selCluster, setSelCluster] = useState('')
-  const [selRegion, setSelRegion]   = useState('')
-  const [selTag, setSelTag]         = useState('')
+  const [selAttr, setSelAttr]           = useState('')
+  const [selStatus, setSelStatus]       = useState('')
+  const [selDiv, setSelDiv]             = useState('')
+  const [selCluster, setSelCluster]     = useState('')
+  const [selRegion, setSelRegion]       = useState('')
+  const [selTag, setSelTag]             = useState('')
+  const [selDivisions, setSelDivisions] = useState<string[]>([])
+  const [selCampaigns, setSelCampaigns] = useState<string[]>([])
   const [search, setSearch]         = useState('')
 
   const [tab, setTab]       = useState<'store' | 'article'>('store')
@@ -438,12 +508,12 @@ export default function NSODashboard() {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 100
 
-  // Auto-load on mount (will serve from cache if available)
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Load article data only when user switches to article tab (lazy)
+  useEffect(() => { if (tab === 'article') load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-reload when any server-side filter changes (instant from Parquet)
+  // Auto-reload when any server-side filter changes (only if data already loaded)
   useEffect(() => {
-    if (data) load()
+    if (data && tab === 'article') load()
   }, [selAttr, selStatus, selDiv, selCluster, selRegion, selTag]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
@@ -487,10 +557,12 @@ export default function NSODashboard() {
       {/* ── Header + filters ── */}
       <div style={S.card}>
         <div style={S.cardHead}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>NSO Dashboard</div>
-            <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>
-              New Store Opening — performance tracker · data from Master Data parquet
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>NSO Dashboard</div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>
+                New Store Opening — performance tracker · data from Master Data parquet
+              </div>
             </div>
           </div>
           <div style={S.filterRow}>
@@ -523,6 +595,12 @@ export default function NSODashboard() {
                 <option value="">All Tags</option>
                 {filters.store_tag.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
+            )}
+            {tab === 'store' && (
+              <>
+                <MultiSelect label="Divisions" options={filters.division} selected={selDivisions} onChange={setSelDivisions} />
+                <MultiSelect label="Campaigns" options={filters.attribute1} selected={selCampaigns} onChange={setSelCampaigns} />
+              </>
             )}
             {tab === 'article' && (
               <>
@@ -570,6 +648,8 @@ export default function NSODashboard() {
           selCluster={selCluster}
           selRegion={selRegion}
           selTag={selTag}
+          selDivisions={selDivisions}
+          selCampaigns={selCampaigns}
         />
       )}
 

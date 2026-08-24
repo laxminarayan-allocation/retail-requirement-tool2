@@ -139,8 +139,24 @@ async def get_nso_data(
             c = col("store_f_name") or col("store_name")
             if c: mask &= df[c].str.upper().str.contains(store_search.upper(), na=False)
 
-        filtered = df[mask].head(limit)
+        filtered = df[mask].head(limit).copy()
+
+        # Compute opert_days if not already present
+        od_col = col("opening_date")
+        if od_col and "opert_days" not in [c.lower() for c in filtered.columns]:
+            today = pd.Timestamp(date.today())
+            od = pd.to_datetime(filtered[od_col], errors="coerce")
+            filtered["opert_days"] = (today - od).dt.days.clip(lower=0).fillna(0).astype(int)
+
         filtered = filtered.where(filtered.notna(), None)
+
+        # Reorder: pin opert_days near front (after key identity columns)
+        PIN_FIRST = ["store_f_name", "store_name", "store_status", "opening_date",
+                     "opert_days", "division", "attribute1"]
+        existing = list(filtered.columns)
+        pinned = [c for c in PIN_FIRST if c in existing]
+        rest   = [c for c in existing if c not in pinned]
+        filtered = filtered[pinned + rest]
 
         elapsed = round((time.perf_counter() - t0) * 1000, 1)
         return APIResponse.ok(data={

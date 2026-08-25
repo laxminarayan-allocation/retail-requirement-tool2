@@ -427,7 +427,8 @@ export default function ReqDashboard() {
           </div>
 
           {sparkLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Sparky data from Oracle…</div>}
-          {sparkError && <div style={{ color: '#f87171', padding: 20 }}>{sparkError}</div>}
+          {sparkError && !sparkData && <div style={{ color: '#f87171', padding: 20 }}>{sparkError}</div>}
+          {sparkError && sparkData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data. {sparkError}</div>}
 
           {sparkData && !sparkLoading && (
             <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>

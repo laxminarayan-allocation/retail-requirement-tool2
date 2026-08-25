@@ -92,9 +92,6 @@ def get_preview(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-_SPARKY_CACHE: dict[str, tuple[float, Any]] = {}
-_SPARKY_TTL = 300  # 5 min
-
 _SPARKY_SQL = """
 WITH T_SPARKY_BASE AS (
     SELECT DEPARTMENT, ARTICLE_NAME, CAT4,
@@ -137,20 +134,15 @@ ORDER BY A.DEPARTMENT, A.ARTICLE_NAME, A.CAT4
 """
 
 
-@router.get("/sparky_pivot")
-def get_sparky_pivot(
-    department: Optional[str] = Query(None),
-    article: Optional[str] = Query(None),
-    cat4: Optional[str] = Query(None),
-):
-    """Run the Sparky Req pivot query (V_SPARKY_PBS_REQ + V_WH_STOCK + T_ALLOCATION) live from Oracle."""
-    cache_key = f"{department}__{article}__{cat4}"
-    now = time.time()
-    if cache_key in _SPARKY_CACHE and now - _SPARKY_CACHE[cache_key][0] < _SPARKY_TTL:
-        return {"success": True, "data": _SPARKY_CACHE[cache_key][1]}
+_SPARKY_PARQUET_OWNER = "CK_A2166"
+_SPARKY_PARQUET_OBJ  = "V_SPARKY_PIVOT"
 
+
+def _fetch_sparky_to_parquet() -> None:
+    """Fetch the full Sparky pivot from Oracle and cache to parquet."""
     try:
         from app.db.oracle import get_pool
+        from app.core.parquet_cache import write_cache
         import pandas as pd
 
         pool = get_pool()
@@ -159,24 +151,56 @@ def get_sparky_pivot(
                 cur.execute(_SPARKY_SQL)
                 cols = [c[0].lower() for c in cur.description]
                 rows = cur.fetchall()
-
         df = pd.DataFrame(rows, columns=cols)
-
-        if department:
-            df = df[df["department"].str.contains(department, case=False, na=False)]
-        if article:
-            df = df[df["article_name"].str.contains(article, case=False, na=False)]
-        if cat4:
-            df = df[df["cat4"].str.contains(cat4, case=False, na=False)]
-
-        payload = {
-            "columns": list(df.columns),
-            "rows": df.where(df.notna(), None).to_dict(orient="records"),
-            "total_rows": len(df),
-        }
-        _SPARKY_CACHE[cache_key] = (now, payload)
-        return {"success": True, "data": payload}
-
+        write_cache(_SPARKY_PARQUET_OWNER, _SPARKY_PARQUET_OBJ, df)
+        logger.info("sparky_pivot: cached %d rows to parquet", len(df))
     except Exception as exc:
-        logger.exception("Sparky pivot error")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.warning("sparky_pivot: parquet fetch failed — %s", exc)
+
+
+@router.get("/sparky_pivot")
+def get_sparky_pivot(
+    department: Optional[str] = Query(None),
+    article: Optional[str] = Query(None),
+    cat4: Optional[str] = Query(None),
+):
+    """Serve Sparky Req pivot from parquet cache (falls back to live Oracle if not cached)."""
+    from app.core.parquet_cache import has_output, read_cache
+    import pandas as pd
+
+    # serve from parquet if available
+    if has_output(_SPARKY_PARQUET_OWNER, _SPARKY_PARQUET_OBJ):
+        df = read_cache(_SPARKY_PARQUET_OWNER, _SPARKY_PARQUET_OBJ)
+    else:
+        # first-time: fetch live and cache
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_SPARKY_SQL)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            from app.core.parquet_cache import write_cache
+            write_cache(_SPARKY_PARQUET_OWNER, _SPARKY_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Sparky pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No Sparky data cached yet")
+
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if article:
+        df = df[df["article_name"].str.contains(article, case=False, na=False)]
+    if cat4:
+        df = df[df["cat4"].str.contains(cat4, case=False, na=False)]
+
+    payload = {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }
+    return {"success": True, "data": payload}

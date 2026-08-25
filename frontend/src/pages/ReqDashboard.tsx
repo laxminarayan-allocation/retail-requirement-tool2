@@ -478,7 +478,7 @@ export default function ReqDashboard() {
                   <tr style={{ background: '#0a0f1e' }}>
                     {/* section headers */}
                     <th colSpan={3} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
-                    <th colSpan={4} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                    <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                     <th colSpan={2} style={{ padding: '4px 10px', color: '#f97316', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Sparky</th>
                     <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
                     <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
@@ -486,7 +486,7 @@ export default function ReqDashboard() {
                   <tr style={{ background: '#131929' }}>
                     {[
                       ['Department', '#cbd5e1'], ['Article Name', '#cbd5e1'], ['CAT4', '#cbd5e1'],
-                      ['LM Sale', '#64748b'], ['MTD Sale', '#64748b'], ['Store Stk', '#64748b'], ['TO Qty', '#64748b'],
+                      ['Stores', '#38bdf8'], ['LM Sale', '#64748b'], ['MTD Sale', '#64748b'], ['Store Stk', '#64748b'], ['TO Qty', '#64748b'],
                       ['PBS', '#f97316'], ['Sparky Req', '#f97316'],
                       ['GRC', '#10b981'], ['MSA', '#10b981'], ['Alloc', '#10b981'], ['WMS', '#10b981'], ['Rest DC', '#10b981'],
                       ['PPO Qty', '#8b5cf6'],
@@ -496,7 +496,7 @@ export default function ReqDashboard() {
                         fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4,
                         borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap',
                         textAlign: i > 2 ? 'right' : 'left',
-                        borderRight: [2, 6, 8, 13].includes(i) ? '1px solid #1e293b' : undefined,
+                        borderRight: [2, 7, 9, 14].includes(i) ? '1px solid #1e293b' : undefined,
                         position: 'sticky', top: 0, background: '#131929',
                       }}>{lbl}</th>
                     ))}
@@ -515,7 +515,7 @@ export default function ReqDashboard() {
                     return [
                       // dept header row
                       <tr key={`hdr-${dept}`} style={{ background: '#0f172a' }}>
-                        <td colSpan={15} style={{ padding: '6px 10px', color: '#f97316', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>
+                        <td colSpan={16} style={{ padding: '6px 10px', color: '#f97316', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>
                           ⚡ {dept}
                         </td>
                       </tr>,
@@ -525,6 +525,7 @@ export default function ReqDashboard() {
                           <td style={{ padding: '5px 10px', color: '#94a3b8', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
                           <td style={{ padding: '5px 10px', color: '#e2e8f0', borderBottom: '1px solid #131929', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.article_name}</td>
                           <td style={{ padding: '5px 10px', color: '#94a3b8', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', whiteSpace: 'nowrap' }}>{r.cat4 ?? '—'}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#38bdf8', fontWeight: 600, borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN((r as unknown as Record<string,number>).store_cnt)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
@@ -542,7 +543,7 @@ export default function ReqDashboard() {
                       // dept total row
                       <tr key={`tot-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
                         <td colSpan={3} style={{ padding: '5px 10px', color: '#4ade80', fontWeight: 700, fontSize: 11, borderBottom: '1px solid #1e293b', borderRight: '1px solid #0f172a' }}>{dept} Total</td>
-                        {[tot.lm, tot.mtd, tot.stk, tot.to].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: '#4ade80', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 3 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
+                        {[n(deptRows.reduce((s,r)=>s+n((r as unknown as Record<string,number>).store_cnt),0)), tot.lm, tot.mtd, tot.stk, tot.to].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: i===0?'#38bdf8':'#4ade80', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 4 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
                         {[tot.pbs, tot.req].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: '#fb923c', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 1 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
                         {[tot.grc, tot.msa, tot.alloc, tot.wms, tot.rest].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: '#4ade80', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 4 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
                         <td style={{ padding: '5px 10px', textAlign: 'right', color: '#a78bfa', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums' }}>{fmtN(tot.ppo)}</td>

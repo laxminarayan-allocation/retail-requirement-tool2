@@ -204,3 +204,93 @@ def get_sparky_pivot(
         "total_rows": len(df),
     }
     return {"success": True, "data": payload}
+
+
+# ── Size Req pivot ─────────────────────────────────────────────────────────────
+
+_SIZE_SQL = """
+WITH T_SZ_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4,
+        SUM(MTD) MTD_SL_Q, SUM(LM) LM_SL_Q,
+        SUM(STK) TTL_STK_Q, SUM(ADJ_STK) ADJ_STK_Q,
+        SUM(SZ_PBS) SZ_PBS, SUM(SZ_REQ) SZ_REQ
+    FROM CK_A2166.V_SZ_REQ_APPS
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4
+),
+T_WH_STK AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4,
+        SUM(GRC_Q) GRC_Q, SUM(MSA_Q) MSA_Q,
+        SUM(ALLOC_Q) ALLOC_Q, SUM(WMS_Q) WMS_Q,
+        SUM(REST_DC_Q) REST_DC_Q
+    FROM CK_A2166.V_WH_STOCK
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, CAT4, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME, CAT4
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4,
+    A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.ADJ_STK_Q,
+    A.SZ_PBS, A.SZ_REQ,
+    NVL(B.GRC_Q,    0) GRC_Q,
+    NVL(B.MSA_Q,    0) MSA_Q,
+    NVL(B.ALLOC_Q,  0) ALLOC_Q,
+    NVL(B.WMS_Q,    0) WMS_Q,
+    NVL(B.REST_DC_Q,0) REST_DC_Q,
+    NVL(C.PPO_Q,    0) PPO_Q
+FROM T_SZ_BASE A
+LEFT JOIN T_WH_STK B
+    ON A.DEPARTMENT = B.DEPARTMENT AND A.ARTICLE_NAME = B.ARTICLE_NAME AND A.CAT4 = B.CAT4
+LEFT JOIN T_PPO C
+    ON A.DEPARTMENT = C.DEPARTMENT AND A.ARTICLE_NAME = C.ARTICLE_NAME AND A.CAT4 = C.CAT4
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4
+"""
+
+_SIZE_PARQUET_OWNER = "CK_A2166"
+_SIZE_PARQUET_OBJ   = "V_SIZE_PIVOT"
+
+
+@router.get("/size_pivot")
+def get_size_pivot(
+    department: Optional[str] = Query(None),
+    article:    Optional[str] = Query(None),
+    cat4:       Optional[str] = Query(None),
+):
+    """Serve Size Req pivot from parquet cache (falls back to live Oracle if not cached)."""
+    import pandas as pd
+
+    if has_output(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ):
+        df = read_cache(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_SIZE_SQL)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Size pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No Size data cached yet")
+
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if article:
+        df = df[df["article_name"].str.contains(article, case=False, na=False)]
+    if cat4:
+        df = df[df["cat4"].str.contains(cat4, case=False, na=False)]
+
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}

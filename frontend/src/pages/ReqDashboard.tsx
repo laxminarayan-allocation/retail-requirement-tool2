@@ -77,7 +77,7 @@ const n = (v: number | null) => v == null ? 0 : v
 const fmtN = (v: number | null) => v == null ? '—' : v === 0 ? '-' : v.toLocaleString('en-IN')
 
 export default function ReqDashboard() {
-  const [activeTab, setActiveTab] = useState<'views' | 'sparky'>('views')
+  const [activeTab, setActiveTab] = useState<'views' | 'sparky' | 'size'>('views')
   const [views, setViews] = useState<ViewStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<{ owner: string; obj: string; group: string } | null>(null)
@@ -91,6 +91,39 @@ export default function ReqDashboard() {
   const [sparkError, setSparkError] = useState<string | null>(null)
   const [sparkFilter, setSparkFilter] = useState({ dept: '', article: '', cat4: '' })
   const sparkFetched = useRef(false)
+
+  // Size Req pivot state
+  const [sizeData, setSizeData] = useState<SparkData | null>(null)
+  const [sizeLoading, setSizeLoading] = useState(false)
+  const [sizeError, setSizeError] = useState<string | null>(null)
+  const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '' })
+  const sizeFetched = useRef(false)
+
+  const loadSize = useCallback(async () => {
+    setSizeLoading(true)
+    setSizeError(null)
+    try {
+      const r = await http.get('/req/size_pivot', {
+        params: {
+          department: sizeFilter.dept || undefined,
+          article: sizeFilter.article || undefined,
+          cat4: sizeFilter.cat4 || undefined,
+        }
+      })
+      setSizeData(r.data.data)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Size data'
+      setSizeError(msg)
+    }
+    setSizeLoading(false)
+  }, [sizeFilter])
+
+  useEffect(() => {
+    if (activeTab === 'size' && !sizeFetched.current) {
+      sizeFetched.current = true
+      loadSize()
+    }
+  }, [activeTab, loadSize])
 
   const loadStatus = useCallback(async () => {
     setLoading(true)
@@ -158,7 +191,7 @@ export default function ReqDashboard() {
 
   const meta = modal ? GROUP_META[modal.group] : null
 
-  const TAB_BTN = (tab: 'views' | 'sparky', label: string, icon: string) => (
+  const TAB_BTN = (tab: 'views' | 'sparky' | 'size', label: string, icon: string) => (
     <button onClick={() => setActiveTab(tab)} style={{
       fontSize: 13, padding: '6px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 600,
       background: activeTab === tab ? '#6366f1' : '#1e293b',
@@ -199,6 +232,13 @@ export default function ReqDashboard() {
               color: '#94a3b8', cursor: 'pointer',
             }}>↻ Refresh</button>
           )}
+          {activeTab === 'size' && (
+            <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{
+              fontSize: 12, padding: '6px 14px', borderRadius: 8,
+              background: '#1e293b', border: '1px solid #334155',
+              color: '#94a3b8', cursor: 'pointer',
+            }}>↻ Refresh</button>
+          )}
         </div>
       </div>
 
@@ -206,6 +246,7 @@ export default function ReqDashboard() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {TAB_BTN('views', 'Req Views', '📋')}
         {TAB_BTN('sparky', 'Sparky Req', '⚡')}
+        {TAB_BTN('size', 'Size Req', '📐')}
       </div>
 
       {/* ── Views tab ── */}
@@ -512,6 +553,116 @@ export default function ReqDashboard() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Size Req Tab ── */}
+      {activeTab === 'size' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input placeholder="Filter Department…" value={sizeFilter.dept}
+              onChange={e => setSizeFilter(f => ({ ...f, dept: e.target.value }))}
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+            <input placeholder="Filter Article…" value={sizeFilter.article}
+              onChange={e => setSizeFilter(f => ({ ...f, article: e.target.value }))}
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+            <input placeholder="Filter Size (CAT4)…" value={sizeFilter.cat4}
+              onChange={e => setSizeFilter(f => ({ ...f, cat4: e.target.value }))}
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+            <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{
+              height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer',
+              background: '#ec4899', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,
+            }}>Search</button>
+            {sizeData && <span style={{ fontSize: 12, color: '#475569' }}>{sizeData.total_rows.toLocaleString()} rows</span>}
+          </div>
+
+          {sizeLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Size data from Oracle…</div>}
+          {sizeError && !sizeData && <div style={{ color: '#f87171', padding: 20 }}>{sizeError}</div>}
+          {sizeError && sizeData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
+
+          {sizeData && !sizeLoading && (() => {
+            type SzRow = { department: string; display_type: string; article_name: string; cat4: string; lm_sl_q: number; mtd_sl_q: number; ttl_stk_q: number; adj_stk_q: number; sz_pbs: number; sz_req: number; grc_q: number; msa_q: number; alloc_q: number; wms_q: number; rest_dc_q: number; ppo_q: number }
+            const rows = sizeData.rows as unknown as SzRow[]
+            const depts = Array.from(new Set(rows.map(r => r.department)))
+            return (
+              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#0a0f1e' }}>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                      <th colSpan={2} style={{ padding: '4px 10px', color: '#ec4899', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Size Req</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
+                      <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
+                    </tr>
+                    <tr style={{ background: '#131929' }}>
+                      {[
+                        ['Department','#cbd5e1'],['Display Type','#94a3b8'],['Article Name','#cbd5e1'],['Size','#cbd5e1'],
+                        ['LM Sale','#64748b'],['MTD Sale','#64748b'],['Store Stk','#64748b'],['Adj Stk','#64748b'],
+                        ['SZ PBS','#ec4899'],['SZ Req','#ec4899'],
+                        ['GRC','#10b981'],['MSA','#10b981'],['Alloc','#10b981'],['WMS','#10b981'],['Rest DC','#10b981'],
+                        ['PPO Qty','#8b5cf6'],
+                      ].map(([lbl, col], i) => (
+                        <th key={i} style={{
+                          padding: '6px 10px', color: col, fontWeight: 600, fontSize: 10,
+                          textTransform: 'uppercase', letterSpacing: 0.4,
+                          borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap',
+                          textAlign: i > 3 ? 'right' : 'left',
+                          borderRight: [3, 7, 9, 14].includes(i) ? '1px solid #1e293b' : undefined,
+                          position: 'sticky', top: 0, background: '#131929',
+                        }}>{lbl}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {depts.map(dept => {
+                      const deptRows = rows.filter(r => r.department === dept)
+                      const tot = deptRows.reduce((a, r) => ({
+                        lm: a.lm + n(r.lm_sl_q), mtd: a.mtd + n(r.mtd_sl_q),
+                        stk: a.stk + n(r.ttl_stk_q), adj: a.adj + n(r.adj_stk_q),
+                        pbs: a.pbs + n(r.sz_pbs), req: a.req + n(r.sz_req),
+                        grc: a.grc + n(r.grc_q), msa: a.msa + n(r.msa_q),
+                        alloc: a.alloc + n(r.alloc_q), wms: a.wms + n(r.wms_q),
+                        rest: a.rest + n(r.rest_dc_q), ppo: a.ppo + n(r.ppo_q),
+                      }), { lm:0,mtd:0,stk:0,adj:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
+                      return [
+                        <tr key={`hdr-${dept}`} style={{ background: '#0f172a' }}>
+                          <td colSpan={16} style={{ padding: '6px 10px', color: '#ec4899', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📐 {dept}</td>
+                        </tr>,
+                        ...deptRows.map((r, i) => (
+                          <tr key={`${dept}-${i}`} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1525' }}>
+                            <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
+                            <td style={{ padding:'5px 10px', color:'#64748b', fontSize:11, borderBottom:'1px solid #131929', whiteSpace:'nowrap' }}>{r.display_type ?? '—'}</td>
+                            <td style={{ padding:'5px 10px', color:'#e2e8f0', borderBottom:'1px solid #131929', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.article_name}</td>
+                            <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', whiteSpace:'nowrap' }}>{r.cat4 ?? '—'}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.adj_stk_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#ec4899', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.sz_pbs)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color: r.sz_req > 0 ? '#f472b6' : '#334155', fontWeight: r.sz_req > 0 ? 700 : 400, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.sz_req)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.grc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.msa_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.alloc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.wms_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.rest_dc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#8b5cf6', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ppo_q)}</td>
+                          </tr>
+                        )),
+                        <tr key={`tot-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
+                          <td colSpan={4} style={{ padding:'5px 10px', color:'#4ade80', fontWeight:700, fontSize:11, borderBottom:'1px solid #1e293b', borderRight:'1px solid #0f172a' }}>{dept} Total</td>
+                          {[tot.lm,tot.mtd,tot.stk,tot.adj].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===3?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.pbs,tot.req].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#f472b6', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===1?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.grc,tot.msa,tot.alloc,tot.wms,tot.rest].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===4?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#a78bfa', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.ppo)}</td>
+                        </tr>
+                      ]
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

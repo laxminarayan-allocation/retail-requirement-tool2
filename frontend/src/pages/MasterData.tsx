@@ -1062,8 +1062,8 @@ export default function MasterData() {
       </div>
 
       {/* Master table */}
-      <div style={{ flexShrink: 0, border: '1px solid #334155', borderRadius: 10, background: '#1e293b' }}>
-        <div style={{ maxHeight: 340, overflowY: 'auto', overflowX: 'auto', borderRadius: 10 }}>
+      <div style={{ flex: 1, minHeight: 0, border: '1px solid #334155', borderRadius: 10, background: '#1e293b' }}>
+        <div style={{ height: '100%', overflowY: 'auto', overflowX: 'auto', borderRadius: 10 }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: colOrder.reduce((s, k) => s + colWidths[k], 0) }}>
             <colgroup>
               {colOrder.map(k => <col key={k} style={{ width: colWidths[k] }} />)}

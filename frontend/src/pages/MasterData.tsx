@@ -1057,11 +1057,11 @@ export default function MasterData() {
       <div style={{ flexShrink: 0 }}>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#e2e8f0' }}>📊 Master Data</h1>
         <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
-          Core Oracle tables — auto-loaded from local Parquet cache. Download to refresh.
+          Core Oracle tables — auto-loaded from local Parquet cache.
         </p>
       </div>
 
-      {/* Master table — outer keeps border/radius only (NO overflow so sticky works), inner scrolls */}
+      {/* Master table */}
       <div style={{ flexShrink: 0, border: '1px solid #334155', borderRadius: 10, background: '#1e293b' }}>
         <div style={{ maxHeight: 340, overflowY: 'auto', overflowX: 'auto', borderRadius: 10 }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: colOrder.reduce((s, k) => s + colWidths[k], 0) }}>
@@ -1069,7 +1069,6 @@ export default function MasterData() {
               {colOrder.map(k => <col key={k} style={{ width: colWidths[k] }} />)}
             </colgroup>
             <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
-              {/* Group header — computed dynamically from current column order */}
               <tr>
                 {(() => {
                   const groups: { label: string; count: number }[] = []
@@ -1109,7 +1108,6 @@ export default function MasterData() {
                       opacity: dragFrom.current === col ? 0.4 : 1,
                     }}>
                     {label}{sortable && <SortIcon col={col} />}
-                    {/* resize handle */}
                     <span
                       onMouseDown={e => startResize(col, e)}
                       onClick={e => e.stopPropagation()}
@@ -1182,11 +1180,6 @@ export default function MasterData() {
                     case 'actions': return (
                       <td key={col} style={{ ...TD, padding: '5px 8px' }}>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
-                          {isCustom(id) && (
-                            <ActionBtn onClick={() => handleRefresh(id)} accent>
-                              {exists ? 'Refresh' : 'Download'}
-                            </ActionBtn>
-                          )}
                           {exists && (
                             <ActionBtn onClick={() => openWindow(id)}>
                               {activeWin === id ? 'Close' : wins[id] ? 'View ✓' : 'View'}

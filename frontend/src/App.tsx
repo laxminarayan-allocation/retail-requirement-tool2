@@ -15,6 +15,7 @@ import UserManual from '@/pages/UserManual'
 import Procedures from '@/pages/Procedures'
 import NSODashboard from '@/pages/NSODashboard'
 import SaleDashboard from '@/pages/SaleDashboard'
+import ReqDashboard from '@/pages/ReqDashboard'
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="procedures" element={<Procedures />} />
             <Route path="nso" element={<NSODashboard />} />
             <Route path="sale" element={<SaleDashboard />} />
+            <Route path="req" element={<ReqDashboard />} />
           </Route>
         </Routes>
       </BrowserRouter>

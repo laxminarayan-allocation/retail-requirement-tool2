@@ -26,6 +26,7 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/history',    label: 'History',          icon: '🕑', minRole: 'viewer'  },
   { to: '/nso',        label: 'NSO Dashboard',    icon: '🏪', minRole: 'viewer'  },
   { to: '/sale',       label: 'Sale Dashboard',   icon: '📊', minRole: 'viewer'  },
+  { to: '/req',        label: 'Requirements',      icon: '📝', minRole: 'viewer'  },
   { to: '/settings',   label: 'Settings',         icon: '🔧', minRole: 'planner' },
   { to: '/admin',      label: 'Admin Panel',      icon: '🛡️', minRole: 'admin'   },
   { to: '/procedures',label: 'Procedures',        icon: '📋', minRole: 'admin'   },

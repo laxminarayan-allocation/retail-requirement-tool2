@@ -28,6 +28,7 @@ from app.api.routes import notifications as notif_routes
 from app.api.routes import sop as sop_routes
 from app.api.routes import nso as nso_routes
 from app.api.routes import sale as sale_routes
+from app.api.routes import req_dashboard as req_dashboard_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -59,6 +60,12 @@ async def lifespan(app: FastAPI):
     import threading as _threading
     _threading.Thread(target=_run_inactivity_checker, daemon=True, name="inactivity-checker").start()
     logger.info("Inactivity auto-logout checker started (2hr screen-lock threshold)")
+
+    # Requirements views: register in master data + start daily 6 AM refresh
+    from app.core.req_scheduler import register_views_in_master_data, start_scheduler
+    register_views_in_master_data()
+    if settings.is_oracle_configured:
+        start_scheduler()
 
     yield
 
@@ -171,6 +178,7 @@ _ROUTE_ROLES: list[tuple] = [
     # Viewer+ (read-only browsing)
     ("/api/calculation/",          None,          "viewer"),
     ("/api/dashboard/",            None,          "viewer"),
+    ("/api/req/",                  None,          "viewer"),
     ("/api/master-data/",          None,          "viewer"),
     # Assistant logs — admin only
     ("/api/assistant/logs",        {"GET"},       "admin"),
@@ -322,6 +330,7 @@ app.include_router(notif_routes.router, prefix="/api")    # Notifications
 app.include_router(sop_routes.router,   prefix="/api")    # SOP / Procedures
 app.include_router(nso_routes.router,   prefix="/api")    # NSO Dashboard
 app.include_router(sale_routes.router,  prefix="/api")    # Sale Dashboard
+app.include_router(req_dashboard_routes.router, prefix="/api")  # Requirements Dashboard
 
 
 @app.get("/", tags=["Root"])

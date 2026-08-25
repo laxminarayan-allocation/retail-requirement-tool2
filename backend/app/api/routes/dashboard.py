@@ -120,6 +120,20 @@ def _safe_oracle_stats() -> dict:
                 state_dist = store_df[col].fillna("—").value_counts().head(15).to_dict()
                 break
 
+        # Calendar year and financial year store counts from opening_date
+        cal_year_dist: dict = {}
+        fin_year_dist: dict = {}
+        if "opening_date" in store_df.columns:
+            od = pd.to_datetime(store_df["opening_date"], errors="coerce")
+            valid = store_df[od.notna()].copy()
+            valid["_cy"] = od[od.notna()].dt.year.astype(str)
+            cal_year_dist = valid["_cy"].value_counts().sort_index().to_dict()
+            # Financial year: Apr–Mar, e.g. Apr-2024 to Mar-2025 = "FY25"
+            def fy_label(dt):
+                return f"FY{str(dt.year + 1)[-2:]}" if dt.month >= 4 else f"FY{str(dt.year)[-2:]}"
+            valid["_fy"] = od[od.notna()].apply(fy_label)
+            fin_year_dist = valid["_fy"].value_counts().sort_index().to_dict()
+
         result = {
             "oracle_ok": True,
             "oracle_cache_ms": oracle_ms,
@@ -138,6 +152,8 @@ def _safe_oracle_stats() -> dict:
             "store_grade_distribution": {str(k): int(v) for k, v in sorted(grade_dist.items())},
             "store_zone_distribution": {str(k): int(v) for k, v in zone_dist.items()},
             "store_state_distribution": {str(k): int(v) for k, v in state_dist.items()},
+            "store_cal_year_dist": {str(k): int(v) for k, v in cal_year_dist.items()},
+            "store_fin_year_dist": {str(k): int(v) for k, v in fin_year_dist.items()},
         }
         _oracle_cache.update(result)
         _oracle_cache_ts = time.time()
@@ -167,6 +183,8 @@ def _safe_oracle_stats() -> dict:
             "store_grade_distribution": {},
             "store_zone_distribution": {},
             "store_state_distribution": {},
+            "store_cal_year_dist": {},
+            "store_fin_year_dist": {},
         }
 
 

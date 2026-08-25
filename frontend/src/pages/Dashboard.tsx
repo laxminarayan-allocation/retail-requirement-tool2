@@ -342,6 +342,43 @@ interface DetailData {
   columns: string[]
 }
 
+function YearSplitCard({ oracle }: { oracle: Record<string, Record<string, number>> }) {
+  const [tab, setTab] = useState<'cy' | 'fy'>('fy')
+  const cy = oracle.store_cal_year_dist ?? {}
+  const fy = oracle.store_fin_year_dist ?? {}
+  if (!Object.keys(cy).length && !Object.keys(fy).length) return null
+  const dist = tab === 'cy' ? cy : fy
+  const entries = Object.entries(dist).sort(([a], [b]) => a.localeCompare(b))
+  const mx = Math.max(...entries.map(([, v]) => v), 1)
+  const COLORS = ['#f59e0b', '#fb923c', '#34d399', '#38bdf8', '#818cf8', '#ec4899', '#a78bfa', '#10b981', '#06b6d4', '#84cc16']
+  return (
+    <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Openings</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['fy', 'cy'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              fontSize: 9, padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: tab === t ? '#f59e0b22' : 'transparent',
+              border: `1px solid ${tab === t ? '#f59e0b' : '#334155'}`,
+              color: tab === t ? '#f59e0b' : '#475569',
+            }}>{t === 'cy' ? 'CY' : 'FY'}</button>
+          ))}
+        </div>
+      </div>
+      {entries.map(([yr, cnt], i) => (
+        <div key={yr} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
+          <span style={{ width: 36, color: '#94a3b8', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{yr}</span>
+          <div style={{ flex: 1, height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: `${(cnt / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
+          </div>
+          <span style={{ color: '#64748b', width: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{cnt}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
@@ -519,22 +556,6 @@ export default function Dashboard() {
             <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>{oracle.divisions} divisions · {oracle.departments} depts</div>
           </div>
 
-          {/* Active NSO */}
-          <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #fb923c' }}>
-            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Active NSO</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#fb923c', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.active_nso)}</div>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginBottom: 3 }}>
-                <span>of {fmtNum(oracle.total_stores)} active</span>
-                <span>{oracle.total_stores > 0 ? Math.round((oracle.active_nso / oracle.total_stores) * 100) : 0}%</span>
-              </div>
-              <div style={{ height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#fb923c', borderRadius: 3, width: oracle.total_stores > 0 ? `${(oracle.active_nso / oracle.total_stores) * 100}%` : '0%', transition: 'width 0.5s' }} />
-              </div>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>Since {oracle.nso_from_date ?? '—'}</div>
-          </div>
-
           {/* Upcoming */}
           <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b' }}>
             <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Upcoming Stores</div>
@@ -570,6 +591,9 @@ export default function Dashboard() {
               })}
             </div>
           )}
+
+          {/* Year-wise store opening card */}
+          <YearSplitCard oracle={oracle as unknown as Record<string, Record<string, number>>} />
 
           {/* State distribution mini */}
           {Object.entries((oracle as unknown as Record<string, Record<string, number>>).store_state_distribution ?? {}).length > 0 && (

@@ -570,6 +570,27 @@ export default function Dashboard() {
               })}
             </div>
           )}
+
+          {/* State distribution mini */}
+          {Object.entries((oracle as unknown as Record<string, Record<string, number>>).store_state_distribution ?? {}).length > 0 && (
+            <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #34d399' }}>
+              <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>State Split</div>
+              {Object.entries((oracle as unknown as Record<string, Record<string, number>>).store_state_distribution).slice(0, 8).map(([state, cnt], i) => {
+                const dist = (oracle as unknown as Record<string, Record<string, number>>).store_state_distribution
+                const mx = Math.max(...Object.values(dist))
+                const COLORS = ['#34d399', '#38bdf8', '#818cf8', '#f59e0b', '#fb923c', '#ec4899', '#a78bfa', '#10b981']
+                return (
+                  <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
+                    <span style={{ width: 72, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{state}</span>
+                    <div style={{ flex: 1, height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ width: `${(cnt / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
+                    </div>
+                    <span style={{ color: '#64748b', width: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{cnt}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 

@@ -114,6 +114,12 @@ def _safe_oracle_stats() -> dict:
         if "zone" in store_df.columns:
             zone_dist = store_df["zone"].fillna("—").value_counts().head(10).to_dict()
 
+        state_dist: dict = {}
+        for col in ("state", "store_state", "state_name"):
+            if col in store_df.columns:
+                state_dist = store_df[col].fillna("—").value_counts().head(15).to_dict()
+                break
+
         result = {
             "oracle_ok": True,
             "oracle_cache_ms": oracle_ms,
@@ -131,6 +137,7 @@ def _safe_oracle_stats() -> dict:
             "items_by_attribute1": {str(k): int(v) for k, v in items_by_attr.items()},
             "store_grade_distribution": {str(k): int(v) for k, v in sorted(grade_dist.items())},
             "store_zone_distribution": {str(k): int(v) for k, v in zone_dist.items()},
+            "store_state_distribution": {str(k): int(v) for k, v in state_dist.items()},
         }
         _oracle_cache.update(result)
         _oracle_cache_ts = time.time()
@@ -159,6 +166,7 @@ def _safe_oracle_stats() -> dict:
             "items_by_attribute1": {},
             "store_grade_distribution": {},
             "store_zone_distribution": {},
+            "store_state_distribution": {},
         }
 
 

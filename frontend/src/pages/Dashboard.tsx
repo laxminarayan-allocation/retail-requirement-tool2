@@ -451,22 +451,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Pinned widgets ── */}
-      <div>
-        <div style={{ fontSize: 10, color: '#334155', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>
-          📌 My Dashboard
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {pinned.length === 0 ? (
-            <DefaultStoreTile totalStores={oracle.total_stores} />
-          ) : (
-            pinned.map(w => (
-              <PinnedTile key={`${w.id}-${w.mode}`} w={w} onRemove={() => removePinned(w.id, w.mode)} />
-            ))
-          )}
-        </div>
-      </div>
-
       {/* ── Store Network section ── */}
       <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

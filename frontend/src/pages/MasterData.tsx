@@ -1182,9 +1182,11 @@ export default function MasterData() {
                     case 'actions': return (
                       <td key={col} style={{ ...TD, padding: '5px 8px' }}>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
-                          <ActionBtn onClick={() => handleRefresh(id)} accent>
-                            {exists ? 'Refresh' : 'Download'}
-                          </ActionBtn>
+                          {isCustom(id) && (
+                            <ActionBtn onClick={() => handleRefresh(id)} accent>
+                              {exists ? 'Refresh' : 'Download'}
+                            </ActionBtn>
+                          )}
                           {exists && (
                             <ActionBtn onClick={() => openWindow(id)}>
                               {activeWin === id ? 'Close' : wins[id] ? 'View ✓' : 'View'}

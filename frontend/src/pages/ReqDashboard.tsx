@@ -1,8 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import http from '@/api/http'
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
 interface ViewStatus {
   group: string
   owner: string
@@ -19,92 +17,39 @@ interface PreviewData {
   total_rows: number
 }
 
-// ── Group order ────────────────────────────────────────────────────────────────
-
 const GROUP_ORDER = [
   'MC_REQ', 'ART_REQ', 'MRP_REQ', 'BARCODE_REQ',
   'SIZE_REQ', 'SPARKY_REQ', 'TABLE_REQ', 'OPTION_REQ', 'LIST_REQ',
 ]
 
-const GROUP_LABELS: Record<string, string> = {
-  MC_REQ:      'MC Requirement',
-  ART_REQ:     'Article Requirement',
-  MRP_REQ:     'MRP Requirement',
-  BARCODE_REQ: 'Barcode Requirement',
-  SIZE_REQ:    'Size Requirement',
-  SPARKY_REQ:  'Sparky Requirement',
-  TABLE_REQ:   'Table Requirement',
-  OPTION_REQ:  'Option Requirement',
-  LIST_REQ:    'List Requirement',
+const GROUP_META: Record<string, { label: string; icon: string; color: string }> = {
+  MC_REQ:      { label: 'MC Requirement',      icon: '🧩', color: '#6366f1' },
+  ART_REQ:     { label: 'Article Requirement', icon: '📦', color: '#0ea5e9' },
+  MRP_REQ:     { label: 'MRP Requirement',     icon: '💰', color: '#f59e0b' },
+  BARCODE_REQ: { label: 'Barcode Requirement', icon: '🔖', color: '#10b981' },
+  SIZE_REQ:    { label: 'Size Requirement',    icon: '📐', color: '#ec4899' },
+  SPARKY_REQ:  { label: 'Sparky Requirement',  icon: '⚡', color: '#f97316' },
+  TABLE_REQ:   { label: 'Table Requirement',   icon: '📋', color: '#8b5cf6' },
+  OPTION_REQ:  { label: 'Option Requirement',  icon: '🎛️', color: '#14b8a6' },
+  LIST_REQ:    { label: 'List Requirement',    icon: '📝', color: '#64748b' },
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+const fmtRows = (n: number | null) => n == null ? '—' : n >= 1_000_000
+  ? (n / 1_000_000).toFixed(1) + 'M'
+  : n >= 1_000 ? (n / 1_000).toFixed(1) + 'K' : String(n)
 
-const S: Record<string, React.CSSProperties> = {
-  page: { padding: '20px 24px', background: '#0f172a', minHeight: '100vh', color: '#e2e8f0' },
-  heading: { fontSize: 22, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 },
-  sub: { fontSize: 13, color: '#64748b', marginBottom: 24 },
-  groupCard: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
-    marginBottom: 16, overflow: 'hidden',
-  },
-  groupHeader: {
-    padding: '10px 16px', background: '#172033', borderBottom: '1px solid #334155',
-    display: 'flex', alignItems: 'center', gap: 10,
-  },
-  groupTitle: { fontWeight: 700, fontSize: 14, color: '#a5b4fc', flex: 1 },
-  viewRow: {
-    display: 'flex', alignItems: 'center', gap: 10,
-    padding: '9px 16px', borderBottom: '1px solid #1e293b',
-  },
-  viewLabel: { flex: 1, fontSize: 13, color: '#cbd5e1' },
-  badge: {
-    fontSize: 11, padding: '2px 8px', borderRadius: 99,
-    fontWeight: 600, minWidth: 60, textAlign: 'center',
-  },
-  btnView: {
-    fontSize: 12, padding: '3px 10px', borderRadius: 5,
-    background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer',
-  },
-  rows: { fontSize: 12, color: '#94a3b8', minWidth: 80, textAlign: 'right' as const },
-  ts: { fontSize: 11, color: '#475569', minWidth: 130, textAlign: 'right' as const },
-
-  // Modal
-  overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
-  },
-  modal: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
-    width: 'calc(100vw - 32px)', height: 'calc(100vh - 32px)',
-    display: 'flex', flexDirection: 'column', overflow: 'hidden',
-  },
-  modalHeader: {
-    padding: '12px 18px', borderBottom: '1px solid #334155',
-    display: 'flex', alignItems: 'center', gap: 10,
-  },
-  modalTitle: { flex: 1, fontSize: 15, fontWeight: 700, color: '#e2e8f0' },
-  closeBtn: {
-    background: '#ef4444', border: 'none', color: '#fff', fontSize: 13,
-    borderRadius: 5, padding: '3px 10px', cursor: 'pointer',
-  },
-  tableWrap: { flex: 1, overflow: 'auto' },
-  table: { borderCollapse: 'collapse', width: '100%', fontSize: 12 },
-  th: {
-    padding: '6px 10px', background: '#0f172a', color: '#94a3b8',
-    borderBottom: '1px solid #334155', fontWeight: 600,
-    position: 'sticky', top: 0, whiteSpace: 'nowrap',
-  },
-  td: { padding: '5px 10px', borderBottom: '1px solid #1e293b', color: '#cbd5e1', whiteSpace: 'nowrap' },
+const fmtTs = (ts: string | null) => {
+  if (!ts) return '—'
+  try {
+    const d = new Date(ts)
+    return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+  } catch { return ts }
 }
-
-// ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ReqDashboard() {
   const [views, setViews] = useState<ViewStatus[]>([])
   const [loading, setLoading] = useState(true)
-
-  const [modal, setModal] = useState<{ owner: string; obj: string } | null>(null)
+  const [modal, setModal] = useState<{ owner: string; obj: string; group: string } | null>(null)
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -120,8 +65,8 @@ export default function ReqDashboard() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
-  const openModal = async (owner: string, obj: string) => {
-    setModal({ owner, obj })
+  const openModal = async (owner: string, obj: string, group: string) => {
+    setModal({ owner, obj, group })
     setPreview(null)
     setPreviewError(null)
     setPreviewLoading(true)
@@ -137,90 +82,220 @@ export default function ReqDashboard() {
 
   const closeModal = () => { setModal(null); setPreview(null); setPreviewError(null) }
 
-  // Group views
   const grouped: Record<string, ViewStatus[]> = {}
   for (const v of views) {
     if (!grouped[v.group]) grouped[v.group] = []
     grouped[v.group].push(v)
   }
 
-  const fmtTs = (ts: string | null) => {
-    if (!ts) return '—'
-    try { return new Date(ts).toLocaleString('en-IN', { hour12: false }).replace(',', '') } catch { return ts }
-  }
-  const fmtRows = (n: number | null) => n == null ? '—' : n.toLocaleString()
+  const totalCached = views.filter(v => v.cached).length
+  const totalRows = views.reduce((s, v) => s + (v.rows ?? 0), 0)
+  const lastRefresh = views.filter(v => v.fetched_at).map(v => v.fetched_at!).sort().reverse()[0]
+
+  const meta = modal ? GROUP_META[modal.group] : null
 
   return (
-    <div style={S.page}>
-      <div style={S.heading}>Requirements Dashboard</div>
-      <div style={S.sub}>
-        12 Oracle views across 9 requirement groups — auto-refreshed daily at 06:00 AM
-        &nbsp;·&nbsp;
-        <button
-          onClick={loadStatus}
-          style={{ fontSize: 12, background: 'none', border: '1px solid #334155', color: '#94a3b8', borderRadius: 5, padding: '2px 10px', cursor: 'pointer' }}
-        >
+    <div style={{ padding: '20px 24px', background: '#0a0f1e', minHeight: '100vh', color: '#e2e8f0' }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', letterSpacing: -0.5 }}>
+            Requirements Dashboard
+          </div>
+          <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
+            Oracle views — auto-refreshed daily at 06:00 AM
+          </div>
+        </div>
+        <button onClick={loadStatus} style={{
+          fontSize: 12, padding: '6px 14px', borderRadius: 8,
+          background: '#1e293b', border: '1px solid #334155',
+          color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+        }}>
           ↻ Reload status
         </button>
       </div>
 
-      {loading && <div style={{ color: '#64748b', fontSize: 14 }}>Loading…</div>}
-
-      {!loading && GROUP_ORDER.map(group => {
-        const rows = grouped[group]
-        if (!rows || rows.length === 0) return null
-        const allCached = rows.every(v => v.cached)
-        const someCached = rows.some(v => v.cached)
-        return (
-          <div key={group} style={S.groupCard}>
-            <div style={S.groupHeader}>
-              <span style={S.groupTitle}>{GROUP_LABELS[group] ?? group}</span>
-              <span style={{
-                ...S.badge,
-                background: allCached ? '#14532d' : someCached ? '#422006' : '#1e1b4b',
-                color: allCached ? '#4ade80' : someCached ? '#fb923c' : '#818cf8',
-              }}>
-                {allCached ? '✓ Cached' : someCached ? '~ Partial' : '○ No data'}
-              </span>
-            </div>
-            {rows.map(v => (
-              <div key={v.obj} style={S.viewRow}>
-                <span style={{ ...S.viewLabel, fontFamily: 'monospace' }}>{v.obj}</span>
-                <span style={S.rows}>{fmtRows(v.rows)} rows</span>
-                <span style={S.ts}>{fmtTs(v.fetched_at)}</span>
-                {v.cached
-                  ? <button style={S.btnView} onClick={() => openModal(v.owner, v.obj)}>View</button>
-                  : <span style={{ fontSize: 12, color: '#475569', minWidth: 44 }}>—</span>
-                }
-              </div>
-            ))}
+      {/* ── Summary strip ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
+        {[
+          { label: 'Total Views', value: '12', sub: '9 groups' },
+          { label: 'Cached', value: `${totalCached}/12`, sub: totalCached === 12 ? 'All ready' : `${12 - totalCached} pending` },
+          { label: 'Total Rows', value: fmtRows(totalRows), sub: 'across all views' },
+          { label: 'Last Refresh', value: fmtTs(lastRefresh ?? null), sub: 'most recent' },
+        ].map(s => (
+          <div key={s.label} style={{
+            background: '#131929', border: '1px solid #1e293b', borderRadius: 10,
+            padding: '12px 16px',
+          }}>
+            <div style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2 }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: '#334155', marginTop: 2 }}>{s.sub}</div>
           </div>
-        )
-      })}
+        ))}
+      </div>
 
-      {/* Preview Modal */}
+      {/* ── Loading ── */}
+      {loading && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#475569', fontSize: 13 }}>
+          <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Loading…
+        </div>
+      )}
+
+      {/* ── Grid ── */}
+      {!loading && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+          {GROUP_ORDER.map(group => {
+            const rows = grouped[group]
+            if (!rows || rows.length === 0) return null
+            const gm = GROUP_META[group]
+            const allCached = rows.every(v => v.cached)
+            const someCached = rows.some(v => v.cached)
+            const status = allCached ? 'all' : someCached ? 'partial' : 'none'
+
+            return (
+              <div key={group} style={{
+                background: '#131929',
+                border: `1px solid ${allCached ? '#1e3a2f' : someCached ? '#2d1f0a' : '#1e293b'}`,
+                borderRadius: 12, overflow: 'hidden',
+                boxShadow: allCached ? `0 0 0 0.5px ${gm.color}22` : 'none',
+              }}>
+                {/* card header */}
+                <div style={{
+                  padding: '12px 16px',
+                  background: `linear-gradient(135deg, ${gm.color}18 0%, transparent 100%)`,
+                  borderBottom: '1px solid #1e293b',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <span style={{ fontSize: 18 }}>{gm.icon}</span>
+                  <span style={{ flex: 1, fontWeight: 700, fontSize: 14, color: '#f1f5f9' }}>{gm.label}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99,
+                    background: status === 'all' ? '#14532d' : status === 'partial' ? '#422006' : '#1e1b4b',
+                    color: status === 'all' ? '#4ade80' : status === 'partial' ? '#fb923c' : '#818cf8',
+                  }}>
+                    {status === 'all' ? '✓ Cached' : status === 'partial' ? '⟳ Partial' : '○ No data'}
+                  </span>
+                </div>
+
+                {/* view rows */}
+                <div style={{ padding: '4px 0' }}>
+                  {rows.map((v, i) => (
+                    <div key={v.obj} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 16px',
+                      background: i % 2 === 1 ? '#0d1525' : 'transparent',
+                      borderBottom: i < rows.length - 1 ? '1px solid #0d1525' : 'none',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#cbd5e1', fontWeight: 600 }}>
+                          {v.obj}
+                        </div>
+                        {v.fetched_at && (
+                          <div style={{ fontSize: 10, color: '#334155', marginTop: 2 }}>
+                            {fmtTs(v.fetched_at)}
+                          </div>
+                        )}
+                      </div>
+
+                      {v.cached && (
+                        <div style={{ textAlign: 'right', minWidth: 60 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: gm.color, fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtRows(v.rows)}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#475569' }}>rows</div>
+                        </div>
+                      )}
+
+                      {v.cached
+                        ? (
+                          <button onClick={() => openModal(v.owner, v.obj, group)} style={{
+                            fontSize: 11, padding: '4px 12px', borderRadius: 6,
+                            background: gm.color + '22', border: `1px solid ${gm.color}44`,
+                            color: gm.color, cursor: 'pointer', fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            View ↗
+                          </button>
+                        )
+                        : <span style={{ fontSize: 11, color: '#334155', minWidth: 60 }}>Not cached</span>
+                      }
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Modal ── */}
       {modal && (
-        <div style={S.overlay} onClick={closeModal}>
-          <div style={S.modal} onClick={e => e.stopPropagation()}>
-            <div style={S.modalHeader}>
-              <span style={{ ...S.modalTitle, fontFamily: 'monospace' }}>{modal.obj}</span>
-              {preview && <span style={{ fontSize: 12, color: '#64748b' }}>{preview.total_rows.toLocaleString()} rows (showing first 200)</span>}
-              <button style={S.closeBtn} onClick={closeModal}>✕ Close</button>
-            </div>
-            <div style={S.tableWrap}>
-              {previewLoading && <div style={{ padding: 24, color: '#64748b' }}>Loading preview…</div>}
-              {previewError && <div style={{ padding: 24, color: '#f87171' }}>{previewError}</div>}
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
+        }} onClick={closeModal}>
+          <div style={{
+            background: '#131929', border: '1px solid #1e293b', borderRadius: 14,
+            width: 'calc(100vw - 32px)', height: 'calc(100vh - 32px)',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }} onClick={e => e.stopPropagation()}>
+
+            {/* modal header */}
+            <div style={{
+              padding: '14px 20px', borderBottom: '1px solid #1e293b',
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: `linear-gradient(135deg, ${meta?.color ?? '#6366f1'}18 0%, transparent 100%)`,
+            }}>
+              <span style={{ fontSize: 20 }}>{meta?.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#f1f5f9', fontFamily: 'monospace' }}>{modal.obj}</div>
+                <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{meta?.label}</div>
+              </div>
               {preview && (
-                <table style={S.table}>
+                <div style={{ fontSize: 12, color: '#64748b', background: '#0d1525', padding: '4px 10px', borderRadius: 6 }}>
+                  {preview.total_rows.toLocaleString()} rows · {preview.columns.length} columns · showing 200
+                </div>
+              )}
+              <button onClick={closeModal} style={{
+                background: '#ef4444', border: 'none', color: '#fff',
+                fontSize: 12, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontWeight: 600,
+              }}>
+                ✕ Close
+              </button>
+            </div>
+
+            {/* table */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {previewLoading && (
+                <div style={{ padding: 32, color: '#475569', textAlign: 'center', fontSize: 14 }}>Loading preview…</div>
+              )}
+              {previewError && (
+                <div style={{ padding: 32, color: '#f87171', textAlign: 'center', fontSize: 14 }}>{previewError}</div>
+              )}
+              {preview && (
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
-                    <tr>{preview.columns.map(c => <th key={c} style={S.th}>{c}</th>)}</tr>
+                    <tr>
+                      {preview.columns.map(c => (
+                        <th key={c} style={{
+                          padding: '8px 12px', background: '#0a0f1e', color: '#64748b',
+                          borderBottom: '1px solid #1e293b', fontWeight: 600,
+                          position: 'sticky', top: 0, whiteSpace: 'nowrap',
+                          textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.5,
+                        }}>{c}</th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
                     {preview.rows.map((row, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#172033' }}>
+                      <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1525' }}>
                         {preview.columns.map(c => (
-                          <td key={c} style={S.td}>
-                            {row[c] == null ? <span style={{ color: '#475569' }}>—</span> : String(row[c])}
+                          <td key={c} style={{
+                            padding: '6px 12px', borderBottom: '1px solid #131929',
+                            color: row[c] == null ? '#334155' : '#cbd5e1', whiteSpace: 'nowrap',
+                          }}>
+                            {row[c] == null ? '—' : String(row[c])}
                           </td>
                         ))}
                       </tr>

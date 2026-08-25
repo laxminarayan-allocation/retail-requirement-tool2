@@ -780,41 +780,148 @@ export default function SaleDashboard() {
       {activeTab === 'daily' && (
         dailyLoading ? <div className="loading-bar">Loading daily data…</div> : (
           <div className="tbl-scroll">
-            <table className="sale-table">
-              <thead>
-                <tr className="group-header">
-                  <th colSpan={1}></th>
-                  <th colSpan={4} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
-                  <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
-                  <th colSpan={1} style={{ borderLeft: '1px solid #2a3a55' }}>Perf</th>
-                </tr>
-                <tr>
-                  <th style={{ textAlign: 'left' }}>Date</th>
-                  <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><th>Sale Qty</th><th>Target</th><th>Achv%</th>
-                  <th style={{ borderLeft: '1px solid #2a3a55' }}>LY Sale ₹</th><th>LY Target</th><th>LY Achv%</th>
-                  <th style={{ borderLeft: '1px solid #2a3a55' }}>Growth%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyRows.length === 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
-                    No data — apply a date filter and refresh
-                  </td></tr>
-                )}
-                {dailyRows.map((r, i) => {
-                  const tyAchv = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
-                  const lyAchv = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
-                  return (
-                    <tr key={i}>
-                      <td style={{ textAlign: 'left', fontVariantNumeric: 'tabular-nums' }}>{String(r.SALE_DATE || '—')}</td>
-                      <td>{fmt(r.TY_V)}</td><td>{fmt(r.TY_QTY)}</td><td>{fmt(r.TY_TGT_V)}</td><td><AchvBadge val={tyAchv} /></td>
-                      <td>{fmt(r.LY_V)}</td><td>{fmt(r.LY_TGT_V)}</td><td><AchvBadge val={lyAchv} /></td>
-                      <td><GrowthBadge val={r.GRWTH_PCT} /></td>
+            {(() => {
+              const today = new Date().toISOString().slice(0, 10) // 2026-08-25
+
+              // ── Build Year → Month → rows hierarchy ─────────────────────────
+              type MonthGroup  = { monthKey: string; label: string; rows: Row[] }
+              type YearGroup   = { year: string; months: MonthGroup[] }
+
+              const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+              const yearMap = new Map<string, Map<string, Row[]>>()
+              for (const r of dailyRows) {
+                const d = String(r.SALE_DATE || '')
+                const [yr, mo] = d.split('-')
+                if (!yr || !mo) continue
+                if (!yearMap.has(yr)) yearMap.set(yr, new Map())
+                const monthMap = yearMap.get(yr)!
+                if (!monthMap.has(mo)) monthMap.set(mo, [])
+                monthMap.get(mo)!.push(r)
+              }
+
+              const years: YearGroup[] = []
+              for (const [year, monthMap] of yearMap) {
+                const months: MonthGroup[] = []
+                for (const [mo, rows] of monthMap) {
+                  const mIdx = parseInt(mo, 10) - 1
+                  months.push({ monthKey: mo, label: `${MONTHS[mIdx] ?? mo} ${year}`, rows })
+                }
+                months.sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+                years.push({ year, months })
+              }
+              years.sort((a, b) => a.year.localeCompare(b.year))
+
+              function sumRow(rows: Row[]) {
+                return rows.reduce((acc, r) => ({
+                  TY_V:     (acc.TY_V     as number) + Number(r.TY_V     || 0),
+                  TY_QTY:   (acc.TY_QTY   as number) + Number(r.TY_QTY   || 0),
+                  TY_TGT_V: (acc.TY_TGT_V as number) + Number(r.TY_TGT_V || 0),
+                  LY_V:     (acc.LY_V     as number) + Number(r.LY_V     || 0),
+                  LY_TGT_V: (acc.LY_TGT_V as number) + Number(r.LY_TGT_V || 0),
+                }), { TY_V: 0, TY_QTY: 0, TY_TGT_V: 0, LY_V: 0, LY_TGT_V: 0 })
+              }
+
+              const GH: React.CSSProperties = { background: '#0f172a', fontWeight: 700, fontSize: 11, color: '#94a3b8', borderBottom: '1px solid #2a3a55' }
+              const YH: React.CSSProperties = { background: '#0a1020', fontWeight: 800, fontSize: 12, color: '#e2e8f0', borderBottom: '2px solid #2a3a55', borderTop: '2px solid #1e3a5f' }
+
+              return (
+                <table className="sale-table">
+                  <thead>
+                    <tr className="group-header">
+                      <th colSpan={1}></th>
+                      <th colSpan={4} style={{ borderLeft: '1px solid #2a3a55' }}>This Year (TY)</th>
+                      <th colSpan={3} style={{ borderLeft: '1px solid #2a3a55' }}>Last Year (LY)</th>
+                      <th colSpan={1} style={{ borderLeft: '1px solid #2a3a55' }}>Perf</th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Date</th>
+                      <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><th>Sale Qty</th><th>Target</th><th>Achv%</th>
+                      <th style={{ borderLeft: '1px solid #2a3a55' }}>LY Sale ₹</th><th>LY Target</th><th>LY Achv%</th>
+                      <th style={{ borderLeft: '1px solid #2a3a55' }}>Growth%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyRows.length === 0 && (
+                      <tr><td colSpan={9} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
+                        No data — apply a date filter and refresh
+                      </td></tr>
+                    )}
+
+                    {years.map(yg => {
+                      const ys = sumRow(yg.months.flatMap(m => m.rows))
+                      const yAchv = ys.TY_TGT_V ? ys.TY_V / ys.TY_TGT_V * 100 : null
+                      const yLyAchv = ys.LY_TGT_V ? ys.LY_V / ys.LY_TGT_V * 100 : null
+                      const yGrowth = ys.LY_V ? (ys.TY_V - ys.LY_V) / ys.LY_V * 100 : null
+
+                      return [
+                        /* ── Year header row ── */
+                        <tr key={`y-${yg.year}`} style={YH}>
+                          <td style={{ paddingLeft: 10, letterSpacing: 1 }}>📅 {yg.year}</td>
+                          <td style={{ borderLeft: '1px solid #2a3a55' }}>{fmt(ys.TY_V)}</td>
+                          <td>{fmt(ys.TY_QTY)}</td>
+                          <td>{fmt(ys.TY_TGT_V)}</td>
+                          <td><AchvBadge val={yAchv} /></td>
+                          <td style={{ borderLeft: '1px solid #2a3a55' }}>{fmt(ys.LY_V)}</td>
+                          <td>{fmt(ys.LY_TGT_V)}</td>
+                          <td><AchvBadge val={yLyAchv} /></td>
+                          <td style={{ borderLeft: '1px solid #2a3a55' }}><GrowthBadge val={yGrowth} /></td>
+                        </tr>,
+
+                        ...yg.months.map(mg => {
+                          const ms = sumRow(mg.rows)
+                          const mAchv   = ms.TY_TGT_V ? ms.TY_V / ms.TY_TGT_V * 100 : null
+                          const mLyAchv = ms.LY_TGT_V ? ms.LY_V / ms.LY_TGT_V * 100 : null
+                          const mGrowth = ms.LY_V ? (ms.TY_V - ms.LY_V) / ms.LY_V * 100 : null
+
+                          return [
+                            /* ── Month header row ── */
+                            <tr key={`m-${yg.year}-${mg.monthKey}`} style={GH}>
+                              <td style={{ paddingLeft: 22 }}>▸ {mg.label}</td>
+                              <td style={{ borderLeft: '1px solid #2a3a55' }}>{fmt(ms.TY_V)}</td>
+                              <td>{fmt(ms.TY_QTY)}</td>
+                              <td>{fmt(ms.TY_TGT_V)}</td>
+                              <td><AchvBadge val={mAchv} /></td>
+                              <td style={{ borderLeft: '1px solid #2a3a55' }}>{fmt(ms.LY_V)}</td>
+                              <td>{fmt(ms.LY_TGT_V)}</td>
+                              <td><AchvBadge val={mLyAchv} /></td>
+                              <td style={{ borderLeft: '1px solid #2a3a55' }}><GrowthBadge val={mGrowth} /></td>
+                            </tr>,
+
+                            /* ── Date rows ── */
+                            ...mg.rows.map((r, i) => {
+                              const dateStr = String(r.SALE_DATE || '')
+                              const isToday = dateStr === today
+                              const tyAchv = r.TY_TGT_V ? Number(r.TY_V) / Number(r.TY_TGT_V) * 100 : null
+                              const lyAchv = r.LY_TGT_V ? Number(r.LY_V) / Number(r.LY_TGT_V) * 100 : null
+                              const rowStyle: React.CSSProperties = isToday
+                                ? { background: '#0f2a1a', outline: '1.5px solid #4ade80', outlineOffset: -1 }
+                                : { background: i % 2 === 0 ? 'transparent' : '#ffffff03' }
+                              return (
+                                <tr key={dateStr} id={isToday ? 'today-row' : undefined} style={rowStyle}>
+                                  <td style={{ paddingLeft: 38, fontVariantNumeric: 'tabular-nums', color: isToday ? '#4ade80' : '#94a3b8', fontWeight: isToday ? 700 : 400 }}>
+                                    {dateStr.slice(5)} {/* show MM-DD */}
+                                    {isToday && <span style={{ marginLeft: 6, fontSize: 9, background: '#16532d', color: '#4ade80', border: '1px solid #166534', borderRadius: 4, padding: '1px 5px' }}>TODAY</span>}
+                                  </td>
+                                  <td style={{ borderLeft: '1px solid #2a3a55' }}>{fmt(r.TY_V)}</td>
+                                  <td>{fmt(r.TY_QTY)}</td>
+                                  <td>{fmt(r.TY_TGT_V)}</td>
+                                  <td><AchvBadge val={tyAchv} /></td>
+                                  <td style={{ borderLeft: '1px solid #2a3a55' }}>{fmt(r.LY_V)}</td>
+                                  <td>{fmt(r.LY_TGT_V)}</td>
+                                  <td><AchvBadge val={lyAchv} /></td>
+                                  <td style={{ borderLeft: '1px solid #2a3a55' }}><GrowthBadge val={r.GRWTH_PCT} /></td>
+                                </tr>
+                              )
+                            }),
+                          ]
+                        }),
+                      ]
+                    })}
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
         )
       )}

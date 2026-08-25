@@ -339,6 +339,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [lastFetch, setLastFetch] = useState<string>('')
   const [pinned, setPinned] = useState<PinnedWidget[]>(getPinned)
+  const [allocView, setAllocView] = useState<'all' | 'store' | 'mc'>('all')
   const [alloc, setAlloc] = useState<AllocSummary | null>(null)
   const [allocLoading, setAllocLoading] = useState(true)
 
@@ -364,17 +365,20 @@ export default function Dashboard() {
     }
   }, [])
 
-  const loadAlloc = useCallback(async () => {
+  const loadAlloc = useCallback(async (view: 'all' | 'store' | 'mc' = 'all') => {
     setAllocLoading(true)
+    const ep = view === 'store' ? '/dashboard/allocation-store'
+             : view === 'mc'   ? '/dashboard/allocation-mc'
+             :                   '/dashboard/allocation-summary'
     try {
-      const res = await http.get<{ success: boolean; data: AllocSummary }>('/dashboard/allocation-summary', { timeout: 60_000 })
+      const res = await http.get<{ success: boolean; data: AllocSummary }>(ep, { timeout: 60_000 })
       if (res.data.success) setAlloc(res.data.data)
     } catch { /* silent */ } finally {
       setAllocLoading(false)
     }
   }, [])
 
-  useEffect(() => { load(); loadAlloc() }, [load, loadAlloc])
+  useEffect(() => { load(); loadAlloc('all') }, [load, loadAlloc])
 
   if (loading) {
     return (
@@ -571,81 +575,135 @@ export default function Dashboard() {
       </div>
 
       {/* ── Allocation Summary section ── */}
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ ...S.cardHead, background: '#0f172a' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={S.cardTitle}>Allocation Summary</span>
-            <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>T_ALLOCATION_FOR_ALL_DIVISION</span>
-            {alloc?.total_rows != null && (
-              <span style={{ fontSize: 10, color: '#334155', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 7px' }}>
-                {alloc.total_rows.toLocaleString()} rows
-              </span>
+      {(() => {
+        // Column definitions per view
+        const viewDefs: Record<'all' | 'store' | 'mc', { key: string; label: string; align: 'left' | 'right'; color?: string; bold?: boolean }[]> = {
+          all: [
+            { key: 'division',     label: 'Division',   align: 'left' },
+            { key: 'stores',       label: 'Stores',     align: 'right', color: '#7dd3fc' },
+            { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
+            { key: 'stk_qty',      label: 'Stock Qty',  align: 'right', color: '#94a3b8' },
+            { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
+            { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
+            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },
+            { key: 'mtd_sale_q',   label: 'MTD Sale',   align: 'right', color: '#38bdf8' },
+            { key: 'proj_qty',     label: 'Proj Qty',   align: 'right', color: '#a78bfa' },
+          ],
+          store: [
+            { key: 'store_code',   label: 'Code',       align: 'left' },
+            { key: 'store_name',   label: 'Store Name', align: 'left' },
+            { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
+            { key: 'stk_qty',      label: 'Stock Qty',  align: 'right', color: '#94a3b8' },
+            { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
+            { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
+            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },
+            { key: 'mtd_sale_q',   label: 'MTD Sale',   align: 'right', color: '#38bdf8' },
+            { key: 'proj_qty',     label: 'Proj Qty',   align: 'right', color: '#a78bfa' },
+          ],
+          mc: [
+            { key: 'division',     label: 'Division',   align: 'left' },
+            { key: 'section',      label: 'Section',    align: 'left' },
+            { key: 'department',   label: 'Department', align: 'left' },
+            { key: 'stores',       label: 'Stores',     align: 'right', color: '#7dd3fc' },
+            { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
+            { key: 'stk_qty',      label: 'Stock Qty',  align: 'right', color: '#94a3b8' },
+            { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
+            { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
+            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },
+            { key: 'mtd_sale_q',   label: 'MTD Sale',   align: 'right', color: '#38bdf8' },
+            { key: 'proj_qty',     label: 'Proj Qty',   align: 'right', color: '#a78bfa' },
+          ],
+        }
+        const cols = viewDefs[allocView]
+
+        const TABS: { key: 'all' | 'store' | 'mc'; label: string }[] = [
+          { key: 'all',   label: 'All (Division)' },
+          { key: 'store', label: 'Store Wise' },
+          { key: 'mc',    label: 'Div · Section · Dept' },
+        ]
+
+        function fmtCell(row: AllocRow, key: string) {
+          const v = (row as Record<string, unknown>)[key]
+          if (v == null || v === 0 && key !== 'alloc_qty') return <span style={{ color: '#334155' }}>—</span>
+          if (typeof v === 'number') return v.toLocaleString()
+          return String(v)
+        }
+
+        return (
+          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #334155', background: '#0f172a', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={S.cardTitle}>Allocation Summary</span>
+                <span style={{ fontSize: 10, color: '#334155', fontFamily: 'monospace' }}>T_ALLOCATION_FOR_ALL_DIVISION</span>
+                {alloc?.total_rows != null && (
+                  <span style={{ fontSize: 10, color: '#334155', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 7px' }}>
+                    {alloc.total_rows.toLocaleString()} rows
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* Tab switcher */}
+                <div style={{ display: 'flex', border: '1px solid #334155', borderRadius: 6, overflow: 'hidden' }}>
+                  {TABS.map(t => (
+                    <button key={t.key} onClick={() => { setAllocView(t.key); loadAlloc(t.key) }}
+                      style={{ padding: '4px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                        background: allocView === t.key ? '#0ea5e9' : '#0f172a',
+                        color: allocView === t.key ? '#fff' : '#64748b' }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => loadAlloc(allocView)} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '4px 9px', cursor: 'pointer' }}>↻</button>
+              </div>
+            </div>
+
+            {/* Body */}
+            {allocLoading ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading…</div>
+            ) : !alloc?.available ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
+            ) : (
+              <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                    <tr style={{ background: '#0f172a' }}>
+                      {cols.map(h => (
+                        <th key={h.key} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: h.align, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>
+                          {h.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alloc.rows.map((row, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #1e293b' }}>
+                        {cols.map(col => (
+                          <td key={col.key} style={{ padding: '6px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: col.bold ? 700 : 400, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {fmtCell(row, col.key)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                  {/* Totals */}
+                  {alloc.totals && (
+                    <tfoot style={{ position: 'sticky', bottom: 0 }}>
+                      <tr style={{ background: '#0f1f2e', borderTop: '2px solid #334155' }}>
+                        {cols.map((col, ci) => (
+                          <td key={col.key} style={{ padding: '8px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            {ci === 0 ? 'TOTAL' : fmtCell(alloc.totals as AllocRow, col.key)}
+                          </td>
+                        ))}
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             )}
           </div>
-          <button onClick={loadAlloc} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '2px 9px', cursor: 'pointer' }}>
-            ↻
-          </button>
-        </div>
-
-        {allocLoading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading allocation data…</div>
-        ) : !alloc?.available ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#0f172a' }}>
-                  {[
-                    { label: 'Division', align: 'left' },
-                    { label: 'Stores', align: 'right' },
-                    { label: 'Articles', align: 'right' },
-                    { label: 'Stock Qty', align: 'right' },
-                    { label: 'Alloc Qty', align: 'right' },
-                    { label: 'In-Transit', align: 'right' },
-                    { label: 'LM Sale', align: 'right' },
-                    { label: 'MTD Sale', align: 'right' },
-                    { label: 'Proj Qty', align: 'right' },
-                  ].map(h => (
-                    <th key={h.label} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: h.align as 'left' | 'right', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {alloc.rows.map((row, i) => (
-                  <tr key={row.division} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #1e293b' }}>
-                    <td style={{ padding: '7px 12px', color: '#e2e8f0', fontWeight: 600 }}>{row.division}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#7dd3fc', fontVariantNumeric: 'tabular-nums' }}>{row.stores?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#7dd3fc', fontVariantNumeric: 'tabular-nums' }}>{row.articles?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{row.stk_qty?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{row.alloc_qty?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#fb923c', fontVariantNumeric: 'tabular-nums' }}>{row.in_transit_q?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{row.lm_sale_q?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{row.mtd_sale_q?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>{row.proj_qty?.toLocaleString() ?? '—'}</td>
-                  </tr>
-                ))}
-                {/* Totals row */}
-                {alloc.totals && (
-                  <tr style={{ background: '#0f1f2e', borderTop: '2px solid #334155' }}>
-                    <td style={{ padding: '8px 12px', color: '#e2e8f0', fontWeight: 800, fontSize: 11 }}>TOTAL</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#7dd3fc', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.stores?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#7dd3fc', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.articles?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94a3b8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.stk_qty?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.alloc_qty?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#fb923c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.in_transit_q?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94a3b8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.lm_sale_q?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#38bdf8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.mtd_sale_q?.toLocaleString() ?? '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#a78bfa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.proj_qty?.toLocaleString() ?? '—'}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        )
+      })()}
 
       {/* ── Row 2: Oracle data + Last run ── */}
       <div style={S.grid2}>

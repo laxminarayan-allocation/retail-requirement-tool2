@@ -404,3 +404,105 @@ async def allocation_summary():
     except Exception as exc:
         logger.warning("allocation summary failed: %s", exc)
         return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})
+
+
+def _alloc_parquet():
+    """Return the allocation DataFrame or None."""
+    from app.core.parquet_cache import has_output, read_cache
+    if not has_output("MISRETAIL", "T_ALLOCATION_FOR_ALL_DIVISION"):
+        return None
+    return read_cache("MISRETAIL", "T_ALLOCATION_FOR_ALL_DIVISION")
+
+
+def _pivot_and_serialize(df, group_cols: list[str]) -> dict:
+    """Generic pivot helper — groups df by group_cols and sums numeric cols."""
+    NUM_COLS = ["total_stk_q", "alloc_regn_q", "lm_sl_q", "mtd_sl_q", "proj_q", "in_transit_q"]
+    num_agg = {c: "sum" for c in NUM_COLS if c in df.columns}
+
+    pivot = df.groupby(group_cols, as_index=False).agg(num_agg)
+
+    # Store / article distinct counts (added separately)
+    if "store_code" in df.columns:
+        sc = df.groupby(group_cols)["store_code"].nunique().reset_index(name="stores")
+        pivot = pivot.merge(sc, on=group_cols, how="left")
+    if "barcode" in df.columns:
+        ac = df.groupby(group_cols)["barcode"].nunique().reset_index(name="articles")
+        pivot = pivot.merge(ac, on=group_cols, how="left")
+
+    rename = {
+        "total_stk_q": "stk_qty", "alloc_regn_q": "alloc_qty",
+        "lm_sl_q": "lm_sale_q", "mtd_sl_q": "mtd_sale_q",
+        "proj_q": "proj_qty",
+    }
+    pivot = pivot.rename(columns={k: v for k, v in rename.items() if k in pivot.columns})
+
+    if "alloc_qty" in pivot.columns:
+        pivot = pivot.sort_values("alloc_qty", ascending=False)
+
+    total_row: dict = {"__label__": "TOTAL"}
+    for col in pivot.columns:
+        if col in group_cols:
+            continue
+        total_row[col] = int(pivot[col].sum()) if pivot[col].dtype.kind in "iuf" else None
+
+    def _to_int(v):
+        if isinstance(v, float) and v == int(v):
+            return int(v)
+        return v
+
+    rows = [{k: _to_int(v) for k, v in r.items()} for r in pivot.fillna(0).to_dict(orient="records")]
+    return {"available": True, "total_rows": int(len(df)), "rows": rows, "totals": total_row}
+
+
+# Store-wise cache
+_store_cache: dict = {}
+_store_cache_ts: float = 0.0
+
+@router.get("/allocation-store", response_model=APIResponse)
+async def allocation_store():
+    """Store-wise pivot of T_ALLOCATION_FOR_ALL_DIVISION."""
+    global _store_cache, _store_cache_ts
+    age = time.time() - _store_cache_ts
+    if _store_cache and age < _ALLOC_TTL:
+        return APIResponse.ok(data=_store_cache)
+    try:
+        df = _alloc_parquet()
+        if df is None or df.empty:
+            return APIResponse.ok(data={"available": False, "rows": []})
+        group_cols = [c for c in ["store_code", "store_name"] if c in df.columns]
+        if not group_cols:
+            return APIResponse.ok(data={"available": False, "rows": []})
+        result = _pivot_and_serialize(df, group_cols)
+        _store_cache.update(result)
+        _store_cache_ts = time.time()
+        return APIResponse.ok(data=result)
+    except Exception as exc:
+        logger.warning("allocation store summary failed: %s", exc)
+        return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})
+
+
+# MC (div+section+dept) cache
+_mc_cache: dict = {}
+_mc_cache_ts: float = 0.0
+
+@router.get("/allocation-mc", response_model=APIResponse)
+async def allocation_mc():
+    """Division + Section + Department pivot of T_ALLOCATION_FOR_ALL_DIVISION."""
+    global _mc_cache, _mc_cache_ts
+    age = time.time() - _mc_cache_ts
+    if _mc_cache and age < _ALLOC_TTL:
+        return APIResponse.ok(data=_mc_cache)
+    try:
+        df = _alloc_parquet()
+        if df is None or df.empty:
+            return APIResponse.ok(data={"available": False, "rows": []})
+        group_cols = [c for c in ["division", "section", "department"] if c in df.columns]
+        if not group_cols:
+            return APIResponse.ok(data={"available": False, "rows": []})
+        result = _pivot_and_serialize(df, group_cols)
+        _mc_cache.update(result)
+        _mc_cache_ts = time.time()
+        return APIResponse.ok(data=result)
+    except Exception as exc:
+        logger.warning("allocation mc summary failed: %s", exc)
+        return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})

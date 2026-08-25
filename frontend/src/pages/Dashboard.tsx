@@ -311,6 +311,27 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Allocation summary types ───────────────────────────────────────────────────
+
+interface AllocRow {
+  division: string
+  stores?: number
+  articles?: number
+  stk_qty?: number
+  alloc_qty?: number
+  lm_sale_q?: number
+  mtd_sale_q?: number
+  proj_qty?: number
+  in_transit_q?: number
+}
+
+interface AllocSummary {
+  available: boolean
+  total_rows?: number
+  rows: AllocRow[]
+  totals?: AllocRow
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
@@ -318,6 +339,8 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [lastFetch, setLastFetch] = useState<string>('')
   const [pinned, setPinned] = useState<PinnedWidget[]>(getPinned)
+  const [alloc, setAlloc] = useState<AllocSummary | null>(null)
+  const [allocLoading, setAllocLoading] = useState(true)
 
   function removePinned(id: string, mode: VizMode) {
     const next = getPinned().filter(w => !(w.id === id && w.mode === mode))
@@ -341,7 +364,17 @@ export default function Dashboard() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadAlloc = useCallback(async () => {
+    setAllocLoading(true)
+    try {
+      const res = await http.get<{ success: boolean; data: AllocSummary }>('/dashboard/allocation-summary', { timeout: 60_000 })
+      if (res.data.success) setAlloc(res.data.data)
+    } catch { /* silent */ } finally {
+      setAllocLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load(); loadAlloc() }, [load, loadAlloc])
 
   if (loading) {
     return (
@@ -430,6 +463,83 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Store Network section ── */}
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '14px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
+          <span style={{ fontSize: 11, color: '#334155' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+          {/* Active */}
+          <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #38bdf8' }}>
+            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Active Stores</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_stores)}</div>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginBottom: 3 }}>
+                <span>{fmtNum(oracle.total_stores)} of {fmtNum(oracle.total_all_stores)}</span>
+                <span>{oracle.total_all_stores > 0 ? Math.round((oracle.total_stores / oracle.total_all_stores) * 100) : 0}%</span>
+              </div>
+              <div style={{ height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#38bdf8', borderRadius: 3, width: oracle.total_all_stores > 0 ? `${(oracle.total_stores / oracle.total_all_stores) * 100}%` : '0%', transition: 'width 0.5s' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>{oracle.divisions} divisions · {oracle.departments} depts</div>
+          </div>
+
+          {/* Active NSO */}
+          <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #fb923c' }}>
+            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Active NSO</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#fb923c', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.active_nso)}</div>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginBottom: 3 }}>
+                <span>of {fmtNum(oracle.total_stores)} active</span>
+                <span>{oracle.total_stores > 0 ? Math.round((oracle.active_nso / oracle.total_stores) * 100) : 0}%</span>
+              </div>
+              <div style={{ height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#fb923c', borderRadius: 3, width: oracle.total_stores > 0 ? `${(oracle.active_nso / oracle.total_stores) * 100}%` : '0%', transition: 'width 0.5s' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>Since {oracle.nso_from_date ?? '—'}</div>
+          </div>
+
+          {/* Upcoming */}
+          <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b' }}>
+            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Upcoming Stores</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#f59e0b', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.upcoming_stores)}</div>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginBottom: 3 }}>
+                <span>of {fmtNum(oracle.total_all_stores)} total</span>
+                <span>{oracle.total_all_stores > 0 ? Math.round((oracle.upcoming_stores / oracle.total_all_stores) * 100) : 0}%</span>
+              </div>
+              <div style={{ height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#f59e0b', borderRadius: 3, width: oracle.total_all_stores > 0 ? `${(oracle.upcoming_stores / oracle.total_all_stores) * 100}%` : '0%', transition: 'width 0.5s' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>Opening soon</div>
+          </div>
+
+          {/* Zone distribution mini */}
+          {Object.entries(oracle.store_zone_distribution).length > 0 && (
+            <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8' }}>
+              <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>Zone Split</div>
+              {Object.entries(oracle.store_zone_distribution).slice(0, 5).map(([zone, cnt], i) => {
+                const mx = Math.max(...Object.values(oracle.store_zone_distribution))
+                const COLORS = ['#818cf8', '#38bdf8', '#34d399', '#f59e0b', '#fb923c']
+                return (
+                  <div key={zone} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
+                    <span style={{ width: 60, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{zone}</span>
+                    <div style={{ flex: 1, height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ width: `${(cnt / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
+                    </div>
+                    <span style={{ color: '#64748b', width: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{cnt}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── Row 1: Top KPI tiles ── */}
       <div style={S.grid6}>
         <KpiTile
@@ -458,6 +568,83 @@ export default function Dashboard() {
         />
         <KpiTile label="Total Items" value={fmtNum(oracle.total_items)} sub={`${oracle.articles.toLocaleString()} articles`} accent="#a78bfa" />
         <KpiTile label="Last REQ Qty" value={lr.has_last_run ? fmtNum(lr.total_req) : '—'} sub={lr.has_last_run ? `Fill rate: ${pct(lr.fill_rate_achieved)}` : 'No runs yet'} accent="#4ade80" />
+      </div>
+
+      {/* ── Allocation Summary section ── */}
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ ...S.cardHead, background: '#0f172a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={S.cardTitle}>Allocation Summary</span>
+            <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace' }}>T_ALLOCATION_FOR_ALL_DIVISION</span>
+            {alloc?.total_rows != null && (
+              <span style={{ fontSize: 10, color: '#334155', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 7px' }}>
+                {alloc.total_rows.toLocaleString()} rows
+              </span>
+            )}
+          </div>
+          <button onClick={loadAlloc} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '2px 9px', cursor: 'pointer' }}>
+            ↻
+          </button>
+        </div>
+
+        {allocLoading ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading allocation data…</div>
+        ) : !alloc?.available ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#0f172a' }}>
+                  {[
+                    { label: 'Division', align: 'left' },
+                    { label: 'Stores', align: 'right' },
+                    { label: 'Articles', align: 'right' },
+                    { label: 'Stock Qty', align: 'right' },
+                    { label: 'Alloc Qty', align: 'right' },
+                    { label: 'In-Transit', align: 'right' },
+                    { label: 'LM Sale', align: 'right' },
+                    { label: 'MTD Sale', align: 'right' },
+                    { label: 'Proj Qty', align: 'right' },
+                  ].map(h => (
+                    <th key={h.label} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: h.align as 'left' | 'right', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>
+                      {h.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {alloc.rows.map((row, i) => (
+                  <tr key={row.division} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '7px 12px', color: '#e2e8f0', fontWeight: 600 }}>{row.division}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#7dd3fc', fontVariantNumeric: 'tabular-nums' }}>{row.stores?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#7dd3fc', fontVariantNumeric: 'tabular-nums' }}>{row.articles?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{row.stk_qty?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{row.alloc_qty?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#fb923c', fontVariantNumeric: 'tabular-nums' }}>{row.in_transit_q?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{row.lm_sale_q?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#38bdf8', fontVariantNumeric: 'tabular-nums' }}>{row.mtd_sale_q?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>{row.proj_qty?.toLocaleString() ?? '—'}</td>
+                  </tr>
+                ))}
+                {/* Totals row */}
+                {alloc.totals && (
+                  <tr style={{ background: '#0f1f2e', borderTop: '2px solid #334155' }}>
+                    <td style={{ padding: '8px 12px', color: '#e2e8f0', fontWeight: 800, fontSize: 11 }}>TOTAL</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#7dd3fc', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.stores?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#7dd3fc', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.articles?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94a3b8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.stk_qty?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#4ade80', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.alloc_qty?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#fb923c', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.in_transit_q?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#94a3b8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.lm_sale_q?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#38bdf8', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.mtd_sale_q?.toLocaleString() ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', color: '#a78bfa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{alloc.totals.proj_qty?.toLocaleString() ?? '—'}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── Row 2: Oracle data + Last run ── */}

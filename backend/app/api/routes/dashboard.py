@@ -299,3 +299,108 @@ async def clear_dashboard_cache():
     global _oracle_cache_ts
     _oracle_cache_ts = 0.0
     return APIResponse.ok(message="Oracle stats cache cleared — next summary call will re-fetch.")
+
+
+# ── Allocation summary cache ───────────────────────────────────────────────────
+_alloc_cache: dict = {}
+_alloc_cache_ts: float = 0.0
+_ALLOC_TTL = 600  # 10 minutes
+
+
+@router.get("/allocation-summary", response_model=APIResponse)
+async def allocation_summary():
+    """
+    Division-level pivot of T_ALLOCATION_FOR_ALL_DIVISION parquet.
+    Returns rows sorted by alloc_regn_q desc plus a totals row.
+    Cached for 10 minutes.
+    """
+    global _alloc_cache, _alloc_cache_ts
+    age = time.time() - _alloc_cache_ts
+    if _alloc_cache and age < _ALLOC_TTL:
+        return APIResponse.ok(data=_alloc_cache)
+
+    try:
+        from app.core.parquet_cache import has_output, read_cache
+
+        if not has_output("MISRETAIL", "T_ALLOCATION_FOR_ALL_DIVISION"):
+            return APIResponse.ok(data={"available": False, "rows": []})
+
+        df = read_cache("MISRETAIL", "T_ALLOCATION_FOR_ALL_DIVISION")
+        if df is None or df.empty:
+            return APIResponse.ok(data={"available": False, "rows": []})
+
+        def safe_col(col):
+            return col if col in df.columns else None
+
+        # Group by division
+        agg_dict = {}
+        num_cols = {
+            "total_stk_q": "stk_qty",
+            "alloc_regn_q": "alloc_qty",
+            "lm_sl_q": "lm_sale_q",
+            "mtd_sl_q": "mtd_sale_q",
+            "proj_q": "proj_qty",
+            "in_transit_q": "in_transit_q",
+        }
+        for src, _ in num_cols.items():
+            if safe_col(src):
+                agg_dict[src] = ("sum")
+
+        if "division" not in df.columns:
+            return APIResponse.ok(data={"available": False, "rows": []})
+
+        grp = df.groupby("division", as_index=False)
+
+        # Build aggregation
+        agg_spec = {}
+        if safe_col("store_code"):
+            store_grp = df.groupby("division")["store_code"].nunique().reset_index(name="stores")
+        else:
+            store_grp = None
+
+        if safe_col("barcode"):
+            art_grp = df.groupby("division")["barcode"].nunique().reset_index(name="articles")
+        else:
+            art_grp = None
+
+        num_agg = {src: "sum" for src in num_cols if safe_col(src)}
+        pivot = grp.agg(num_agg).copy()
+
+        # Rename numeric cols
+        rename_map = {src: dst for src, dst in num_cols.items() if src in pivot.columns}
+        pivot = pivot.rename(columns=rename_map)
+
+        # Merge store/article counts
+        if store_grp is not None:
+            pivot = pivot.merge(store_grp, on="division", how="left")
+        if art_grp is not None:
+            pivot = pivot.merge(art_grp, on="division", how="left")
+
+        # Sort by alloc_qty desc
+        if "alloc_qty" in pivot.columns:
+            pivot = pivot.sort_values("alloc_qty", ascending=False)
+
+        # Totals row
+        total_row = {"division": "__TOTAL__"}
+        for col in pivot.columns:
+            if col == "division":
+                continue
+            total_row[col] = int(pivot[col].sum()) if pivot[col].dtype.kind in "iuf" else None
+
+        rows = [{k: (int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else v)
+                 for k, v in r.items()}
+                for r in pivot.fillna(0).to_dict(orient="records")]
+
+        result = {
+            "available": True,
+            "total_rows": int(len(df)),
+            "rows": rows,
+            "totals": total_row,
+        }
+        _alloc_cache = result
+        _alloc_cache_ts = time.time()
+        return APIResponse.ok(data=result)
+
+    except Exception as exc:
+        logger.warning("allocation summary failed: %s", exc)
+        return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})

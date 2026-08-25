@@ -232,7 +232,7 @@ async def get_nso_store_summary(
         # Columns to aggregate — sums and firsts
         SUM_COLS   = [c for c in [
             'pbs_q', 'ttl_stk_q', 'pbs_v', 'ttl_stk_v',
-            'to_v', 'mtd_sl_v', 'lm_sl_val', 'lm_tgt_v', 'lm_sl_v',
+            'in_transit_v', 'to_v', 'mtd_sl_v', 'lm_sl_val', 'lm_tgt_v', 'lm_sl_v',
             'tgt_v', 'sl_v', 'pack_pend_v', 'stk_v',
         ] if c in df.columns]
         FIRST_COLS = [c for c in [
@@ -252,7 +252,7 @@ async def get_nso_store_summary(
         # Lakhs already: pbs_v, sl_v, tgt_v, lm_sl_v, lm_tgt_v  (small numbers ~0-100)
         # Rupees:         ttl_stk_v, stk_v, to_v, mtd_sl_v, lm_sl_val, pack_pend_v
         RS_TO_L = 100_000
-        for col in ['ttl_stk_v', 'stk_v', 'to_v', 'mtd_sl_v', 'lm_sl_val', 'pack_pend_v']:
+        for col in ['ttl_stk_v', 'stk_v', 'in_transit_v', 'to_v', 'mtd_sl_v', 'lm_sl_val', 'pack_pend_v']:
             if col in grp.columns:
                 grp[col] = (grp[col] / RS_TO_L).round(4)
 

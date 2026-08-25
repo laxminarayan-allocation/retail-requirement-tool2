@@ -80,7 +80,7 @@ interface StoreRow {
   pbs_v?: number; ttl_stk_v?: number
   to_v?: number; mtd_sl_v?: number
   lm_sl_val?: number; lm_tgt_v?: number
-  stk_v?: number; pack_pend_v?: number
+  stk_v?: number; pack_pend_v?: number; in_transit_v?: number
   opert_days?: number; sl_avg_d?: number
   ach_pct?: number; ach_lm_pct?: number; fill_rate?: number
   [key: string]: unknown
@@ -97,6 +97,7 @@ const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 
   { key: 'ttl_stk_q',      label: 'STK QTY',      type: 'qty'  },
   { key: 'pbs_v',          label: 'PBS VAL(L)',    type: 'lakh' },
   { key: 'ttl_stk_v',      label: 'TTL STK(L)',   type: 'lakh' },
+  { key: 'in_transit_v',   label: 'IN-TRANSIT(L)',type: 'lakh' },
   { key: 'to_v',           label: 'TO VAL(L)',    type: 'lakh' },
   { key: 'mtd_sl_v',       label: 'MTD SALE(L)',  type: 'lakh' },
   { key: 'ach_lm_pct',     label: 'ACH LM%',     type: 'pct'  },
@@ -226,6 +227,7 @@ function MobileStoreCard({ row, str }: { row: StoreRow; str?: number }) {
           { label: 'MTD Sale', val: fmtLakh(row.mtd_sl_v) + ' L', color: '#4ade80' },
           { label: 'PBS Val', val: fmtLakh(row.pbs_v) + ' L', color: '#facc15' },
           { label: 'Stk Val', val: fmtLakh(row.ttl_stk_v) + ' L', color: '#7dd3fc' },
+          { label: 'In-Transit', val: fmtLakh(row.in_transit_v) + ' L', color: '#fb923c' },
           { label: 'Oper Days', val: row.opert_days != null ? String(row.opert_days) + 'd' : '—', color: '#94a3b8' },
           { label: 'Ach%', val: row.ach_pct != null ? Number(row.ach_pct).toFixed(1) + '%' : '—', color: pctColor(row.ach_pct != null ? Number(row.ach_pct) : null) },
           { label: 'Fill%', val: row.fill_rate != null ? Number(row.fill_rate).toFixed(1) + '%' : '—', color: pctColor(row.fill_rate != null ? Number(row.fill_rate) : null) },

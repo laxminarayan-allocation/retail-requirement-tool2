@@ -15,22 +15,31 @@ router = APIRouter(prefix="/req", tags=["req_dashboard"])
 
 # ── View registry ──────────────────────────────────────────────────────────────
 REQ_VIEWS: list[dict] = [
-    {"group": "MC_REQ",      "label": "MC Requirement (APPS)",        "owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2"},
-    {"group": "MC_REQ",      "label": "MC Requirement (GM)",          "owner": "CK_A2166", "obj": "V_MC_REQ_GM"},
-    {"group": "ART_REQ",     "label": "Article Requirement (APPS)",   "owner": "CK_A2166", "obj": "V_ART_REQ_APPS"},
-    {"group": "ART_REQ",     "label": "Article Requirement (GM)",     "owner": "CK_A2166", "obj": "V_ART_REQ_GM"},
-    {"group": "MRP_REQ",     "label": "MRP Requirement (APPS)",       "owner": "CK_A2166", "obj": "V_MRP_REQ_APPS"},
-    {"group": "BARCODE_REQ", "label": "Barcode Requirement (GRC)",    "owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_GRC_V2"},
-    {"group": "BARCODE_REQ", "label": "Barcode Requirement (WMS)",    "owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_WMS_V2"},
-    {"group": "SIZE_REQ",    "label": "Size Requirement (APPS)",      "owner": "CK_A2166", "obj": "V_SZ_REQ_APPS"},
-    {"group": "SPARKY_REQ",  "label": "Sparky PBS Requirement",       "owner": "CK_A2166", "obj": "V_SPARKY_PBS_REQ"},
-    {"group": "TABLE_REQ",   "label": "Table Requirement (APPS)",     "owner": "CK_A2166", "obj": "V_TABLE_REQ_APPS"},
-    {"group": "OPTION_REQ",  "label": "Option Requirement (APPS)",    "owner": "CK_A2166", "obj": "V_OPTION_REQ_APPS"},
-    {"group": "LIST_REQ",    "label": "List PBS Requirement",         "owner": "CK_A2166", "obj": "V_LIST_PBS_REQ"},
+    {"group": "MC_REQ",      "label": "V_MC_REQ_APPS_2",           "desc": "MC Requirement (APPS)",       "owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2"},
+    {"group": "MC_REQ",      "label": "V_MC_REQ_GM",               "desc": "MC Requirement (GM)",         "owner": "CK_A2166", "obj": "V_MC_REQ_GM"},
+    {"group": "ART_REQ",     "label": "V_ART_REQ_APPS",            "desc": "Article Requirement (APPS)",  "owner": "CK_A2166", "obj": "V_ART_REQ_APPS"},
+    {"group": "ART_REQ",     "label": "V_ART_REQ_GM",              "desc": "Article Requirement (GM)",    "owner": "CK_A2166", "obj": "V_ART_REQ_GM"},
+    {"group": "MRP_REQ",     "label": "V_MRP_REQ_APPS",            "desc": "MRP Requirement (APPS)",      "owner": "CK_A2166", "obj": "V_MRP_REQ_APPS"},
+    {"group": "BARCODE_REQ", "label": "V_BARCODE_REQ_APPS_GRC_V2", "desc": "Barcode Requirement (GRC)",   "owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_GRC_V2"},
+    {"group": "BARCODE_REQ", "label": "V_BARCODE_REQ_APPS_WMS_V2", "desc": "Barcode Requirement (WMS)",   "owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_WMS_V2"},
+    {"group": "SIZE_REQ",    "label": "V_SZ_REQ_APPS",             "desc": "Size Requirement (APPS)",     "owner": "CK_A2166", "obj": "V_SZ_REQ_APPS"},
+    {"group": "SPARKY_REQ",  "label": "V_SPARKY_PBS_REQ",          "desc": "Sparky PBS Requirement",      "owner": "CK_A2166", "obj": "V_SPARKY_PBS_REQ"},
+    {"group": "TABLE_REQ",   "label": "V_TABLE_REQ_APPS",          "desc": "Table Requirement (APPS)",    "owner": "CK_A2166", "obj": "V_TABLE_REQ_APPS"},
+    {"group": "OPTION_REQ",  "label": "V_OPTION_REQ_APPS",         "desc": "Option Requirement (APPS)",   "owner": "CK_A2166", "obj": "V_OPTION_REQ_APPS"},
+    {"group": "LIST_REQ",    "label": "V_LIST_PBS_REQ",            "desc": "List PBS Requirement",        "owner": "CK_A2166", "obj": "V_LIST_PBS_REQ"},
 ]
 
 _PREVIEW_CACHE: dict[str, tuple[float, Any]] = {}
 _PREVIEW_TTL = 300  # 5 min
+
+
+@router.post("/refresh")
+def trigger_refresh():
+    """Manually trigger a full refresh of all 12 views (runs in background thread)."""
+    import threading
+    from app.core.req_scheduler import refresh_all
+    threading.Thread(target=refresh_all, daemon=True, name="req-manual-refresh").start()
+    return {"success": True, "message": "Refresh started in background — check /status for progress"}
 
 
 @router.get("/status")
@@ -42,6 +51,7 @@ def get_status():
         result.append({
             "group":     v["group"],
             "label":     v["label"],
+            "desc":      v["desc"],
             "owner":     v["owner"],
             "obj":       v["obj"],
             "cached":    meta is not None,

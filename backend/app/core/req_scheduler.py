@@ -11,18 +11,18 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 REQ_VIEWS = [
-    {"owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2",           "label": "MC Requirement (APPS)"},
-    {"owner": "CK_A2166", "obj": "V_MC_REQ_GM",               "label": "MC Requirement (GM)"},
-    {"owner": "CK_A2166", "obj": "V_ART_REQ_APPS",            "label": "Article Requirement (APPS)"},
-    {"owner": "CK_A2166", "obj": "V_ART_REQ_GM",              "label": "Article Requirement (GM)"},
-    {"owner": "CK_A2166", "obj": "V_MRP_REQ_APPS",            "label": "MRP Requirement (APPS)"},
-    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_GRC_V2", "label": "Barcode Requirement (GRC)"},
-    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_WMS_V2", "label": "Barcode Requirement (WMS)"},
-    {"owner": "CK_A2166", "obj": "V_SZ_REQ_APPS",             "label": "Size Requirement (APPS)"},
-    {"owner": "CK_A2166", "obj": "V_SPARKY_PBS_REQ",          "label": "Sparky PBS Requirement"},
-    {"owner": "CK_A2166", "obj": "V_TABLE_REQ_APPS",          "label": "Table Requirement (APPS)"},
-    {"owner": "CK_A2166", "obj": "V_OPTION_REQ_APPS",         "label": "Option Requirement (APPS)"},
-    {"owner": "CK_A2166", "obj": "V_LIST_PBS_REQ",            "label": "List PBS Requirement"},
+    {"owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2",           "label": "V_MC_REQ_APPS_2"},
+    {"owner": "CK_A2166", "obj": "V_MC_REQ_GM",               "label": "V_MC_REQ_GM"},
+    {"owner": "CK_A2166", "obj": "V_ART_REQ_APPS",            "label": "V_ART_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_ART_REQ_GM",              "label": "V_ART_REQ_GM"},
+    {"owner": "CK_A2166", "obj": "V_MRP_REQ_APPS",            "label": "V_MRP_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_GRC_V2", "label": "V_BARCODE_REQ_APPS_GRC_V2"},
+    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_WMS_V2", "label": "V_BARCODE_REQ_APPS_WMS_V2"},
+    {"owner": "CK_A2166", "obj": "V_SZ_REQ_APPS",             "label": "V_SZ_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_SPARKY_PBS_REQ",          "label": "V_SPARKY_PBS_REQ"},
+    {"owner": "CK_A2166", "obj": "V_TABLE_REQ_APPS",          "label": "V_TABLE_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_OPTION_REQ_APPS",         "label": "V_OPTION_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_LIST_PBS_REQ",            "label": "V_LIST_PBS_REQ"},
 ]
 
 _SYSTEM_USER = "system"
@@ -47,9 +47,10 @@ def register_views_in_master_data() -> None:
             now = datetime.utcnow().isoformat()
             for v in REQ_VIEWS:
                 db.execute(
-                    """INSERT OR IGNORE INTO custom_master_tables
+                    """INSERT INTO custom_master_tables
                        (schema_owner, object_name, label, added_by, added_at)
-                       VALUES (?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?)
+                       ON CONFLICT(schema_owner, object_name) DO UPDATE SET label=excluded.label""",
                     (v["owner"], v["obj"], v["label"], _SYSTEM_USER, now),
                 )
         logger.info("req_scheduler: registered %d views in custom_master_tables", len(REQ_VIEWS))

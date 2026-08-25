@@ -4,7 +4,7 @@
  * Live KPI aggregation from Oracle (cached), calculation history (SQLite),
  * and the most recent in-memory run result.
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import http from '@/api/http'
 
@@ -332,6 +332,16 @@ interface AllocSummary {
   totals?: AllocRow
 }
 
+interface DetailData {
+  available: boolean
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+  rows: Record<string, unknown>[]
+  columns: string[]
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
@@ -342,6 +352,15 @@ export default function Dashboard() {
   const [allocView, setAllocView] = useState<'all' | 'store' | 'mc'>('all')
   const [alloc, setAlloc] = useState<AllocSummary | null>(null)
   const [allocLoading, setAllocLoading] = useState(true)
+  // Detail view (All tab)
+  const [detail, setDetail] = useState<DetailData | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailPage, setDetailPage] = useState(0)
+  const [selectedIcodes, setSelectedIcodes] = useState<string[]>([])
+  const [icodeQuery, setIcodeQuery] = useState('')
+  const [icodeSuggestions, setIcodeSuggestions] = useState<string[]>([])
+  const [showSugg, setShowSugg] = useState(false)
+  const icodeRef = useRef<HTMLDivElement>(null)
 
   function removePinned(id: string, mode: VizMode) {
     const next = getPinned().filter(w => !(w.id === id && w.mode === mode))
@@ -378,7 +397,33 @@ export default function Dashboard() {
     }
   }, [])
 
-  useEffect(() => { load(); loadAlloc('all') }, [load, loadAlloc])
+  const loadDetail = useCallback(async (icodes: string[], page = 0) => {
+    setDetailLoading(true)
+    try {
+      const res = await http.get<{ success: boolean; data: DetailData }>('/dashboard/allocation-detail', {
+        params: { icodes: icodes.join(','), page, limit: 500 }, timeout: 60_000,
+      })
+      if (res.data.success) { setDetail(res.data.data); setDetailPage(page) }
+    } catch { /* silent */ } finally { setDetailLoading(false) }
+  }, [])
+
+  const searchIcodes = useCallback(async (q: string) => {
+    try {
+      const res = await http.get<{ success: boolean; data: { barcodes: string[] } }>('/dashboard/allocation-barcodes', { params: { q } })
+      if (res.data.success) setIcodeSuggestions(res.data.data.barcodes)
+    } catch { /* silent */ }
+  }, [])
+
+  // Outside click closes suggestion dropdown
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (icodeRef.current && !icodeRef.current.contains(e.target as Node)) setShowSugg(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  useEffect(() => { load(); loadAlloc('all'); loadDetail([], 0) }, [load, loadAlloc, loadDetail])
 
   if (loading) {
     return (
@@ -601,7 +646,7 @@ export default function Dashboard() {
         const cols = viewDefs[allocView]
 
         const TABS: { key: 'all' | 'store' | 'mc'; label: string }[] = [
-          { key: 'all',   label: 'All (Division)' },
+          { key: 'all',   label: 'All' },
           { key: 'store', label: 'Store Wise' },
           { key: 'mc',    label: 'Div · Section · Dept' },
         ]
@@ -612,6 +657,137 @@ export default function Dashboard() {
           if (typeof v === 'number') return v.toLocaleString()
           return String(v)
         }
+
+        // ── "All" tab: full detail view ──────────────────────────────────────
+        const NUM_QTY_COLS = [
+          'total_stk_q','stk_q','adj_stk_q','alloc_regn_q',
+          'pack_pend_q','adj_pack_pend_q','to_q','adj_to_q',
+          'in_transit_q','adj_in_transit_q','ppo_q',
+          'lm_sl_q','mtd_sl_q',
+          'proj_mnth_1_q','proj_mnth_1a_q','proj_mnth_2_q','proj_mnth_2a_q',
+          'proj_mnth_3_q','proj_mnth_3a_q','proj_q',
+        ]
+
+        const detailBody = allocView === 'all' ? (() => {
+          const detailCols = detail?.columns ?? []
+          return (
+            <>
+              {/* icode multi-select bar */}
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e293b', background: '#0d1525' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  {/* Selected chips */}
+                  {selectedIcodes.map(ic => (
+                    <span key={ic} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#1e3a5f', border: '1px solid #2563eb', borderRadius: 5, padding: '2px 8px', fontSize: 11, color: '#7dd3fc', fontFamily: 'monospace' }}>
+                      {ic}
+                      <button onClick={() => {
+                        const next = selectedIcodes.filter(x => x !== ic)
+                        setSelectedIcodes(next)
+                        loadDetail(next, 0)
+                      }} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}>✕</button>
+                    </span>
+                  ))}
+                  {/* Search input */}
+                  <div ref={icodeRef} style={{ position: 'relative' }}>
+                    <input
+                      value={icodeQuery}
+                      onChange={e => {
+                        setIcodeQuery(e.target.value)
+                        setShowSugg(true)
+                        searchIcodes(e.target.value)
+                      }}
+                      onFocus={() => { setShowSugg(true); searchIcodes(icodeQuery) }}
+                      placeholder="Search icode / barcode…"
+                      style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 5, color: '#e2e8f0', fontSize: 11, padding: '4px 10px', outline: 'none', width: 200 }}
+                    />
+                    {showSugg && icodeSuggestions.length > 0 && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1e293b', border: '1px solid #334155', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.6)', minWidth: 220, maxHeight: 260, overflowY: 'auto', marginTop: 2 }}>
+                        {icodeSuggestions.map(bc => {
+                          const selected = selectedIcodes.includes(bc)
+                          return (
+                            <div key={bc} onClick={() => {
+                              if (!selected) {
+                                const next = [...selectedIcodes, bc]
+                                setSelectedIcodes(next)
+                                loadDetail(next, 0)
+                              } else {
+                                const next = selectedIcodes.filter(x => x !== bc)
+                                setSelectedIcodes(next)
+                                loadDetail(next, 0)
+                              }
+                              setIcodeQuery('')
+                              setShowSugg(false)
+                            }}
+                              style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', color: selected ? '#38bdf8' : '#94a3b8', background: selected ? '#0f1f2e' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 10, color: selected ? '#38bdf8' : '#334155' }}>{selected ? '✔' : '○'}</span>
+                              {bc}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {selectedIcodes.length > 0 && (
+                    <button onClick={() => { setSelectedIcodes([]); loadDetail([], 0) }}
+                      style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>
+                      Clear all
+                    </button>
+                  )}
+                  <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>
+                    {detail ? `${detail.total.toLocaleString()} rows · page ${detail.page + 1}/${detail.total_pages}` : ''}
+                  </span>
+                </div>
+              </div>
+
+              {/* Table */}
+              {detailLoading ? (
+                <div style={{ padding: 24, textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading…</div>
+              ) : !detail?.available ? (
+                <div style={{ padding: 24, textAlign: 'center', color: '#475569', fontSize: 12 }}>Data not available.</div>
+              ) : (
+                <>
+                  <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 11, whiteSpace: 'nowrap' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                        <tr style={{ background: '#0f172a' }}>
+                          {detailCols.map(c => (
+                            <th key={c} style={{ padding: '6px 10px', fontWeight: 700, fontSize: 10, color: NUM_QTY_COLS.includes(c) ? '#7dd3fc' : '#64748b', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #334155', textAlign: NUM_QTY_COLS.includes(c) ? 'right' : 'left' }}>
+                              {c.replace(/_/g, ' ')}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detail.rows.map((row, i) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #0f172a' }}>
+                            {detailCols.map(c => {
+                              const v = row[c]
+                              const isNum = NUM_QTY_COLS.includes(c)
+                              return (
+                                <td key={c} style={{ padding: '5px 10px', textAlign: isNum ? 'right' : 'left', color: isNum ? (Number(v) < 0 ? '#f87171' : '#94a3b8') : c === 'store_name' || c === 'article_name' ? '#e2e8f0' : '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                                  {v === '' || v == null ? <span style={{ color: '#1e293b' }}>—</span> : isNum ? Number(v).toLocaleString() : String(v)}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Pagination */}
+                  {detail.total_pages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid #1e293b', background: '#0d1525' }}>
+                      <button disabled={detailPage === 0} onClick={() => { const p = detailPage - 1; loadDetail(selectedIcodes, p) }}
+                        style={{ padding: '3px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: detailPage === 0 ? 'not-allowed' : 'pointer' }}>‹ Prev</button>
+                      <span style={{ fontSize: 11, color: '#475569' }}>Page {detailPage + 1} / {detail.total_pages}</span>
+                      <button disabled={detailPage >= detail.total_pages - 1} onClick={() => { const p = detailPage + 1; loadDetail(selectedIcodes, p) }}
+                        style={{ padding: '3px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: detailPage >= detail.total_pages - 1 ? 'not-allowed' : 'pointer' }}>Next ›</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )
+        })() : null
 
         return (
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' }}>
@@ -627,10 +803,13 @@ export default function Dashboard() {
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {/* Tab switcher */}
                 <div style={{ display: 'flex', border: '1px solid #334155', borderRadius: 6, overflow: 'hidden' }}>
                   {TABS.map(t => (
-                    <button key={t.key} onClick={() => { setAllocView(t.key); loadAlloc(t.key) }}
+                    <button key={t.key} onClick={() => {
+                      setAllocView(t.key)
+                      if (t.key === 'all') loadDetail(selectedIcodes, 0)
+                      else loadAlloc(t.key)
+                    }}
                       style={{ padding: '4px 12px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
                         background: allocView === t.key ? '#0ea5e9' : '#0f172a',
                         color: allocView === t.key ? '#fff' : '#64748b' }}>
@@ -638,52 +817,54 @@ export default function Dashboard() {
                     </button>
                   ))}
                 </div>
-                <button onClick={() => loadAlloc(allocView)} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '4px 9px', cursor: 'pointer' }}>↻</button>
+                <button onClick={() => allocView === 'all' ? loadDetail(selectedIcodes, detailPage) : loadAlloc(allocView)}
+                  style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '4px 9px', cursor: 'pointer' }}>↻</button>
               </div>
             </div>
 
-            {/* Body */}
-            {allocLoading ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading…</div>
-            ) : !alloc?.available ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
-            ) : (
-              <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                    <tr style={{ background: '#0f172a' }}>
-                      {cols.map(h => (
-                        <th key={h.key} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: h.align, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>
-                          {h.label}
-                        </th>
+            {/* All tab body */}
+            {allocView === 'all' ? detailBody : (
+              allocLoading ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading…</div>
+              ) : !alloc?.available ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
+              ) : (
+                <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                      <tr style={{ background: '#0f172a' }}>
+                        {cols.map(h => (
+                          <th key={h.key} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: h.align, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>
+                            {h.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alloc.rows.map((row, i) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #1e293b' }}>
+                          {cols.map(col => (
+                            <td key={col.key} style={{ padding: '6px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: col.bold ? 700 : 400, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                              {fmtCell(row, col.key)}
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alloc.rows.map((row, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #1e293b' }}>
-                        {cols.map(col => (
-                          <td key={col.key} style={{ padding: '6px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: col.bold ? 700 : 400, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                            {fmtCell(row, col.key)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                  {/* Totals */}
-                  {alloc.totals && (
-                    <tfoot style={{ position: 'sticky', bottom: 0 }}>
-                      <tr style={{ background: '#0f1f2e', borderTop: '2px solid #334155' }}>
-                        {cols.map((col, ci) => (
-                          <td key={col.key} style={{ padding: '8px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                            {ci === 0 ? 'TOTAL' : fmtCell(alloc.totals as AllocRow, col.key)}
-                          </td>
-                        ))}
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
+                    </tbody>
+                    {alloc.totals && (
+                      <tfoot style={{ position: 'sticky', bottom: 0 }}>
+                        <tr style={{ background: '#0f1f2e', borderTop: '2px solid #334155' }}>
+                          {cols.map((col, ci) => (
+                            <td key={col.key} style={{ padding: '8px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                              {ci === 0 ? 'TOTAL' : fmtCell(alloc.totals as AllocRow, col.key)}
+                            </td>
+                          ))}
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              )
             )}
           </div>
         )

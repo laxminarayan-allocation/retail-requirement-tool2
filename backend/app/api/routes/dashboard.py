@@ -414,6 +414,90 @@ def _alloc_parquet():
     return read_cache("MISRETAIL", "T_ALLOCATION_FOR_ALL_DIVISION")
 
 
+from fastapi import Query as FQuery
+
+_DETAIL_COLS = [
+    "store_code", "store_name", "division", "section", "department",
+    "article_name", "barcode", "mrp", "last_in_rate",
+    "cat1", "cat2", "cat3", "cat4", "cat5", "cat6",
+    "desc1", "desc2", "desc3", "desc4", "desc5", "desc6",
+    "total_stk_q", "stk_q", "adj_stk_q", "alloc_regn_q",
+    "pack_pend_q", "adj_pack_pend_q", "to_q", "adj_to_q",
+    "in_transit_q", "adj_in_transit_q", "ppo_q",
+    "lm_sl_q", "mtd_sl_q",
+    "proj_mnth_1_q", "proj_mnth_1a_q", "proj_mnth_2_q", "proj_mnth_2a_q",
+    "proj_mnth_3_q", "proj_mnth_3a_q", "proj_q",
+]
+
+
+@router.get("/allocation-barcodes", response_model=APIResponse)
+async def allocation_barcodes(q: str = FQuery("", description="Partial barcode/icode search")):
+    """Return up to 60 barcodes matching the query string."""
+    try:
+        df = _alloc_parquet()
+        if df is None or "barcode" not in df.columns:
+            return APIResponse.ok(data={"barcodes": []})
+        barcodes = df["barcode"].dropna().astype(str).unique()
+        if q:
+            q_lower = q.lower()
+            barcodes = [b for b in barcodes if q_lower in b.lower()]
+        else:
+            barcodes = list(barcodes)
+        barcodes = sorted(barcodes)[:60]
+        return APIResponse.ok(data={"barcodes": barcodes})
+    except Exception as exc:
+        logger.warning("allocation-barcodes failed: %s", exc)
+        return APIResponse.ok(data={"barcodes": []})
+
+
+@router.get("/allocation-detail", response_model=APIResponse)
+async def allocation_detail(
+    icodes: str = FQuery("", description="Comma-separated barcodes; empty = all"),
+    page: int = FQuery(0, ge=0),
+    limit: int = FQuery(500, ge=1, le=2000),
+):
+    """Return paginated rows from T_ALLOCATION_FOR_ALL_DIVISION with all columns."""
+    try:
+        df = _alloc_parquet()
+        if df is None or df.empty:
+            return APIResponse.ok(data={"available": False, "rows": [], "total": 0, "page": 0})
+
+        # Filter by selected barcodes
+        if icodes.strip():
+            selected = [b.strip() for b in icodes.split(",") if b.strip()]
+            if "barcode" in df.columns:
+                df = df[df["barcode"].astype(str).isin(selected)]
+
+        total = int(len(df))
+        # Select only available columns
+        avail = [c for c in _DETAIL_COLS if c in df.columns]
+        page_df = df[avail].iloc[page * limit: (page + 1) * limit]
+
+        # Serialize: round floats to int where appropriate
+        rows = []
+        for rec in page_df.fillna("").to_dict(orient="records"):
+            clean = {}
+            for k, v in rec.items():
+                if isinstance(v, float):
+                    clean[k] = int(v) if v == int(v) else round(v, 2)
+                else:
+                    clean[k] = v
+            rows.append(clean)
+
+        return APIResponse.ok(data={
+            "available": True,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": max(1, -(-total // limit)),
+            "rows": rows,
+            "columns": avail,
+        })
+    except Exception as exc:
+        logger.warning("allocation-detail failed: %s", exc)
+        return APIResponse.ok(data={"available": False, "rows": [], "total": 0, "error": str(exc)})
+
+
 def _pivot_and_serialize(df, group_cols: list[str]) -> dict:
     """Generic pivot helper — groups df by group_cols and sums numeric cols."""
     NUM_COLS = ["total_stk_q", "alloc_regn_q", "lm_sl_q", "mtd_sl_q", "proj_q", "in_transit_q"]

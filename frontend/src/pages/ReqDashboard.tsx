@@ -582,7 +582,7 @@ export default function ReqDashboard() {
           {sizeError && sizeData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
 
           {sizeData && !sizeLoading && (() => {
-            type SzRow = { department: string; display_type: string; article_name: string; cat4: string; lm_sl_q: number; mtd_sl_q: number; ttl_stk_q: number; adj_stk_q: number; sz_pbs: number; sz_req: number; grc_q: number; msa_q: number; alloc_q: number; wms_q: number; rest_dc_q: number; ppo_q: number }
+            type SzRow = { department: string; display_type: string; article_name: string; cat4: string; store_cnt: number; lm_sl_q: number; mtd_sl_q: number; ttl_stk_q: number; adj_stk_q: number; sz_pbs: number; sz_req: number; grc_q: number; msa_q: number; alloc_q: number; wms_q: number; rest_dc_q: number; ppo_q: number }
             const rows = sizeData.rows as unknown as SzRow[]
             const depts = Array.from(new Set(rows.map(r => r.department)))
             return (
@@ -591,7 +591,7 @@ export default function ReqDashboard() {
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
                       <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
-                      <th colSpan={4} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={2} style={{ padding: '4px 10px', color: '#ec4899', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Size Req</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
                       <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
@@ -599,7 +599,7 @@ export default function ReqDashboard() {
                     <tr style={{ background: '#131929' }}>
                       {[
                         ['Department','#cbd5e1'],['Display Type','#94a3b8'],['Article Name','#cbd5e1'],['Size','#cbd5e1'],
-                        ['LM Sale','#64748b'],['MTD Sale','#64748b'],['Store Stk','#64748b'],['Adj Stk','#64748b'],
+                        ['Stores','#38bdf8'],['LM Sale','#64748b'],['MTD Sale','#64748b'],['Store Stk','#64748b'],['Adj Stk','#64748b'],
                         ['SZ PBS','#ec4899'],['SZ Req','#ec4899'],
                         ['GRC','#10b981'],['MSA','#10b981'],['Alloc','#10b981'],['WMS','#10b981'],['Rest DC','#10b981'],
                         ['PPO Qty','#8b5cf6'],
@@ -609,7 +609,7 @@ export default function ReqDashboard() {
                           textTransform: 'uppercase', letterSpacing: 0.4,
                           borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap',
                           textAlign: i > 3 ? 'right' : 'left',
-                          borderRight: [3, 7, 9, 14].includes(i) ? '1px solid #1e293b' : undefined,
+                          borderRight: [3, 8, 10, 15].includes(i) ? '1px solid #1e293b' : undefined,
                           position: 'sticky', top: 0, background: '#131929',
                         }}>{lbl}</th>
                       ))}
@@ -628,7 +628,7 @@ export default function ReqDashboard() {
                       }), { lm:0,mtd:0,stk:0,adj:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
                       return [
                         <tr key={`hdr-${dept}`} style={{ background: '#0f172a' }}>
-                          <td colSpan={16} style={{ padding: '6px 10px', color: '#ec4899', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📐 {dept}</td>
+                          <td colSpan={17} style={{ padding: '6px 10px', color: '#ec4899', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📐 {dept}</td>
                         </tr>,
                         ...deptRows.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1525' }}>
@@ -636,6 +636,7 @@ export default function ReqDashboard() {
                             <td style={{ padding:'5px 10px', color:'#64748b', fontSize:11, borderBottom:'1px solid #131929', whiteSpace:'nowrap' }}>{r.display_type ?? '—'}</td>
                             <td style={{ padding:'5px 10px', color:'#e2e8f0', borderBottom:'1px solid #131929', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.article_name}</td>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', whiteSpace:'nowrap' }}>{r.cat4 ?? '—'}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:600, borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.store_cnt)}</td>
                             <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
                             <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
                             <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
@@ -652,6 +653,7 @@ export default function ReqDashboard() {
                         )),
                         <tr key={`tot-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
                           <td colSpan={4} style={{ padding:'5px 10px', color:'#4ade80', fontWeight:700, fontSize:11, borderBottom:'1px solid #1e293b', borderRight:'1px solid #0f172a' }}>{dept} Total</td>
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(deptRows.reduce((s,r)=>s+n(r.store_cnt),0))}</td>
                           {[tot.lm,tot.mtd,tot.stk,tot.adj].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===3?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
                           {[tot.pbs,tot.req].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#f472b6', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===1?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
                           {[tot.grc,tot.msa,tot.alloc,tot.wms,tot.rest].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===4?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}

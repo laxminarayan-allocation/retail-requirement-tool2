@@ -11,6 +11,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 REQ_VIEWS = [
+    {"owner": "CK_A2166", "obj": "V_WH_STOCK"},
     {"owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2"},
     {"owner": "CK_A2166", "obj": "V_MC_REQ_GM"},
     {"owner": "CK_A2166", "obj": "V_ART_REQ_APPS"},
@@ -52,7 +53,7 @@ def register_views_in_master_data() -> None:
                        VALUES (?, ?, ?, ?, ?)""",
                     (v["owner"], v["obj"], v["obj"], _SYSTEM_USER, now),
                 )
-        logger.info("req_scheduler: registered %d views in custom_master_tables", len(REQ_VIEWS))
+        logger.info("req_scheduler: registered/verified %d views in custom_master_tables", len(REQ_VIEWS))
     except Exception as exc:
         logger.warning("req_scheduler: master-data registration failed: %s", exc)
 

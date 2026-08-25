@@ -166,8 +166,8 @@ export default function UserManual() {
           <Section id="roles" title="Roles & Access">
             <div style={S.roleRow}>
               {[
-                { role: 'Viewer', color: '#94a3b8', perms: ['Dashboard', 'Master Data', 'Results', 'History'] },
-                { role: 'Planner', color: '#34d399', perms: ['+ Database Explorer', '+ Calc Factors', '+ Calculation', '+ Settings'] },
+                { role: 'Viewer', color: '#94a3b8', perms: ['Dashboard', 'Results', 'History'] },
+                { role: 'Planner', color: '#34d399', perms: ['+ Master Data', '+ Database Explorer', '+ Calc Factors', '+ Calculation', '+ Settings'] },
                 { role: 'Admin', color: '#818cf8', perms: ['+ Admin Panel', '+ User management', '+ All planner pages'] },
               ].map(r => (
                 <div key={r.role} style={S.roleCard(r.color)}>

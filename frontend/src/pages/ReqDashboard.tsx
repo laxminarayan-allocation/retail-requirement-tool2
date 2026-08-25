@@ -1,5 +1,30 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import http from '@/api/http'
+
+interface SparkRow {
+  department: string
+  article_name: string
+  cat4: string | null
+  lm_sl_q: number
+  mtd_sl_q: number
+  ttl_stk_q: number
+  max_slq: number
+  sparky_pbs: number
+  sparky_req: number
+  to_q: number
+  grc_q: number
+  msa_q: number
+  alloc_q: number
+  wms_q: number
+  rest_dc_q: number
+  ppo_q: number
+}
+
+interface SparkData {
+  columns: string[]
+  rows: SparkRow[]
+  total_rows: number
+}
 
 interface ViewStatus {
   group: string
@@ -18,11 +43,13 @@ interface PreviewData {
 }
 
 const GROUP_ORDER = [
+  'WH_STOCK',
   'MC_REQ', 'ART_REQ', 'MRP_REQ', 'BARCODE_REQ',
   'SIZE_REQ', 'SPARKY_REQ', 'TABLE_REQ', 'OPTION_REQ', 'LIST_REQ',
 ]
 
 const GROUP_META: Record<string, { label: string; icon: string; color: string }> = {
+  WH_STOCK:    { label: 'WH Stock',            icon: '🏭', color: '#22d3ee' },
   MC_REQ:      { label: 'MC Requirement',      icon: '🧩', color: '#6366f1' },
   ART_REQ:     { label: 'Article Requirement', icon: '📦', color: '#0ea5e9' },
   MRP_REQ:     { label: 'MRP Requirement',     icon: '💰', color: '#f59e0b' },
@@ -46,13 +73,24 @@ const fmtTs = (ts: string | null) => {
   } catch { return ts }
 }
 
+const n = (v: number | null) => v == null ? 0 : v
+const fmtN = (v: number | null) => v == null ? '—' : v === 0 ? '-' : v.toLocaleString('en-IN')
+
 export default function ReqDashboard() {
+  const [activeTab, setActiveTab] = useState<'views' | 'sparky'>('views')
   const [views, setViews] = useState<ViewStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<{ owner: string; obj: string; group: string } | null>(null)
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+
+  // Sparky pivot state
+  const [sparkData, setSparkData] = useState<SparkData | null>(null)
+  const [sparkLoading, setSparkLoading] = useState(false)
+  const [sparkError, setSparkError] = useState<string | null>(null)
+  const [sparkFilter, setSparkFilter] = useState({ dept: '', article: '', cat4: '' })
+  const sparkFetched = useRef(false)
 
   const loadStatus = useCallback(async () => {
     setLoading(true)
@@ -62,6 +100,32 @@ export default function ReqDashboard() {
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
+
+  const loadSparky = useCallback(async () => {
+    setSparkLoading(true)
+    setSparkError(null)
+    try {
+      const r = await http.get('/req/sparky_pivot', {
+        params: {
+          department: sparkFilter.dept || undefined,
+          article: sparkFilter.article || undefined,
+          cat4: sparkFilter.cat4 || undefined,
+        }
+      })
+      setSparkData(r.data.data)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Sparky data'
+      setSparkError(msg)
+    }
+    setSparkLoading(false)
+  }, [sparkFilter])
+
+  useEffect(() => {
+    if (activeTab === 'sparky' && !sparkFetched.current) {
+      sparkFetched.current = true
+      loadSparky()
+    }
+  }, [activeTab, loadSparky])
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
@@ -94,11 +158,24 @@ export default function ReqDashboard() {
 
   const meta = modal ? GROUP_META[modal.group] : null
 
+  const TAB_BTN = (tab: 'views' | 'sparky', label: string, icon: string) => (
+    <button onClick={() => setActiveTab(tab)} style={{
+      fontSize: 13, padding: '6px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 600,
+      background: activeTab === tab ? '#6366f1' : '#1e293b',
+      border: activeTab === tab ? '1px solid #6366f1' : '1px solid #334155',
+      color: activeTab === tab ? '#fff' : '#94a3b8',
+    }}>{icon} {label}</button>
+  )
+
+  // Sparky grouped rows for rendering subtotals
+  const sparkRows = sparkData?.rows ?? []
+  const sparkDepts = Array.from(new Set(sparkRows.map(r => r.department)))
+
   return (
     <div style={{ padding: '20px 24px', background: '#0a0f1e', minHeight: '100vh', color: '#e2e8f0' }}>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', letterSpacing: -0.5 }}>
             Requirements Dashboard
@@ -107,14 +184,32 @@ export default function ReqDashboard() {
             Oracle views — auto-refreshed daily at 06:00 AM
           </div>
         </div>
-        <button onClick={loadStatus} style={{
-          fontSize: 12, padding: '6px 14px', borderRadius: 8,
-          background: '#1e293b', border: '1px solid #334155',
-          color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          ↻ Reload status
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {activeTab === 'views' && (
+            <button onClick={loadStatus} style={{
+              fontSize: 12, padding: '6px 14px', borderRadius: 8,
+              background: '#1e293b', border: '1px solid #334155',
+              color: '#94a3b8', cursor: 'pointer',
+            }}>↻ Reload</button>
+          )}
+          {activeTab === 'sparky' && (
+            <button onClick={() => { sparkFetched.current = false; loadSparky() }} style={{
+              fontSize: 12, padding: '6px 14px', borderRadius: 8,
+              background: '#1e293b', border: '1px solid #334155',
+              color: '#94a3b8', cursor: 'pointer',
+            }}>↻ Refresh</button>
+          )}
+        </div>
       </div>
+
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {TAB_BTN('views', 'Req Views', '📋')}
+        {TAB_BTN('sparky', 'Sparky Req', '⚡')}
+      </div>
+
+      {/* ── Views tab ── */}
+      {activeTab === 'views' && <>
 
       {/* ── Summary strip ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
@@ -231,6 +326,7 @@ export default function ReqDashboard() {
 
       {/* ── Modal ── */}
       {modal && (
+
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
@@ -305,6 +401,116 @@ export default function ReqDashboard() {
               )}
             </div>
           </div>
+        </div>
+      )}
+      </> }
+
+      {/* ── Sparky Req Tab ── */}
+      {activeTab === 'sparky' && (
+        <div>
+          {/* filters */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input placeholder="Filter Department…" value={sparkFilter.dept}
+              onChange={e => setSparkFilter(f => ({ ...f, dept: e.target.value }))}
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+            <input placeholder="Filter Article…" value={sparkFilter.article}
+              onChange={e => setSparkFilter(f => ({ ...f, article: e.target.value }))}
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+            <input placeholder="Filter CAT4…" value={sparkFilter.cat4}
+              onChange={e => setSparkFilter(f => ({ ...f, cat4: e.target.value }))}
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+            <button onClick={() => { sparkFetched.current = false; loadSparky() }} style={{
+              height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer',
+              background: '#f97316', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,
+            }}>Search</button>
+            {sparkData && <span style={{ fontSize: 12, color: '#475569' }}>{sparkData.total_rows.toLocaleString()} rows</span>}
+          </div>
+
+          {sparkLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Sparky data from Oracle…</div>}
+          {sparkError && <div style={{ color: '#f87171', padding: 20 }}>{sparkError}</div>}
+
+          {sparkData && !sparkLoading && (
+            <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#0a0f1e' }}>
+                    {/* section headers */}
+                    <th colSpan={3} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                    <th colSpan={4} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                    <th colSpan={2} style={{ padding: '4px 10px', color: '#f97316', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Sparky</th>
+                    <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
+                    <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
+                  </tr>
+                  <tr style={{ background: '#131929' }}>
+                    {[
+                      ['Department', '#cbd5e1'], ['Article Name', '#cbd5e1'], ['CAT4', '#cbd5e1'],
+                      ['LM Sale', '#64748b'], ['MTD Sale', '#64748b'], ['Store Stk', '#64748b'], ['TO Qty', '#64748b'],
+                      ['PBS', '#f97316'], ['Sparky Req', '#f97316'],
+                      ['GRC', '#10b981'], ['MSA', '#10b981'], ['Alloc', '#10b981'], ['WMS', '#10b981'], ['Rest DC', '#10b981'],
+                      ['PPO Qty', '#8b5cf6'],
+                    ].map(([lbl, col], i) => (
+                      <th key={i} style={{
+                        padding: '6px 10px', color: col as string, fontWeight: 600,
+                        fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4,
+                        borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap',
+                        textAlign: i > 2 ? 'right' : 'left',
+                        borderRight: [2, 6, 8, 13].includes(i) ? '1px solid #1e293b' : undefined,
+                        position: 'sticky', top: 0, background: '#131929',
+                      }}>{lbl}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sparkDepts.map(dept => {
+                    const deptRows = sparkRows.filter(r => r.department === dept)
+                    const tot = deptRows.reduce((a, r) => ({
+                      lm: a.lm + n(r.lm_sl_q), mtd: a.mtd + n(r.mtd_sl_q), stk: a.stk + n(r.ttl_stk_q),
+                      to: a.to + n(r.to_q), pbs: a.pbs + n(r.sparky_pbs), req: a.req + n(r.sparky_req),
+                      grc: a.grc + n(r.grc_q), msa: a.msa + n(r.msa_q), alloc: a.alloc + n(r.alloc_q),
+                      wms: a.wms + n(r.wms_q), rest: a.rest + n(r.rest_dc_q), ppo: a.ppo + n(r.ppo_q),
+                    }), { lm: 0, mtd: 0, stk: 0, to: 0, pbs: 0, req: 0, grc: 0, msa: 0, alloc: 0, wms: 0, rest: 0, ppo: 0 })
+
+                    return [
+                      // dept header row
+                      <tr key={`hdr-${dept}`} style={{ background: '#0f172a' }}>
+                        <td colSpan={15} style={{ padding: '6px 10px', color: '#f97316', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>
+                          ⚡ {dept}
+                        </td>
+                      </tr>,
+                      // data rows
+                      ...deptRows.map((r, i) => (
+                        <tr key={`${dept}-${i}`} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1525' }}>
+                          <td style={{ padding: '5px 10px', color: '#94a3b8', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
+                          <td style={{ padding: '5px 10px', color: '#e2e8f0', borderBottom: '1px solid #131929', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.article_name}</td>
+                          <td style={{ padding: '5px 10px', color: '#94a3b8', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', whiteSpace: 'nowrap' }}>{r.cat4 ?? '—'}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.to_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#f97316', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.sparky_pbs)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: r.sparky_req > 0 ? '#fb923c' : '#334155', fontWeight: r.sparky_req > 0 ? 700 : 400, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.sparky_req)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#10b981', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.grc_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#10b981', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.msa_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#10b981', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.alloc_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#10b981', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.wms_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#10b981', borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.rest_dc_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#8b5cf6', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.ppo_q)}</td>
+                        </tr>
+                      )),
+                      // dept total row
+                      <tr key={`tot-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
+                        <td colSpan={3} style={{ padding: '5px 10px', color: '#4ade80', fontWeight: 700, fontSize: 11, borderBottom: '1px solid #1e293b', borderRight: '1px solid #0f172a' }}>{dept} Total</td>
+                        {[tot.lm, tot.mtd, tot.stk, tot.to].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: '#4ade80', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 3 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
+                        {[tot.pbs, tot.req].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: '#fb923c', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 1 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
+                        {[tot.grc, tot.msa, tot.alloc, tot.wms, tot.rest].map((v, i) => <td key={i} style={{ padding: '5px 10px', textAlign: 'right', color: '#4ade80', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums', ...(i === 4 ? { borderRight: '1px solid #0f172a' } : {}) }}>{fmtN(v)}</td>)}
+                        <td style={{ padding: '5px 10px', textAlign: 'right', color: '#a78bfa', fontWeight: 700, borderBottom: '1px solid #1e293b', fontVariantNumeric: 'tabular-nums' }}>{fmtN(tot.ppo)}</td>
+                      </tr>
+                    ]
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

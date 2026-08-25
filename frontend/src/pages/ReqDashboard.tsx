@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import axios from 'axios'
+import http from '@/api/http'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -109,12 +109,10 @@ export default function ReqDashboard() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
-  const tok = () => localStorage.getItem('token')
-
   const loadStatus = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await axios.get('/api/req/status', { headers: { Authorization: `Bearer ${tok()}` } })
+      const r = await http.get('/req/status')
       setViews(r.data.data ?? [])
     } catch { /* ignore */ }
     setLoading(false)
@@ -128,10 +126,7 @@ export default function ReqDashboard() {
     setPreviewError(null)
     setPreviewLoading(true)
     try {
-      const r = await axios.get('/api/req/preview', {
-        params: { owner, obj, limit: 200 },
-        headers: { Authorization: `Bearer ${tok()}` },
-      })
+      const r = await http.get('/req/preview', { params: { owner, obj, limit: 200 } })
       setPreview(r.data.data)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Preview failed'

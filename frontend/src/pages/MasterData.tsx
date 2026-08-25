@@ -1285,7 +1285,7 @@ export default function MasterData() {
         return (
           <div onClick={e => { if (e.target === e.currentTarget) setActiveWin(null) }}
             style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(2,8,20,0.72)' }}>
-            <div style={{ width: 'min(93vw, 1340px)', height: 'min(86vh, 880px)', background: '#131e30', border: `1.5px solid ${accent}55`, borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 32px 64px rgba(0,0,0,.85)' }}>
+            <div style={{ width: 'calc(100vw - 32px)', height: 'calc(100vh - 32px)', background: '#131e30', border: `1.5px solid ${accent}55`, borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 32px 64px rgba(0,0,0,.85)' }}>
 
               {/* header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0f1827', flexWrap: 'wrap' }}>

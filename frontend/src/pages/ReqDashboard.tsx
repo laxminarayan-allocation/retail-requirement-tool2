@@ -5,8 +5,6 @@ import axios from 'axios'
 
 interface ViewStatus {
   group: string
-  label: string
-  desc: string
   owner: string
   obj: string
   cached: boolean
@@ -106,7 +104,7 @@ export default function ReqDashboard() {
   const [views, setViews] = useState<ViewStatus[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [modal, setModal] = useState<{ owner: string; obj: string; label: string; desc: string } | null>(null)
+  const [modal, setModal] = useState<{ owner: string; obj: string } | null>(null)
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -124,8 +122,8 @@ export default function ReqDashboard() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
-  const openModal = async (owner: string, obj: string, label: string, desc: string) => {
-    setModal({ owner, obj, label, desc })
+  const openModal = async (owner: string, obj: string) => {
+    setModal({ owner, obj })
     setPreview(null)
     setPreviewError(null)
     setPreviewLoading(true)
@@ -192,14 +190,11 @@ export default function ReqDashboard() {
             </div>
             {rows.map(v => (
               <div key={v.obj} style={S.viewRow}>
-                <span style={S.viewLabel}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#cbd5e1' }}>{v.label}</span>
-                  {v.desc && <span style={{ display: 'block', fontSize: 11, color: '#475569', marginTop: 1 }}>{v.desc}</span>}
-                </span>
+                <span style={{ ...S.viewLabel, fontFamily: 'monospace' }}>{v.obj}</span>
                 <span style={S.rows}>{fmtRows(v.rows)} rows</span>
                 <span style={S.ts}>{fmtTs(v.fetched_at)}</span>
                 {v.cached
-                  ? <button style={S.btnView} onClick={() => openModal(v.owner, v.obj, v.label, v.desc)}>View</button>
+                  ? <button style={S.btnView} onClick={() => openModal(v.owner, v.obj)}>View</button>
                   : <span style={{ fontSize: 12, color: '#475569', minWidth: 44 }}>—</span>
                 }
               </div>
@@ -213,10 +208,7 @@ export default function ReqDashboard() {
         <div style={S.overlay} onClick={closeModal}>
           <div style={S.modal} onClick={e => e.stopPropagation()}>
             <div style={S.modalHeader}>
-              <span style={S.modalTitle}>
-                <span style={{ fontFamily: 'monospace' }}>{modal.label}</span>
-                {modal.desc && <span style={{ fontWeight: 400, fontSize: 12, color: '#64748b', marginLeft: 8 }}>{modal.desc}</span>}
-              </span>
+              <span style={{ ...S.modalTitle, fontFamily: 'monospace' }}>{modal.obj}</span>
               {preview && <span style={{ fontSize: 12, color: '#64748b' }}>{preview.total_rows.toLocaleString()} rows (showing first 200)</span>}
               <button style={S.closeBtn} onClick={closeModal}>✕ Close</button>
             </div>

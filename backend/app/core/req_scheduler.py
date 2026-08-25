@@ -11,18 +11,18 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 REQ_VIEWS = [
-    {"owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2",           "label": "V_MC_REQ_APPS_2"},
-    {"owner": "CK_A2166", "obj": "V_MC_REQ_GM",               "label": "V_MC_REQ_GM"},
-    {"owner": "CK_A2166", "obj": "V_ART_REQ_APPS",            "label": "V_ART_REQ_APPS"},
-    {"owner": "CK_A2166", "obj": "V_ART_REQ_GM",              "label": "V_ART_REQ_GM"},
-    {"owner": "CK_A2166", "obj": "V_MRP_REQ_APPS",            "label": "V_MRP_REQ_APPS"},
-    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_GRC_V2", "label": "V_BARCODE_REQ_APPS_GRC_V2"},
-    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_WMS_V2", "label": "V_BARCODE_REQ_APPS_WMS_V2"},
-    {"owner": "CK_A2166", "obj": "V_SZ_REQ_APPS",             "label": "V_SZ_REQ_APPS"},
-    {"owner": "CK_A2166", "obj": "V_SPARKY_PBS_REQ",          "label": "V_SPARKY_PBS_REQ"},
-    {"owner": "CK_A2166", "obj": "V_TABLE_REQ_APPS",          "label": "V_TABLE_REQ_APPS"},
-    {"owner": "CK_A2166", "obj": "V_OPTION_REQ_APPS",         "label": "V_OPTION_REQ_APPS"},
-    {"owner": "CK_A2166", "obj": "V_LIST_PBS_REQ",            "label": "V_LIST_PBS_REQ"},
+    {"owner": "CK_A2166", "obj": "V_MC_REQ_APPS_2"},
+    {"owner": "CK_A2166", "obj": "V_MC_REQ_GM"},
+    {"owner": "CK_A2166", "obj": "V_ART_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_ART_REQ_GM"},
+    {"owner": "CK_A2166", "obj": "V_MRP_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_GRC_V2"},
+    {"owner": "CK_A2166", "obj": "V_BARCODE_REQ_APPS_WMS_V2"},
+    {"owner": "CK_A2166", "obj": "V_SZ_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_SPARKY_PBS_REQ"},
+    {"owner": "CK_A2166", "obj": "V_TABLE_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_OPTION_REQ_APPS"},
+    {"owner": "CK_A2166", "obj": "V_LIST_PBS_REQ"},
 ]
 
 _SYSTEM_USER = "system"
@@ -47,18 +47,17 @@ def register_views_in_master_data() -> None:
             now = datetime.utcnow().isoformat()
             for v in REQ_VIEWS:
                 db.execute(
-                    """INSERT INTO custom_master_tables
+                    """INSERT OR IGNORE INTO custom_master_tables
                        (schema_owner, object_name, label, added_by, added_at)
-                       VALUES (?, ?, ?, ?, ?)
-                       ON CONFLICT(schema_owner, object_name) DO UPDATE SET label=excluded.label""",
-                    (v["owner"], v["obj"], v["label"], _SYSTEM_USER, now),
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (v["owner"], v["obj"], v["obj"], _SYSTEM_USER, now),
                 )
         logger.info("req_scheduler: registered %d views in custom_master_tables", len(REQ_VIEWS))
     except Exception as exc:
         logger.warning("req_scheduler: master-data registration failed: %s", exc)
 
 
-def _fetch_one(owner: str, obj: str, label: str) -> None:
+def _fetch_one(owner: str, obj: str) -> None:
     try:
         from app.db.oracle import get_pool
         from app.core.parquet_cache import write_cache
@@ -81,7 +80,7 @@ def _fetch_one(owner: str, obj: str, label: str) -> None:
 def refresh_all() -> None:
     logger.info("req_scheduler: starting daily refresh of %d views", len(REQ_VIEWS))
     for v in REQ_VIEWS:
-        _fetch_one(v["owner"], v["obj"], v["label"])
+        _fetch_one(v["owner"], v["obj"])
     logger.info("req_scheduler: daily refresh complete")
 
 

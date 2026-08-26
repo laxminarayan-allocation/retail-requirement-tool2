@@ -207,9 +207,21 @@ def get_sparky_pivot(
     return {"success": True, "data": payload}
 
 
+# ── Store filter helper ────────────────────────────────────────────────────────
+
+def _store_where(store_names: list) -> tuple:
+    """Return (where_clause_str, bind_params_dict) for STORE_NAME IN filter."""
+    if not store_names:
+        return ("", {})
+    placeholders = ", ".join(f":sn{i}" for i in range(len(store_names)))
+    params = {f"sn{i}": sn for i, sn in enumerate(store_names)}
+    return (f"WHERE STORE_NAME IN ({placeholders})", params)
+
+
 # ── Size Req pivot ─────────────────────────────────────────────────────────────
 
-_SIZE_SQL = """
+def _build_size_sql(store_where: str) -> str:
+    return f"""
 WITH T_SZ_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4,
         COUNT(DISTINCT STORE_NAME) STORE_CNT,
@@ -217,6 +229,7 @@ WITH T_SZ_BASE AS (
         SUM(STK) TTL_STK_Q, SUM(ADJ_STK) ADJ_STK_Q,
         SUM(SZ_PBS) SZ_PBS, SUM(SZ_REQ) SZ_REQ
     FROM CK_A2166.V_SZ_REQ_APPS
+    {store_where}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4
 ),
 T_WH_STK AS (
@@ -263,16 +276,32 @@ _SIZE_PARQUET_OBJ   = "V_SIZE_PIVOT"
 
 @router.get("/size_pivot")
 def get_size_pivot(
-    department: Optional[str] = Query(None),
-    article:    Optional[str] = Query(None),
-    cat4:       Optional[str] = Query(None),
-    division:   List[str]     = Query(default=[]),
-    attribute1: List[str]     = Query(default=[]),
+    department:  Optional[str] = Query(None),
+    article:     Optional[str] = Query(None),
+    cat4:        Optional[str] = Query(None),
+    division:    List[str]     = Query(default=[]),
+    attribute1:  List[str]     = Query(default=[]),
+    store_names: List[str]     = Query(default=[]),
 ):
     """Serve Size Req pivot from parquet cache (falls back to live Oracle if not cached)."""
     import pandas as pd
 
-    if has_output(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ):
+    sw, sp = _store_where(store_names)
+    if store_names:
+        # Live query with store filter — bypass parquet
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_size_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("Size pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ):
         df = read_cache(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ)
     else:
         try:
@@ -281,7 +310,7 @@ def get_size_pivot(
             pool = get_pool()
             with pool.acquire() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(_SIZE_SQL)
+                    cur.execute(_build_size_sql(""))
                     cols = [c[0].lower() for c in cur.description]
                     rows = cur.fetchall()
             df = pd.DataFrame(rows, columns=cols)
@@ -291,7 +320,7 @@ def get_size_pivot(
             raise HTTPException(status_code=500, detail=str(exc))
 
     if df is None or df.empty:
-        raise HTTPException(status_code=404, detail="No Size data cached yet")
+        raise HTTPException(status_code=404, detail="No Size data found")
 
     if department:
         df = df[df["department"].str.contains(department, case=False, na=False)]
@@ -313,7 +342,8 @@ def get_size_pivot(
 
 # ── MRP Req pivot ──────────────────────────────────────────────────────────────
 
-_MRP_SQL = """
+def _build_mrp_sql(store_where: str) -> str:
+  return f"""
 WITH T_MRP_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME,
         COUNT(DISTINCT STORE_NAME) STORE_CNT,
@@ -321,6 +351,7 @@ WITH T_MRP_BASE AS (
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
     FROM CK_A2166.V_MRP_REQ_APPS
+    {store_where}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME
 ),
 T_WH_STK AS (
@@ -369,9 +400,24 @@ def get_mrp_pivot(
     article:      Optional[str] = Query(None),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
+    store_names:  List[str]     = Query(default=[]),
 ):
     import pandas as pd
-    if has_output(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ):
+    sw, sp = _store_where(store_names)
+    if store_names:
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_mrp_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("MRP pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ):
         df = read_cache(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ)
     else:
         try:
@@ -380,7 +426,7 @@ def get_mrp_pivot(
             pool = get_pool()
             with pool.acquire() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(_MRP_SQL)
+                    cur.execute(_build_mrp_sql(""))
                     cols = [c[0].lower() for c in cur.description]
                     rows = cur.fetchall()
             df = pd.DataFrame(rows, columns=cols)
@@ -389,7 +435,7 @@ def get_mrp_pivot(
             logger.exception("MRP pivot live fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
-        raise HTTPException(status_code=404, detail="No MRP data cached yet")
+        raise HTTPException(status_code=404, detail="No MRP data found")
     if department:
         df = df[df["department"].str.contains(department, case=False, na=False)]
     if display_type:
@@ -409,7 +455,8 @@ def get_mrp_pivot(
 
 # ── Article Req pivot ──────────────────────────────────────────────────────────
 
-_ART_SQL = """
+def _build_art_sql(store_where: str) -> str:
+  return f"""
 WITH T_ART_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME,
         COUNT(DISTINCT STORE_NAME) STORE_CNT,
@@ -417,6 +464,7 @@ WITH T_ART_BASE AS (
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
     FROM CK_A2166.V_ART_REQ_APPS
+    {store_where}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME
 ),
 T_WH_STK AS (
@@ -465,9 +513,24 @@ def get_art_pivot(
     article:      Optional[str] = Query(None),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
+    store_names:  List[str]     = Query(default=[]),
 ):
     import pandas as pd
-    if has_output(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ):
+    sw, sp = _store_where(store_names)
+    if store_names:
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_art_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("Art pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ):
         df = read_cache(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ)
     else:
         try:
@@ -476,7 +539,7 @@ def get_art_pivot(
             pool = get_pool()
             with pool.acquire() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(_ART_SQL)
+                    cur.execute(_build_art_sql(""))
                     cols = [c[0].lower() for c in cur.description]
                     rows = cur.fetchall()
             df = pd.DataFrame(rows, columns=cols)
@@ -485,7 +548,7 @@ def get_art_pivot(
             logger.exception("Art pivot live fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
-        raise HTTPException(status_code=404, detail="No Article Req data cached yet")
+        raise HTTPException(status_code=404, detail="No Article Req data found")
     if department:
         df = df[df["department"].str.contains(department, case=False, na=False)]
     if display_type:
@@ -505,7 +568,8 @@ def get_art_pivot(
 
 # ── MC Req pivot ───────────────────────────────────────────────────────────────
 
-_MC_SQL = """
+def _build_mc_sql(store_where: str) -> str:
+  return f"""
 WITH T_MC_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE,
         COUNT(DISTINCT STORE_NAME) STORE_CNT,
@@ -513,6 +577,7 @@ WITH T_MC_BASE AS (
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
     FROM CK_A2166.V_MC_REQ_APPS_2
+    {store_where}
     GROUP BY DEPARTMENT, DISPLAY_TYPE
 ),
 T_WH_STK AS (
@@ -560,9 +625,24 @@ def get_mc_pivot(
     display_type: Optional[str] = Query(None),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
+    store_names:  List[str]     = Query(default=[]),
 ):
     import pandas as pd
-    if has_output(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ):
+    sw, sp = _store_where(store_names)
+    if store_names:
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_mc_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("MC pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ):
         df = read_cache(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ)
     else:
         try:
@@ -571,7 +651,7 @@ def get_mc_pivot(
             pool = get_pool()
             with pool.acquire() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(_MC_SQL)
+                    cur.execute(_build_mc_sql(""))
                     cols = [c[0].lower() for c in cur.description]
                     rows = cur.fetchall()
             df = pd.DataFrame(rows, columns=cols)
@@ -580,7 +660,7 @@ def get_mc_pivot(
             logger.exception("MC pivot live fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
-        raise HTTPException(status_code=404, detail="No MC Req data cached yet")
+        raise HTTPException(status_code=404, detail="No MC Req data found")
     if department:
         df = df[df["department"].str.contains(department, case=False, na=False)]
     if display_type:
@@ -633,3 +713,34 @@ def get_filter_meta():
     divisions   = sorted(df["division"].dropna().unique().tolist())
     attribute1s = sorted(df["attribute1"].dropna().unique().tolist())
     return {"success": True, "data": {"divisions": divisions, "attribute1s": attribute1s}}
+
+
+# ── Store names list ───────────────────────────────────────────────────────────
+
+_STORE_NAMES_SQL = "SELECT DISTINCT STORE_NAME FROM CK_A2166.V_SZ_REQ_APPS WHERE STORE_NAME IS NOT NULL ORDER BY STORE_NAME"
+_STORE_NAMES_PARQUET_OWNER = "CK_A2166"
+_STORE_NAMES_PARQUET_OBJ   = "V_STORE_NAMES"
+
+
+@router.get("/store_names")
+def get_store_names():
+    import pandas as pd
+    if has_output(_STORE_NAMES_PARQUET_OWNER, _STORE_NAMES_PARQUET_OBJ):
+        df = read_cache(_STORE_NAMES_PARQUET_OWNER, _STORE_NAMES_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_STORE_NAMES_SQL)
+                    rows = [r[0] for r in cur.fetchall()]
+            df = pd.DataFrame(rows, columns=["store_name"])
+            _wc(_STORE_NAMES_PARQUET_OWNER, _STORE_NAMES_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Store names fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        return {"success": True, "data": {"stores": []}}
+    return {"success": True, "data": {"stores": df["store_name"].dropna().tolist()}}

@@ -109,6 +109,58 @@ function MultiSelect({ label, options, value, onChange, accentColor = '#0ea5e9' 
   )
 }
 
+function StoreSelect({ stores, value, onChange, accentColor = '#0ea5e9' }: {
+  stores: string[]; value: string[]; onChange: (v: string[]) => void; accentColor?: string
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState('')
+  const ref = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  const filtered = search ? stores.filter(s => s.toLowerCase().includes(search.toLowerCase())) : stores
+  const toggle = (s: string) => onChange(value.includes(s) ? value.filter(x => x !== s) : [...value, s])
+  const nsoStores = stores.filter(s => /nso/i.test(s))
+  const pill = value.length ? `${value.length} stores` : 'All Stores'
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${value.length ? accentColor : '#334155'}`, background: '#1e293b', color: value.length ? accentColor : '#94a3b8', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 110 }}>
+        🏪 {pill} ▾
+      </button>
+      {nsoStores.length > 0 && (
+        <button onClick={() => onChange(nsoStores)} title="Select NSO stores only" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${JSON.stringify(value.sort()) === JSON.stringify(nsoStores.sort()) ? accentColor : '#334155'}`, background: '#1e293b', color: '#f59e0b', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>NSO</button>
+      )}
+      {value.length > 0 && (
+        <button onClick={() => onChange([])} title="All stores" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#94a3b8', fontSize: 11, cursor: 'pointer' }}>All</button>
+      )}
+      {open && (
+        <div style={{ position: 'absolute', top: 36, left: 0, zIndex: 300, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 0 6px', minWidth: 220, maxHeight: 320, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 24px #00000099' }}>
+          <div style={{ padding: '0 8px 6px' }}>
+            <input autoFocus placeholder="Search store…" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', height: 28, padding: '0 8px', borderRadius: 6, border: '1px solid #475569', background: '#0f172a', color: '#e2e8f0', fontSize: 12 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 4, padding: '0 8px 6px', borderBottom: '1px solid #1e293b' }}>
+            <button onClick={() => onChange(filtered)} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid #334155', background: 'none', color: '#64748b', cursor: 'pointer' }}>Select All</button>
+            <button onClick={() => onChange([])} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid #334155', background: 'none', color: '#f87171', cursor: 'pointer' }}>Clear</button>
+            {nsoStores.length > 0 && <button onClick={() => onChange(nsoStores)} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid #92400e', background: 'none', color: '#f59e0b', cursor: 'pointer' }}>NSO Only</button>}
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filtered.length === 0 && <div style={{ padding: '8px 12px', color: '#475569', fontSize: 12 }}>No match</div>}
+            {filtered.map(s => (
+              <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 12px', cursor: 'pointer', color: value.includes(s) ? accentColor : '#cbd5e1', fontSize: 12, background: value.includes(s) ? '#0f2a1a' : 'transparent' }}>
+                <input type="checkbox" checked={value.includes(s)} onChange={() => toggle(s)} style={{ accentColor }} />
+                {s}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ReqDashboard() {
   const [activeTab, setActiveTab] = useState<'views' | 'sparky' | 'size' | 'mrp' | 'art' | 'mc'>('views')
   const [views, setViews] = useState<ViewStatus[]>([])
@@ -129,34 +181,36 @@ export default function ReqDashboard() {
   const [sizeData, setSizeData] = useState<SparkData | null>(null)
   const [sizeLoading, setSizeLoading] = useState(false)
   const [sizeError, setSizeError] = useState<string | null>(null)
-  const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '', division: [] as string[], attribute1: [] as string[] })
+  const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const sizeFetched = useRef(false)
 
   // Filter meta (Division + Attribute1 options from SSRK.ITEM_MV)
   const [filterMeta, setFilterMeta] = useState<{ divisions: string[]; attribute1s: string[] }>({ divisions: [], attribute1s: [] })
+  const [allStores, setAllStores] = useState<string[]>([])
   useEffect(() => {
     http.get('/req/filter_meta').then(r => setFilterMeta(r.data.data)).catch(() => {})
+    http.get('/req/store_names').then(r => setAllStores(r.data.data.stores)).catch(() => {})
   }, [])
 
   // MRP Req state
   const [mrpData, setMrpData] = useState<SparkData | null>(null)
   const [mrpLoading, setMrpLoading] = useState(false)
   const [mrpError, setMrpError] = useState<string | null>(null)
-  const [mrpFilter, setMrpFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[] })
+  const [mrpFilter, setMrpFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const mrpFetched = useRef(false)
 
   // Article Req state
   const [artData, setArtData] = useState<SparkData | null>(null)
   const [artLoading, setArtLoading] = useState(false)
   const [artError, setArtError] = useState<string | null>(null)
-  const [artFilter, setArtFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[] })
+  const [artFilter, setArtFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const artFetched = useRef(false)
 
   // MC Req state
   const [mcData, setMcData] = useState<SparkData | null>(null)
   const [mcLoading, setMcLoading] = useState(false)
   const [mcError, setMcError] = useState<string | null>(null)
-  const [mcFilter, setMcFilter] = useState({ dept: '', display_type: '', division: [] as string[], attribute1: [] as string[] })
+  const [mcFilter, setMcFilter] = useState({ dept: '', display_type: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const mcFetched = useRef(false)
 
   const loadMrp = useCallback(async () => {
@@ -166,8 +220,9 @@ export default function ReqDashboard() {
       if (mrpFilter.dept)         params.set('department',   mrpFilter.dept)
       if (mrpFilter.display_type) params.set('display_type', mrpFilter.display_type)
       if (mrpFilter.article)      params.set('article',      mrpFilter.article)
-      mrpFilter.division.forEach(v   => params.append('division',   v))
-      mrpFilter.attribute1.forEach(v => params.append('attribute1', v))
+      mrpFilter.division.forEach(v    => params.append('division',    v))
+      mrpFilter.attribute1.forEach(v  => params.append('attribute1',  v))
+      mrpFilter.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/mrp_pivot', { params })
       setMrpData(r.data.data)
     } catch (e: unknown) {
@@ -183,8 +238,9 @@ export default function ReqDashboard() {
       if (artFilter.dept)         params.set('department',   artFilter.dept)
       if (artFilter.display_type) params.set('display_type', artFilter.display_type)
       if (artFilter.article)      params.set('article',      artFilter.article)
-      artFilter.division.forEach(v   => params.append('division',   v))
-      artFilter.attribute1.forEach(v => params.append('attribute1', v))
+      artFilter.division.forEach(v    => params.append('division',    v))
+      artFilter.attribute1.forEach(v  => params.append('attribute1',  v))
+      artFilter.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/art_pivot', { params })
       setArtData(r.data.data)
     } catch (e: unknown) {
@@ -199,8 +255,9 @@ export default function ReqDashboard() {
       const params = new URLSearchParams()
       if (mcFilter.dept)         params.set('department',   mcFilter.dept)
       if (mcFilter.display_type) params.set('display_type', mcFilter.display_type)
-      mcFilter.division.forEach(v   => params.append('division',   v))
-      mcFilter.attribute1.forEach(v => params.append('attribute1', v))
+      mcFilter.division.forEach(v    => params.append('division',    v))
+      mcFilter.attribute1.forEach(v  => params.append('attribute1',  v))
+      mcFilter.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/mc_pivot', { params })
       setMcData(r.data.data)
     } catch (e: unknown) {
@@ -221,8 +278,9 @@ export default function ReqDashboard() {
       if (sizeFilter.dept)    params.set('department', sizeFilter.dept)
       if (sizeFilter.article) params.set('article',    sizeFilter.article)
       if (sizeFilter.cat4)    params.set('cat4',       sizeFilter.cat4)
-      sizeFilter.division.forEach(v   => params.append('division',   v))
-      sizeFilter.attribute1.forEach(v => params.append('attribute1', v))
+      sizeFilter.division.forEach(v     => params.append('division',    v))
+      sizeFilter.attribute1.forEach(v   => params.append('attribute1',  v))
+      sizeFilter.store_names.forEach(v  => params.append('store_names', v))
       const r = await http.get('/req/size_pivot', { params })
       setSizeData(r.data.data)
     } catch (e: unknown) {
@@ -581,6 +639,7 @@ export default function ReqDashboard() {
               <input placeholder="Filter Article…" value={mrpFilter.article} onChange={e => setMrpFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={mrpFilter.division} onChange={v => setMrpFilter(f => ({ ...f, division: v }))} accentColor="#f59e0b" />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={mrpFilter.attribute1} onChange={v => setMrpFilter(f => ({ ...f, attribute1: v }))} accentColor="#f59e0b" />
+              <StoreSelect stores={allStores} value={mrpFilter.store_names} onChange={v => setMrpFilter(f => ({ ...f, store_names: v }))} accentColor="#f59e0b" />
               <button onClick={() => { mrpFetched.current = false; loadMrp() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#f59e0b', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
               {mrpData && <span style={{ fontSize: 12, color: '#475569' }}>{mrpData.total_rows.toLocaleString()} rows</span>}
             </div>
@@ -667,6 +726,7 @@ export default function ReqDashboard() {
               <input placeholder="Filter Article…" value={artFilter.article} onChange={e => setArtFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={artFilter.division} onChange={v => setArtFilter(f => ({ ...f, division: v }))} accentColor="#0ea5e9" />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={artFilter.attribute1} onChange={v => setArtFilter(f => ({ ...f, attribute1: v }))} accentColor="#0ea5e9" />
+              <StoreSelect stores={allStores} value={artFilter.store_names} onChange={v => setArtFilter(f => ({ ...f, store_names: v }))} accentColor="#0ea5e9" />
               <button onClick={() => { artFetched.current = false; loadArt() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#0ea5e9', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
               {artData && <span style={{ fontSize: 12, color: '#475569' }}>{artData.total_rows.toLocaleString()} rows</span>}
             </div>
@@ -751,6 +811,7 @@ export default function ReqDashboard() {
               <input placeholder="Filter Display Type…" value={mcFilter.display_type} onChange={e => setMcFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={mcFilter.division} onChange={v => setMcFilter(f => ({ ...f, division: v }))} accentColor="#6366f1" />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={mcFilter.attribute1} onChange={v => setMcFilter(f => ({ ...f, attribute1: v }))} accentColor="#6366f1" />
+              <StoreSelect stores={allStores} value={mcFilter.store_names} onChange={v => setMcFilter(f => ({ ...f, store_names: v }))} accentColor="#6366f1" />
               <button onClick={() => { mcFetched.current = false; loadMc() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#6366f1', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
               {mcData && <span style={{ fontSize: 12, color: '#475569' }}>{mcData.total_rows.toLocaleString()} rows</span>}
             </div>
@@ -948,6 +1009,7 @@ export default function ReqDashboard() {
               style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
             <MultiSelect label="Division" options={filterMeta.divisions} value={sizeFilter.division} onChange={v => setSizeFilter(f => ({ ...f, division: v }))} accentColor="#ec4899" />
             <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={sizeFilter.attribute1} onChange={v => setSizeFilter(f => ({ ...f, attribute1: v }))} accentColor="#ec4899" />
+            <StoreSelect stores={allStores} value={sizeFilter.store_names} onChange={v => setSizeFilter(f => ({ ...f, store_names: v }))} accentColor="#ec4899" />
             <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{
               height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer',
               background: '#ec4899', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,

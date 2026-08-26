@@ -670,6 +670,7 @@ export default function Dashboard() {
             { key: 'store_name',   label: 'Store Name', align: 'left' },
             { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
             { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: '#94a3b8' },
+            { key: 'dc_stk_q',     label: 'DC Stock',   align: 'right', color: '#67e8f9' },
             { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
             { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
             { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },

@@ -523,7 +523,10 @@ async def allocation_detail(
 def _pivot_and_serialize(df, group_cols: list[str]) -> dict:
     """Generic pivot helper — groups df by group_cols and sums numeric cols.
     Separates STORE vs DC rows so stock counts and store counts are accurate.
+    DC sites appear as their own rows (dc_stk_q > 0, stk_qty = 0).
     """
+    import pandas as pd
+
     has_loc = "location" in df.columns
     store_df = df[df["location"] == "STORE"] if has_loc else df
     dc_df    = df[df["location"] == "DC"]    if has_loc else df.iloc[:0]
@@ -531,30 +534,38 @@ def _pivot_and_serialize(df, group_cols: list[str]) -> dict:
     STORE_COLS = ["total_stk_q", "lm_sl_q", "mtd_sl_q", "proj_q", "in_transit_q"]
     DC_COLS    = ["total_stk_q", "alloc_regn_q"]
 
+    # Store pivot
     store_agg = {c: "sum" for c in STORE_COLS if c in store_df.columns}
-    pivot = store_df.groupby(group_cols, as_index=False).agg(store_agg)
+    store_pivot = store_df.groupby(group_cols, as_index=False).agg(store_agg)
+    store_pivot = store_pivot.rename(columns={"total_stk_q": "stk_qty"})
+    store_pivot["dc_stk_q"] = 0
 
-    # DC stock + alloc from DC rows
+    # Store count + articles for store rows
+    if "store_code" in store_df.columns:
+        sc = store_df.groupby(group_cols)["store_code"].nunique().reset_index(name="stores")
+        store_pivot = store_pivot.merge(sc, on=group_cols, how="left")
+    if "barcode" in store_df.columns:
+        ac = store_df.groupby(group_cols)["barcode"].nunique().reset_index(name="articles")
+        store_pivot = store_pivot.merge(ac, on=group_cols, how="left")
+
+    # DC pivot — each DC site becomes its own row
     if not dc_df.empty:
         dc_agg = {c: "sum" for c in DC_COLS if c in dc_df.columns}
         dc_pivot = dc_df.groupby(group_cols, as_index=False).agg(dc_agg)
         dc_pivot = dc_pivot.rename(columns={"total_stk_q": "dc_stk_q"})
-        pivot = pivot.merge(dc_pivot, on=group_cols, how="left")
+        dc_pivot["stk_qty"] = 0
+        dc_pivot["stores"] = 0
+        if "barcode" in dc_df.columns:
+            dc_art = dc_df.groupby(group_cols)["barcode"].nunique().reset_index(name="articles")
+            dc_pivot = dc_pivot.merge(dc_art, on=group_cols, how="left")
+        pivot = pd.concat([store_pivot, dc_pivot], ignore_index=True)
     else:
-        pivot["dc_stk_q"] = 0
+        pivot = store_pivot
         if "alloc_regn_q" not in pivot.columns:
             pivot["alloc_regn_q"] = 0
 
-    # Store count = only STORE location unique store_codes
-    if "store_code" in store_df.columns:
-        sc = store_df.groupby(group_cols)["store_code"].nunique().reset_index(name="stores")
-        pivot = pivot.merge(sc, on=group_cols, how="left")
-    if "barcode" in df.columns:
-        ac = df.groupby(group_cols)["barcode"].nunique().reset_index(name="articles")
-        pivot = pivot.merge(ac, on=group_cols, how="left")
-
     rename = {
-        "total_stk_q": "stk_qty", "alloc_regn_q": "alloc_qty",
+        "alloc_regn_q": "alloc_qty",
         "lm_sl_q": "lm_sale_q", "mtd_sl_q": "mtd_sale_q",
         "proj_q": "proj_qty",
     }

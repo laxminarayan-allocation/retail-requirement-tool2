@@ -752,3 +752,291 @@ def get_store_names():
     if df is None or df.empty:
         return {"success": True, "data": {"stores": []}}
     return {"success": True, "data": {"stores": df["store_name"].dropna().tolist()}}
+
+
+# ── Barcode Req pivot (GRC + WMS combined) ─────────────────────────────────────
+
+def _build_barcode_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_GRC_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) GRC_REQ,
+        MAX(DIVISION) DIVISION, MAX(ATTRIBUTE1) ATTRIBUTE1
+    FROM CK_A2166.V_BARCODE_REQ_APPS_GRC_V2
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP
+),
+T_WMS_BASE AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, MRP,
+        SUM(REQ) WMS_REQ
+    FROM CK_A2166.V_BARCODE_REQ_APPS_WMS_V2
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, ARTICLE_NAME, MRP
+),
+T_WH_STK AS (
+    SELECT DEPARTMENT, ARTICLE_NAME,
+        SUM(GRC_Q) GRC_Q, SUM(MSA_Q) MSA_Q, SUM(ALLOC_Q) ALLOC_Q,
+        SUM(WMS_Q) WMS_Q, SUM(REST_DC_Q) REST_DC_Q
+    FROM CK_A2166.V_WH_STOCK
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP,
+    NVL(A.DIVISION,   'N/A') DIVISION,
+    NVL(A.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.GRC_REQ,
+    NVL(W.WMS_REQ,   0) WMS_REQ,
+    NVL(B.GRC_Q,     0) GRC_Q,
+    NVL(B.MSA_Q,     0) MSA_Q,
+    NVL(B.ALLOC_Q,   0) ALLOC_Q,
+    NVL(B.WMS_Q,     0) WMS_Q,
+    NVL(B.REST_DC_Q, 0) REST_DC_Q,
+    NVL(C.PPO_Q,     0) PPO_Q
+FROM T_GRC_BASE A
+LEFT JOIN T_WMS_BASE W ON A.DEPARTMENT=W.DEPARTMENT AND A.ARTICLE_NAME=W.ARTICLE_NAME AND A.MRP=W.MRP
+LEFT JOIN T_WH_STK B ON A.DEPARTMENT=B.DEPARTMENT AND A.ARTICLE_NAME=B.ARTICLE_NAME
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP
+"""
+
+_BARCODE_PARQUET_OWNER = "CK_A2166"
+_BARCODE_PARQUET_OBJ   = "V_BARCODE_PIVOT"
+
+
+@router.get("/barcode_pivot")
+def get_barcode_pivot(
+    department:   Optional[str] = Query(None),
+    display_type: Optional[str] = Query(None),
+    article:      Optional[str] = Query(None),
+    division:     List[str]     = Query(default=[]),
+    attribute1:   List[str]     = Query(default=[]),
+    store_names:  List[str]     = Query(default=[]),
+):
+    import pandas as pd
+    sw, sp = _store_where(store_names)
+    if store_names:
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_barcode_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("Barcode pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ):
+        df = read_cache(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_barcode_sql(""))
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Barcode pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No Barcode Req data found")
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if display_type:
+        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+    if article:
+        df = df[df["article_name"].str.contains(article, case=False, na=False)]
+    if division:
+        df = df[df["division"].isin(division)]
+    if attribute1:
+        df = df[df["attribute1"].isin(attribute1)]
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}
+
+
+# ── Option Req pivot ───────────────────────────────────────────────────────────
+
+def _build_option_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_OPTION_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, OPTION_LEVEL, ALLOCATION_OPTION,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TTL_STK_Q_ADJ) TTL_STK_Q_ADJ,
+        SUM(PBS) PBS, SUM(OPTION_PBS) OPTION_PBS, SUM(OPTION_REQ) OPTION_REQ,
+        MAX(DIVISION) DIVISION, MAX(ATTRIBUTE1) ATTRIBUTE1
+    FROM CK_A2166.V_OPTION_REQ_APPS
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, OPTION_LEVEL, ALLOCATION_OPTION
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.OPTION_LEVEL, A.ALLOCATION_OPTION,
+    NVL(A.DIVISION,   'N/A') DIVISION,
+    NVL(A.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TTL_STK_Q_ADJ,
+    A.PBS, A.OPTION_PBS, A.OPTION_REQ
+FROM T_OPTION_BASE A
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.OPTION_LEVEL, A.ALLOCATION_OPTION
+"""
+
+_OPTION_PARQUET_OWNER = "CK_A2166"
+_OPTION_PARQUET_OBJ   = "V_OPTION_PIVOT"
+
+
+@router.get("/option_pivot")
+def get_option_pivot(
+    department:   Optional[str] = Query(None),
+    display_type: Optional[str] = Query(None),
+    division:     List[str]     = Query(default=[]),
+    attribute1:   List[str]     = Query(default=[]),
+    store_names:  List[str]     = Query(default=[]),
+):
+    import pandas as pd
+    sw, sp = _store_where(store_names)
+    if store_names:
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_option_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("Option pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ):
+        df = read_cache(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_option_sql(""))
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Option pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No Option Req data found")
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if display_type:
+        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+    if division:
+        df = df[df["division"].isin(division)]
+    if attribute1:
+        df = df[df["attribute1"].isin(attribute1)]
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}
+
+
+# ── List Req pivot ─────────────────────────────────────────────────────────────
+
+def _build_list_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_LIST_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP, LIST_TAG,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LIST_Q) LIST_Q, SUM(ADJ_TTL_STK_Q) ADJ_TTL_STK_Q,
+        SUM(LIST_REQ) LIST_REQ
+    FROM CK_A2166.V_LIST_PBS_REQ
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP, LIST_TAG
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP, A.LIST_TAG,
+    A.STORE_CNT, A.LIST_Q, A.ADJ_TTL_STK_Q, A.LIST_REQ
+FROM T_LIST_BASE A
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP, A.LIST_TAG
+"""
+
+_LIST_PARQUET_OWNER = "CK_A2166"
+_LIST_PARQUET_OBJ   = "V_LIST_PIVOT"
+
+
+@router.get("/list_pivot")
+def get_list_pivot(
+    department:   Optional[str] = Query(None),
+    display_type: Optional[str] = Query(None),
+    article:      Optional[str] = Query(None),
+    store_names:  List[str]     = Query(default=[]),
+):
+    import pandas as pd
+    sw, sp = _store_where(store_names)
+    if store_names:
+        try:
+            from app.db.oracle import get_pool
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_list_sql(sw), sp)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+        except Exception as exc:
+            logger.exception("List pivot store-filtered fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    elif has_output(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ):
+        df = read_cache(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_build_list_sql(""))
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("List pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No List Req data found")
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if display_type:
+        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+    if article:
+        df = df[df["article_name"].str.contains(article, case=False, na=False)]
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}

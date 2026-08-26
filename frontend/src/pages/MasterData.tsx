@@ -972,7 +972,7 @@ export default function MasterData() {
     name: ct.object_name,
     schema: ct.schema_owner,
     view: ct.object_name,
-    desc: `Added by ${ct.added_by.split('@')[0]}`,
+    desc: ct.object_name,
     color: '#f59e0b',
     status: statuses[ct.id] ?? null,
     loading: statusLoading[ct.id] ?? false,
@@ -1145,7 +1145,7 @@ export default function MasterData() {
                       </td>
                     )
                     case 'desc': {
-                      const displayed = customDescs[id] ?? desc
+                      const displayed = customDescs[id] || desc || name
                       const isEditing = editingDesc === id
                       return (
                         <td key={col}

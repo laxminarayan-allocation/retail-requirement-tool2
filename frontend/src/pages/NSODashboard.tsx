@@ -174,6 +174,81 @@ function MultiSelect({
   )
 }
 
+// ── Searchable multi-select (for store names — can be large list) ───────────────
+function SearchableMultiSelect({
+  label, options, selected, onChange,
+}: {
+  label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    function handler(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQ('') } }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 50) }, [open])
+  const toggle = useCallback((v: string) => {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+  }, [selected, onChange])
+  const filtered = q.trim() ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
+  const display = selected.length === 0 ? `All ${label}` : selected.length === 1 ? selected[0] : `${selected.length} ${label}`
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        ...S.select, cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap', minWidth: 140,
+        background: selected.length > 0 ? '#1e3a5f' : undefined,
+        color: selected.length > 0 ? '#7dd3fc' : C.text2,
+        border: selected.length > 0 ? '1px solid #3b82f6' : undefined,
+      }}>{display} ▾</button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 999, width: 260,
+          background: C.surf1, border: `1px solid ${C.border}`, borderRadius: 6,
+          boxShadow: '0 8px 24px #0008', display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Search input */}
+          <div style={{ padding: '6px 8px', borderBottom: `1px solid ${C.border}` }}>
+            <input
+              ref={inputRef}
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Search store…"
+              style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, padding: '5px 8px', outline: 'none' }}
+            />
+          </div>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${C.border}` }}>
+            {selected.length > 0 && (
+              <div onClick={() => onChange([])} style={{ flex: 1, padding: '5px 10px', fontSize: 11, color: '#f87171', cursor: 'pointer', textAlign: 'center' }}>✕ Clear</div>
+            )}
+            {filtered.length > 0 && filtered.length !== options.length && (
+              <div onClick={() => onChange([...new Set([...selected, ...filtered])])} style={{ flex: 1, padding: '5px 10px', fontSize: 11, color: '#4ade80', cursor: 'pointer', textAlign: 'center' }}>+ All shown</div>
+            )}
+          </div>
+          {/* List */}
+          <div style={{ maxHeight: 240, overflowY: 'auto', padding: '4px 0' }}>
+            {filtered.length === 0 && <div style={{ padding: '8px 12px', fontSize: 11, color: C.text3 }}>No match</div>}
+            {filtered.map(v => (
+              <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 12, color: selected.includes(v) ? '#7dd3fc' : C.text2, background: selected.includes(v) ? '#1e3a5f44' : 'transparent' }}>
+                <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} style={{ accentColor: C.blue, flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
+              </label>
+            ))}
+          </div>
+          {filtered.length > 0 && (
+            <div style={{ padding: '4px 10px', borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.text3 }}>
+              {filtered.length} of {options.length} · {selected.length} selected
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Mobile KPI strip ──────────────────────────────────────────────────────────
 function MobileKPIStrip({ items }: { items: { label: string; val: string; color: string }[] }) {
   return (
@@ -309,11 +384,12 @@ function MobileMultiSelect({ label, options, selected, onChange }: {
 }
 
 function StoreSummary({
-  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns, source, onToggleSource, isMobile,
+  selStatus, selCluster, selRegion, selTag, selDivisions, selCampaigns, selStores, source, onToggleSource, isMobile, onStoreOptions,
 }: {
   selStatus: string; selCluster: string; selRegion: string; selTag: string
-  selDivisions: string[]; selCampaigns: string[]
+  selDivisions: string[]; selCampaigns: string[]; selStores: string[]
   source: 'nso' | 'all'; onToggleSource: () => void; isMobile: boolean
+  onStoreOptions?: (opts: string[]) => void
 }) {
   const [data, setData] = useState<StoreSummaryData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -332,7 +408,14 @@ function StoreSummary({
     if (selCampaigns.length > 0) params.attribute1 = selCampaigns.join(',')
     params.source = src ?? source
     apiFetch<StoreSummaryData>('/nso/store-summary', params)
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => {
+        setData(d)
+        setLoading(false)
+        if (onStoreOptions) {
+          const names = Array.from(new Set(d.stores.map(s => s.store_f_name ?? s.store_name).filter(Boolean))).sort() as string[]
+          onStoreOptions(names)
+        }
+      })
       .catch(e => { setError(String(e)); setLoading(false) })
   }
 
@@ -382,8 +465,10 @@ function StoreSummary({
     else { setSortCol(key); setSortDir('desc') }
   }
 
-  const active   = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE'))
-  const upcoming = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING')))
+  const storeMatch = (r: StoreRow) =>
+    selStores.length === 0 || selStores.includes(r.store_f_name ?? '') || selStores.includes(r.store_name)
+  const active   = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE' && storeMatch(r)))
+  const upcoming = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING') && storeMatch(r)))
 
   function StoreTable({ rows, title }: { rows: StoreRow[]; title: string }) {
     const color = title.startsWith('Active') ? C.green : '#7dd3fc'
@@ -526,6 +611,9 @@ function StoreSummary({
             ))}
           </div>
           {stores.length === 0 && <div style={{ ...S.card, ...S.empty }}>No stores found.</div>}
+          {active.length === 0 && upcoming.length === 0 && stores.length > 0 && (
+            <div style={{ ...S.card, ...S.empty }}>No stores match the selected store filter.</div>
+          )}
           {active.length > 0 && (
             <>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.green, textTransform: 'uppercase', letterSpacing: 0.8, paddingLeft: 4 }}>
@@ -684,6 +772,8 @@ export default function NSODashboard() {
   const [selTags, setSelTags]           = useState<string[]>([])
   const [selDivisions, setSelDivisions] = useState<string[]>([])
   const [selCampaigns, setSelCampaigns] = useState<string[]>([])
+  const [selStores, setSelStores]     = useState<string[]>([])
+  const [storeOptions, setStoreOptions] = useState<string[]>([])
   const [search, setSearch]         = useState('')
 
   const [tab, setTab]           = useState<'store' | 'article'>('store')
@@ -694,7 +784,7 @@ export default function NSODashboard() {
   const [artSortCol, setArtSortCol] = useState('')
   const [artSortDir, setArtSortDir] = useState<'asc' | 'desc'>('asc')
 
-  function toggleSource() { setSource(s => s === 'nso' ? 'all' : 'nso') }
+  function toggleSource() { setSource(s => s === 'nso' ? 'all' : 'nso'); setSelStores([]); setStoreOptions([]) }
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
@@ -734,9 +824,12 @@ export default function NSODashboard() {
   const rows = data?.rows ?? []
   const cols = data?.columns ?? []
 
-  const filtered = search.trim()
-    ? rows.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
+  const storeFiltered = selStores.length > 0
+    ? rows.filter(r => selStores.includes(String(r['store_f_name'] ?? '')) || selStores.includes(String(r['store_name'] ?? '')))
     : rows
+  const filtered = search.trim()
+    ? storeFiltered.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
+    : storeFiltered
 
   const visible = artSortCol
     ? [...filtered].sort((a, b) => {
@@ -781,7 +874,7 @@ export default function NSODashboard() {
     a.click()
   }
 
-  const activeFilterCount = selStatuses.length + selClusters.length + selRegions.length + selTags.length + selDivisions.length + selCampaigns.length
+  const activeFilterCount = selStatuses.length + selClusters.length + selRegions.length + selTags.length + selDivisions.length + selCampaigns.length + selStores.length
 
   // ── Mobile layout ──────────────────────────────────────────────────────────
   if (isMobile) {
@@ -843,6 +936,7 @@ export default function NSODashboard() {
                 ...selRegions.map(v => ({ label: `Rgn: ${v}`, clear: () => setSelRegions(s => s.filter(x => x !== v)) })),
                 ...selDivisions.map(v => ({ label: `Div: ${v}`, clear: () => setSelDivisions(s => s.filter(x => x !== v)) })),
                 ...selCampaigns.map(v => ({ label: `Camp: ${v}`, clear: () => setSelCampaigns(s => s.filter(x => x !== v)) })),
+                ...selStores.map(v => ({ label: v, clear: () => setSelStores(s => s.filter(x => x !== v)) })),
               ].map((chip, i) => (
                 <span key={i} onClick={chip.clear} style={{
                   fontSize: 10, padding: '3px 8px', borderRadius: 10, cursor: 'pointer',
@@ -873,12 +967,13 @@ export default function NSODashboard() {
           {filters.store_tag.length > 0 && <MobileMultiSelect label="Tags" options={filters.store_tag} selected={selTags} onChange={setSelTags} />}
           <MobileMultiSelect label="Divisions" options={filters.division}     selected={selDivisions} onChange={setSelDivisions} />
           <MobileMultiSelect label="Campaigns" options={filters.attribute1}   selected={selCampaigns} onChange={setSelCampaigns} />
+          <MobileMultiSelect label="Stores"    options={storeOptions}         selected={selStores}    onChange={setSelStores}    />
           <button onClick={() => { setFilterDrawerOpen(false) }} style={{
             width: '100%', padding: '12px', borderRadius: 10, border: 'none',
             background: '#0ea5e9', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 4,
           }}>Apply Filters</button>
           {activeFilterCount > 0 && (
-            <button onClick={() => { setSelStatuses([]); setSelClusters([]); setSelRegions([]); setSelTags([]); setSelDivisions([]); setSelCampaigns([]) }} style={{
+            <button onClick={() => { setSelStatuses([]); setSelClusters([]); setSelRegions([]); setSelTags([]); setSelDivisions([]); setSelCampaigns([]); setSelStores([]) }} style={{
               width: '100%', padding: '10px', borderRadius: 10, border: '1px solid #334155',
               background: 'transparent', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}>Clear All Filters</button>
@@ -891,8 +986,8 @@ export default function NSODashboard() {
             <StoreSummary
               selStatus={selStatuses.join(',')} selCluster={selClusters.join(',')}
               selRegion={selRegions.join(',')} selTag={selTags.join(',')}
-              selDivisions={selDivisions} selCampaigns={selCampaigns}
-              source={source} onToggleSource={toggleSource} isMobile={true}
+              selDivisions={selDivisions} selCampaigns={selCampaigns} selStores={selStores}
+              source={source} onToggleSource={toggleSource} isMobile={true} onStoreOptions={setStoreOptions}
             />
           </div>
         )}
@@ -1025,6 +1120,7 @@ export default function NSODashboard() {
             )}
             <MultiSelect label="Divisions" options={filters.division}   selected={selDivisions} onChange={setSelDivisions} />
             <MultiSelect label="Campaigns" options={filters.attribute1} selected={selCampaigns} onChange={setSelCampaigns} />
+            <SearchableMultiSelect label="Stores" options={storeOptions} selected={selStores} onChange={setSelStores} />
             {tab === 'article' && (
               <>
                 <button style={S.btn} onClick={() => load()} disabled={loading}>
@@ -1042,8 +1138,8 @@ export default function NSODashboard() {
         <StoreSummary
           selStatus={selStatuses.join(',')} selCluster={selClusters.join(',')}
           selRegion={selRegions.join(',')} selTag={selTags.join(',')}
-          selDivisions={selDivisions} selCampaigns={selCampaigns}
-          source={source} onToggleSource={toggleSource} isMobile={false}
+          selDivisions={selDivisions} selCampaigns={selCampaigns} selStores={selStores}
+          source={source} onToggleSource={toggleSource} isMobile={false} onStoreOptions={setStoreOptions}
         />
       )}
 

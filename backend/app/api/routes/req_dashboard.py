@@ -221,6 +221,8 @@ def _store_where(store_names: list) -> tuple:
 # ── Size Req pivot ─────────────────────────────────────────────────────────────
 
 def _build_size_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
     return f"""
 WITH T_SZ_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4,
@@ -229,7 +231,7 @@ WITH T_SZ_BASE AS (
         SUM(STK) TTL_STK_Q, SUM(ADJ_STK) ADJ_STK_Q,
         SUM(SZ_PBS) SZ_PBS, SUM(SZ_REQ) SZ_REQ
     FROM CK_A2166.V_SZ_REQ_APPS
-    {store_where}
+    {sw} {sw_extra}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4
 ),
 T_WH_STK AS (
@@ -343,6 +345,8 @@ def get_size_pivot(
 # ── MRP Req pivot ──────────────────────────────────────────────────────────────
 
 def _build_mrp_sql(store_where: str) -> str:
+  sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+  sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
   return f"""
 WITH T_MRP_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME,
@@ -351,7 +355,7 @@ WITH T_MRP_BASE AS (
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
     FROM CK_A2166.V_MRP_REQ_APPS
-    {store_where}
+    {sw} {sw_extra}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME
 ),
 T_WH_STK AS (
@@ -456,6 +460,8 @@ def get_mrp_pivot(
 # ── Article Req pivot ──────────────────────────────────────────────────────────
 
 def _build_art_sql(store_where: str) -> str:
+  sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+  sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
   return f"""
 WITH T_ART_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME,
@@ -464,7 +470,7 @@ WITH T_ART_BASE AS (
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
     FROM CK_A2166.V_ART_REQ_APPS
-    {store_where}
+    {sw} {sw_extra}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME
 ),
 T_WH_STK AS (
@@ -569,6 +575,8 @@ def get_art_pivot(
 # ── MC Req pivot ───────────────────────────────────────────────────────────────
 
 def _build_mc_sql(store_where: str) -> str:
+  sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+  sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
   return f"""
 WITH T_MC_BASE AS (
     SELECT DEPARTMENT, DISPLAY_TYPE,
@@ -577,7 +585,7 @@ WITH T_MC_BASE AS (
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
     FROM CK_A2166.V_MC_REQ_APPS_2
-    {store_where}
+    {sw} {sw_extra}
     GROUP BY DEPARTMENT, DISPLAY_TYPE
 ),
 T_WH_STK AS (

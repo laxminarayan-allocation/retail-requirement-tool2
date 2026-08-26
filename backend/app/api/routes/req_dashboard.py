@@ -231,9 +231,15 @@ T_PPO AS (
     SELECT DEPARTMENT, ARTICLE_NAME, CAT4, SUM(PPO_Q) PPO_Q
     FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
     GROUP BY DEPARTMENT, ARTICLE_NAME, CAT4
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
 )
 SELECT
     A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
     A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.ADJ_STK_Q,
     A.SZ_PBS, A.SZ_REQ,
     NVL(B.GRC_Q,    0) GRC_Q,
@@ -247,6 +253,7 @@ LEFT JOIN T_WH_STK B
     ON A.DEPARTMENT = B.DEPARTMENT AND A.ARTICLE_NAME = B.ARTICLE_NAME AND A.CAT4 = B.CAT4
 LEFT JOIN T_PPO C
     ON A.DEPARTMENT = C.DEPARTMENT AND A.ARTICLE_NAME = C.ARTICLE_NAME AND A.CAT4 = C.CAT4
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT = D.DEPARTMENT
 ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4
 """
 
@@ -259,6 +266,8 @@ def get_size_pivot(
     department: Optional[str] = Query(None),
     article:    Optional[str] = Query(None),
     cat4:       Optional[str] = Query(None),
+    division:   List[str]     = Query(default=[]),
+    attribute1: List[str]     = Query(default=[]),
 ):
     """Serve Size Req pivot from parquet cache (falls back to live Oracle if not cached)."""
     import pandas as pd
@@ -290,6 +299,10 @@ def get_size_pivot(
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     if cat4:
         df = df[df["cat4"].str.contains(cat4, case=False, na=False)]
+    if division:
+        df = df[df["division"].isin(division)]
+    if attribute1:
+        df = df[df["attribute1"].isin(attribute1)]
 
     return {"success": True, "data": {
         "columns": list(df.columns),

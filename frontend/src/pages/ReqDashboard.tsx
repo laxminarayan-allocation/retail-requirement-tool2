@@ -129,7 +129,7 @@ export default function ReqDashboard() {
   const [sizeData, setSizeData] = useState<SparkData | null>(null)
   const [sizeLoading, setSizeLoading] = useState(false)
   const [sizeError, setSizeError] = useState<string | null>(null)
-  const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '' })
+  const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '', division: [] as string[], attribute1: [] as string[] })
   const sizeFetched = useRef(false)
 
   // Filter meta (Division + Attribute1 options from SSRK.ITEM_MV)
@@ -217,13 +217,13 @@ export default function ReqDashboard() {
     setSizeLoading(true)
     setSizeError(null)
     try {
-      const r = await http.get('/req/size_pivot', {
-        params: {
-          department: sizeFilter.dept || undefined,
-          article: sizeFilter.article || undefined,
-          cat4: sizeFilter.cat4 || undefined,
-        }
-      })
+      const params = new URLSearchParams()
+      if (sizeFilter.dept)    params.set('department', sizeFilter.dept)
+      if (sizeFilter.article) params.set('article',    sizeFilter.article)
+      if (sizeFilter.cat4)    params.set('cat4',       sizeFilter.cat4)
+      sizeFilter.division.forEach(v   => params.append('division',   v))
+      sizeFilter.attribute1.forEach(v => params.append('attribute1', v))
+      const r = await http.get('/req/size_pivot', { params })
       setSizeData(r.data.data)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Size data'
@@ -945,7 +945,9 @@ export default function ReqDashboard() {
               style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
             <input placeholder="Filter Size (CAT4)…" value={sizeFilter.cat4}
               onChange={e => setSizeFilter(f => ({ ...f, cat4: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
+            <MultiSelect label="Division" options={filterMeta.divisions} value={sizeFilter.division} onChange={v => setSizeFilter(f => ({ ...f, division: v }))} accentColor="#ec4899" />
+            <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={sizeFilter.attribute1} onChange={v => setSizeFilter(f => ({ ...f, attribute1: v }))} accentColor="#ec4899" />
             <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{
               height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer',
               background: '#ec4899', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,

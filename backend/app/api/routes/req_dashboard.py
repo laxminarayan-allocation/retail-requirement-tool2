@@ -4,7 +4,7 @@ grouped into 9 requirement categories.
 """
 import logging
 import time
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -296,3 +296,327 @@ def get_size_pivot(
         "rows": df.where(df.notna(), None).to_dict(orient="records"),
         "total_rows": len(df),
     }}
+
+
+# ── MRP Req pivot ──────────────────────────────────────────────────────────────
+
+_MRP_SQL = """
+WITH T_MRP_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) REQ
+    FROM CK_A2166.V_MRP_REQ_APPS
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME
+),
+T_WH_STK AS (
+    SELECT DEPARTMENT, ARTICLE_NAME,
+        SUM(GRC_Q) GRC_Q, SUM(MSA_Q) MSA_Q, SUM(ALLOC_Q) ALLOC_Q,
+        SUM(WMS_Q) WMS_Q, SUM(REST_DC_Q) REST_DC_Q
+    FROM CK_A2166.V_WH_STOCK
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.MRP, A.ARTICLE_NAME,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.REQ,
+    NVL(B.GRC_Q,    0) GRC_Q,
+    NVL(B.MSA_Q,    0) MSA_Q,
+    NVL(B.ALLOC_Q,  0) ALLOC_Q,
+    NVL(B.WMS_Q,    0) WMS_Q,
+    NVL(B.REST_DC_Q,0) REST_DC_Q,
+    NVL(C.PPO_Q,    0) PPO_Q
+FROM T_MRP_BASE A
+LEFT JOIN T_WH_STK B ON A.DEPARTMENT=B.DEPARTMENT AND A.ARTICLE_NAME=B.ARTICLE_NAME
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.MRP, A.ARTICLE_NAME
+"""
+
+_MRP_PARQUET_OWNER = "CK_A2166"
+_MRP_PARQUET_OBJ   = "V_MRP_PIVOT"
+
+
+@router.get("/mrp_pivot")
+def get_mrp_pivot(
+    department:   Optional[str] = Query(None),
+    display_type: Optional[str] = Query(None),
+    article:      Optional[str] = Query(None),
+    division:     List[str]     = Query(default=[]),
+    attribute1:   List[str]     = Query(default=[]),
+):
+    import pandas as pd
+    if has_output(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ):
+        df = read_cache(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_MRP_SQL)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("MRP pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No MRP data cached yet")
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if display_type:
+        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+    if article:
+        df = df[df["article_name"].str.contains(article, case=False, na=False)]
+    if division:
+        df = df[df["division"].isin(division)]
+    if attribute1:
+        df = df[df["attribute1"].isin(attribute1)]
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}
+
+
+# ── Article Req pivot ──────────────────────────────────────────────────────────
+
+_ART_SQL = """
+WITH T_ART_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) REQ
+    FROM CK_A2166.V_ART_REQ_APPS
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME
+),
+T_WH_STK AS (
+    SELECT DEPARTMENT, ARTICLE_NAME,
+        SUM(GRC_Q) GRC_Q, SUM(MSA_Q) MSA_Q, SUM(ALLOC_Q) ALLOC_Q,
+        SUM(WMS_Q) WMS_Q, SUM(REST_DC_Q) REST_DC_Q
+    FROM CK_A2166.V_WH_STOCK
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.REQ,
+    NVL(B.GRC_Q,    0) GRC_Q,
+    NVL(B.MSA_Q,    0) MSA_Q,
+    NVL(B.ALLOC_Q,  0) ALLOC_Q,
+    NVL(B.WMS_Q,    0) WMS_Q,
+    NVL(B.REST_DC_Q,0) REST_DC_Q,
+    NVL(C.PPO_Q,    0) PPO_Q
+FROM T_ART_BASE A
+LEFT JOIN T_WH_STK B ON A.DEPARTMENT=B.DEPARTMENT AND A.ARTICLE_NAME=B.ARTICLE_NAME
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME
+"""
+
+_ART_PARQUET_OWNER = "CK_A2166"
+_ART_PARQUET_OBJ   = "V_ART_PIVOT"
+
+
+@router.get("/art_pivot")
+def get_art_pivot(
+    department:   Optional[str] = Query(None),
+    display_type: Optional[str] = Query(None),
+    article:      Optional[str] = Query(None),
+    division:     List[str]     = Query(default=[]),
+    attribute1:   List[str]     = Query(default=[]),
+):
+    import pandas as pd
+    if has_output(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ):
+        df = read_cache(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_ART_SQL)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Art pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No Article Req data cached yet")
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if display_type:
+        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+    if article:
+        df = df[df["article_name"].str.contains(article, case=False, na=False)]
+    if division:
+        df = df[df["division"].isin(division)]
+    if attribute1:
+        df = df[df["attribute1"].isin(attribute1)]
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}
+
+
+# ── MC Req pivot ───────────────────────────────────────────────────────────────
+
+_MC_SQL = """
+WITH T_MC_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) REQ
+    FROM CK_A2166.V_MC_REQ_APPS_2
+    GROUP BY DEPARTMENT, DISPLAY_TYPE
+),
+T_WH_STK AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE,
+        SUM(GRC_Q) GRC_Q, SUM(MSA_Q) MSA_Q, SUM(ALLOC_Q) ALLOC_Q,
+        SUM(WMS_Q) WMS_Q, SUM(REST_DC_Q) REST_DC_Q
+    FROM CK_A2166.V_WH_STOCK
+    GROUP BY DEPARTMENT, DISPLAY_TYPE
+),
+T_PPO AS (
+    SELECT DEPARTMENT, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.REQ,
+    NVL(B.GRC_Q,    0) GRC_Q,
+    NVL(B.MSA_Q,    0) MSA_Q,
+    NVL(B.ALLOC_Q,  0) ALLOC_Q,
+    NVL(B.WMS_Q,    0) WMS_Q,
+    NVL(B.REST_DC_Q,0) REST_DC_Q,
+    NVL(C.PPO_Q,    0) PPO_Q
+FROM T_MC_BASE A
+LEFT JOIN T_WH_STK B ON A.DEPARTMENT=B.DEPARTMENT AND A.DISPLAY_TYPE=B.DISPLAY_TYPE
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE
+"""
+
+_MC_PARQUET_OWNER = "CK_A2166"
+_MC_PARQUET_OBJ   = "V_MC_PIVOT"
+
+
+@router.get("/mc_pivot")
+def get_mc_pivot(
+    department:   Optional[str] = Query(None),
+    display_type: Optional[str] = Query(None),
+    division:     List[str]     = Query(default=[]),
+    attribute1:   List[str]     = Query(default=[]),
+):
+    import pandas as pd
+    if has_output(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ):
+        df = read_cache(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_MC_SQL)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("MC pivot live fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail="No MC Req data cached yet")
+    if department:
+        df = df[df["department"].str.contains(department, case=False, na=False)]
+    if display_type:
+        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+    if division:
+        df = df[df["division"].isin(division)]
+    if attribute1:
+        df = df[df["attribute1"].isin(attribute1)]
+    return {"success": True, "data": {
+        "columns": list(df.columns),
+        "rows": df.where(df.notna(), None).to_dict(orient="records"),
+        "total_rows": len(df),
+    }}
+
+
+# ── Filter meta (DIVISION + ATTRIBUTE1 options) ────────────────────────────────
+
+_FILTER_META_SQL = """
+SELECT DISTINCT DIVISION, ATTRIBUTE1
+FROM SSRK.ITEM_MV
+WHERE DIVISION IS NOT NULL
+ORDER BY DIVISION, ATTRIBUTE1
+"""
+_FILTER_META_PARQUET_OWNER = "SSRK"
+_FILTER_META_PARQUET_OBJ   = "ITEM_MV_FILTER_META"
+
+
+@router.get("/filter_meta")
+def get_filter_meta():
+    import pandas as pd
+    if has_output(_FILTER_META_PARQUET_OWNER, _FILTER_META_PARQUET_OBJ):
+        df = read_cache(_FILTER_META_PARQUET_OWNER, _FILTER_META_PARQUET_OBJ)
+    else:
+        try:
+            from app.db.oracle import get_pool
+            from app.core.parquet_cache import write_cache as _wc
+            pool = get_pool()
+            with pool.acquire() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(_FILTER_META_SQL)
+                    cols = [c[0].lower() for c in cur.description]
+                    rows = cur.fetchall()
+            df = pd.DataFrame(rows, columns=cols)
+            _wc(_FILTER_META_PARQUET_OWNER, _FILTER_META_PARQUET_OBJ, df)
+        except Exception as exc:
+            logger.exception("Filter meta fetch error")
+            raise HTTPException(status_code=500, detail=str(exc))
+    if df is None or df.empty:
+        return {"success": True, "data": {"divisions": [], "attribute1s": []}}
+    divisions   = sorted(df["division"].dropna().unique().tolist())
+    attribute1s = sorted(df["attribute1"].dropna().unique().tolist())
+    return {"success": True, "data": {"divisions": divisions, "attribute1s": attribute1s}}

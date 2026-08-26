@@ -653,7 +653,7 @@ function StoreSummary({
                       style={{
                         ...(col.type === 'text' || col.type === 'date' ? S.th : S.thNum),
                         cursor: 'pointer', userSelect: 'none',
-                        background: sortCol === col.key ? '#1e3a5f' : undefined,
+                        background: sortCol === col.key ? '#1e3a5f' : C.bg,
                         color: sortCol === col.key ? '#7dd3fc' : undefined,
                         whiteSpace: 'nowrap',
                       }}
@@ -1210,7 +1210,7 @@ export default function NSODashboard() {
                           style={{
                             ...(isPct(c) || isNum(c) ? S.thNum : S.th),
                             cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
-                            background: artSortCol === c ? '#1e3a5f' : undefined,
+                            background: artSortCol === c ? '#1e3a5f' : C.bg,
                             color: artSortCol === c ? '#7dd3fc' : undefined,
                           }}
                         >

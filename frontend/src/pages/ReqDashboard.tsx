@@ -77,7 +77,7 @@ const n = (v: number | null) => v == null ? 0 : v
 const fmtN = (v: number | null) => v == null ? '—' : v === 0 ? '-' : v.toLocaleString('en-IN')
 
 export default function ReqDashboard() {
-  const [activeTab, setActiveTab] = useState<'views' | 'sparky' | 'size'>('views')
+  const [activeTab, setActiveTab] = useState<'views' | 'sparky' | 'size' | 'mrp' | 'art' | 'mc'>('views')
   const [views, setViews] = useState<ViewStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<{ owner: string; obj: string; group: string } | null>(null)
@@ -98,6 +98,64 @@ export default function ReqDashboard() {
   const [sizeError, setSizeError] = useState<string | null>(null)
   const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '' })
   const sizeFetched = useRef(false)
+
+  // MRP Req state
+  const [mrpData, setMrpData] = useState<SparkData | null>(null)
+  const [mrpLoading, setMrpLoading] = useState(false)
+  const [mrpError, setMrpError] = useState<string | null>(null)
+  const [mrpFilter, setMrpFilter] = useState({ dept: '', display_type: '', article: '' })
+  const mrpFetched = useRef(false)
+
+  // Article Req state
+  const [artData, setArtData] = useState<SparkData | null>(null)
+  const [artLoading, setArtLoading] = useState(false)
+  const [artError, setArtError] = useState<string | null>(null)
+  const [artFilter, setArtFilter] = useState({ dept: '', display_type: '', article: '' })
+  const artFetched = useRef(false)
+
+  // MC Req state
+  const [mcData, setMcData] = useState<SparkData | null>(null)
+  const [mcLoading, setMcLoading] = useState(false)
+  const [mcError, setMcError] = useState<string | null>(null)
+  const [mcFilter, setMcFilter] = useState({ dept: '', display_type: '' })
+  const mcFetched = useRef(false)
+
+  const loadMrp = useCallback(async () => {
+    setMrpLoading(true); setMrpError(null)
+    try {
+      const r = await http.get('/req/mrp_pivot', { params: { department: mrpFilter.dept || undefined, display_type: mrpFilter.display_type || undefined, article: mrpFilter.article || undefined } })
+      setMrpData(r.data.data)
+    } catch (e: unknown) {
+      setMrpError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load MRP data')
+    }
+    setMrpLoading(false)
+  }, [mrpFilter])
+
+  const loadArt = useCallback(async () => {
+    setArtLoading(true); setArtError(null)
+    try {
+      const r = await http.get('/req/art_pivot', { params: { department: artFilter.dept || undefined, display_type: artFilter.display_type || undefined, article: artFilter.article || undefined } })
+      setArtData(r.data.data)
+    } catch (e: unknown) {
+      setArtError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Article Req data')
+    }
+    setArtLoading(false)
+  }, [artFilter])
+
+  const loadMc = useCallback(async () => {
+    setMcLoading(true); setMcError(null)
+    try {
+      const r = await http.get('/req/mc_pivot', { params: { department: mcFilter.dept || undefined, display_type: mcFilter.display_type || undefined } })
+      setMcData(r.data.data)
+    } catch (e: unknown) {
+      setMcError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load MC Req data')
+    }
+    setMcLoading(false)
+  }, [mcFilter])
+
+  useEffect(() => { if (activeTab === 'mrp' && !mrpFetched.current) { mrpFetched.current = true; loadMrp() } }, [activeTab, loadMrp])
+  useEffect(() => { if (activeTab === 'art' && !artFetched.current) { artFetched.current = true; loadArt() } }, [activeTab, loadArt])
+  useEffect(() => { if (activeTab === 'mc'  && !mcFetched.current)  { mcFetched.current  = true; loadMc()  } }, [activeTab, loadMc])
 
   const loadSize = useCallback(async () => {
     setSizeLoading(true)
@@ -233,11 +291,16 @@ export default function ReqDashboard() {
             }}>↻ Refresh</button>
           )}
           {activeTab === 'size' && (
-            <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{
-              fontSize: 12, padding: '6px 14px', borderRadius: 8,
-              background: '#1e293b', border: '1px solid #334155',
-              color: '#94a3b8', cursor: 'pointer',
-            }}>↻ Refresh</button>
+            <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+          )}
+          {activeTab === 'mrp' && (
+            <button onClick={() => { mrpFetched.current = false; loadMrp() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+          )}
+          {activeTab === 'art' && (
+            <button onClick={() => { artFetched.current = false; loadArt() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+          )}
+          {activeTab === 'mc' && (
+            <button onClick={() => { mcFetched.current = false; loadMc() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
           )}
         </div>
       </div>
@@ -245,6 +308,9 @@ export default function ReqDashboard() {
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {TAB_BTN('views', 'Req Views', '📋')}
+        {TAB_BTN('mrp', 'MRP Req', '🏷️')}
+        {TAB_BTN('art', 'Article Req', '📦')}
+        {TAB_BTN('mc', 'MC Req', '🧩')}
         {TAB_BTN('sparky', 'Sparky Req', '⚡')}
         {TAB_BTN('size', 'Size Req', '📐')}
       </div>
@@ -445,6 +511,254 @@ export default function ReqDashboard() {
         </div>
       )}
       </> }
+
+      {/* ── MRP Req Tab ── */}
+      {activeTab === 'mrp' && (() => {
+        type MrpRow = { department: string; display_type: string; mrp: number; article_name: string; store_cnt: number; lm_sl_q: number; mtd_sl_q: number; ttl_stk_q: number; to_q: number; pbs: number; req: number; grc_q: number; msa_q: number; alloc_q: number; wms_q: number; rest_dc_q: number; ppo_q: number }
+        const rows = (mrpData?.rows ?? []) as unknown as MrpRow[]
+        const depts = Array.from(new Set(rows.map(r => r.department)))
+        return (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input placeholder="Filter Department…" value={mrpFilter.dept} onChange={e => setMrpFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 180 }} />
+              <input placeholder="Filter Display Type…" value={mrpFilter.display_type} onChange={e => setMrpFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              <input placeholder="Filter Article…" value={mrpFilter.article} onChange={e => setMrpFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 180 }} />
+              <button onClick={() => { mrpFetched.current = false; loadMrp() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#f59e0b', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
+              {mrpData && <span style={{ fontSize: 12, color: '#475569' }}>{mrpData.total_rows.toLocaleString()} rows</span>}
+            </div>
+            {mrpLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading MRP data from Oracle…</div>}
+            {mrpError && !mrpData && <div style={{ color: '#f87171', padding: 20 }}>{mrpError}</div>}
+            {mrpError && mrpData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
+            {mrpData && !mrpLoading && (
+              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#0a0f1e' }}>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                      <th colSpan={2} style={{ padding: '4px 10px', color: '#f59e0b', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>MRP Req</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
+                      <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
+                    </tr>
+                    <tr style={{ background: '#131929' }}>
+                      {[['Department','#cbd5e1'],['Display Type','#94a3b8'],['MRP','#f59e0b'],['Article Name','#cbd5e1'],
+                        ['Stores','#38bdf8'],['LM Sale','#64748b'],['MTD Sale','#64748b'],['Store Stk','#64748b'],['TO Qty','#64748b'],
+                        ['PBS','#f59e0b'],['MRP Req','#f59e0b'],
+                        ['GRC','#10b981'],['MSA','#10b981'],['Alloc','#10b981'],['WMS','#10b981'],['Rest DC','#10b981'],
+                        ['PPO Qty','#8b5cf6'],
+                      ].map(([lbl, col], i) => (
+                        <th key={i} style={{ padding: '6px 10px', color: col, fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap', textAlign: i > 3 ? 'right' : 'left', borderRight: [3,8,10,15].includes(i) ? '1px solid #1e293b' : undefined, position: 'sticky', top: 0, background: '#131929' }}>{lbl}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {depts.map(dept => {
+                      const dr = rows.filter(r => r.department === dept)
+                      const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), req: a.req+n(r.req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
+                      return [
+                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={17} style={{ padding: '6px 10px', color: '#f59e0b', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🏷️ {dept}</td></tr>,
+                        ...dr.map((r, i) => (
+                          <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
+                            <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
+                            <td style={{ padding:'5px 10px', color:'#64748b', fontSize:11, borderBottom:'1px solid #131929', whiteSpace:'nowrap' }}>{r.display_type ?? '—'}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#f59e0b', fontWeight:600, borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.mrp)}</td>
+                            <td style={{ padding:'5px 10px', color:'#e2e8f0', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.article_name}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:600, borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.store_cnt)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.to_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#f59e0b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.pbs)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color: r.req>0?'#fbbf24':'#334155', fontWeight: r.req>0?700:400, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.req)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.grc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.msa_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.alloc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.wms_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.rest_dc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#8b5cf6', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ppo_q)}</td>
+                          </tr>
+                        )),
+                        <tr key={`t-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
+                          <td colSpan={4} style={{ padding:'5px 10px', color:'#4ade80', fontWeight:700, fontSize:11, borderBottom:'1px solid #1e293b', borderRight:'1px solid #0f172a' }}>{dept} Total</td>
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.sc)}</td>
+                          {[tot.lm,tot.mtd,tot.stk,tot.to].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===3?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.pbs,tot.req].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#fbbf24', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===1?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.grc,tot.msa,tot.alloc,tot.wms,tot.rest].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===4?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#a78bfa', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.ppo)}</td>
+                        </tr>
+                      ]
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Article Req Tab ── */}
+      {activeTab === 'art' && (() => {
+        type ArtRow = { department: string; display_type: string; article_name: string; store_cnt: number; lm_sl_q: number; mtd_sl_q: number; ttl_stk_q: number; to_q: number; pbs: number; req: number; grc_q: number; msa_q: number; alloc_q: number; wms_q: number; rest_dc_q: number; ppo_q: number }
+        const rows = (artData?.rows ?? []) as unknown as ArtRow[]
+        const depts = Array.from(new Set(rows.map(r => r.department)))
+        return (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input placeholder="Filter Department…" value={artFilter.dept} onChange={e => setArtFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 180 }} />
+              <input placeholder="Filter Display Type…" value={artFilter.display_type} onChange={e => setArtFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              <input placeholder="Filter Article…" value={artFilter.article} onChange={e => setArtFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 180 }} />
+              <button onClick={() => { artFetched.current = false; loadArt() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#0ea5e9', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
+              {artData && <span style={{ fontSize: 12, color: '#475569' }}>{artData.total_rows.toLocaleString()} rows</span>}
+            </div>
+            {artLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Article Req data from Oracle…</div>}
+            {artError && !artData && <div style={{ color: '#f87171', padding: 20 }}>{artError}</div>}
+            {artError && artData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
+            {artData && !artLoading && (
+              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#0a0f1e' }}>
+                      <th colSpan={3} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                      <th colSpan={2} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Art Req</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
+                      <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
+                    </tr>
+                    <tr style={{ background: '#131929' }}>
+                      {[['Department','#cbd5e1'],['Display Type','#94a3b8'],['Article Name','#cbd5e1'],
+                        ['Stores','#38bdf8'],['LM Sale','#64748b'],['MTD Sale','#64748b'],['Store Stk','#64748b'],['TO Qty','#64748b'],
+                        ['PBS','#0ea5e9'],['Art Req','#0ea5e9'],
+                        ['GRC','#10b981'],['MSA','#10b981'],['Alloc','#10b981'],['WMS','#10b981'],['Rest DC','#10b981'],
+                        ['PPO Qty','#8b5cf6'],
+                      ].map(([lbl, col], i) => (
+                        <th key={i} style={{ padding: '6px 10px', color: col, fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap', textAlign: i > 2 ? 'right' : 'left', borderRight: [2,7,9,14].includes(i) ? '1px solid #1e293b' : undefined, position: 'sticky', top: 0, background: '#131929' }}>{lbl}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {depts.map(dept => {
+                      const dr = rows.filter(r => r.department === dept)
+                      const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), req: a.req+n(r.req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
+                      return [
+                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={16} style={{ padding: '6px 10px', color: '#0ea5e9', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📦 {dept}</td></tr>,
+                        ...dr.map((r, i) => (
+                          <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
+                            <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
+                            <td style={{ padding:'5px 10px', color:'#64748b', fontSize:11, borderBottom:'1px solid #131929', whiteSpace:'nowrap' }}>{r.display_type ?? '—'}</td>
+                            <td style={{ padding:'5px 10px', color:'#e2e8f0', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.article_name}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:600, borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.store_cnt)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.to_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#0ea5e9', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.pbs)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color: r.req>0?'#38bdf8':'#334155', fontWeight: r.req>0?700:400, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.req)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.grc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.msa_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.alloc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.wms_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.rest_dc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#8b5cf6', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ppo_q)}</td>
+                          </tr>
+                        )),
+                        <tr key={`t-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
+                          <td colSpan={3} style={{ padding:'5px 10px', color:'#4ade80', fontWeight:700, fontSize:11, borderBottom:'1px solid #1e293b', borderRight:'1px solid #0f172a' }}>{dept} Total</td>
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.sc)}</td>
+                          {[tot.lm,tot.mtd,tot.stk,tot.to].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===3?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.pbs,tot.req].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===1?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.grc,tot.msa,tot.alloc,tot.wms,tot.rest].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===4?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#a78bfa', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.ppo)}</td>
+                        </tr>
+                      ]
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── MC Req Tab ── */}
+      {activeTab === 'mc' && (() => {
+        type McRow = { department: string; display_type: string; store_cnt: number; lm_sl_q: number; mtd_sl_q: number; ttl_stk_q: number; to_q: number; pbs: number; req: number; grc_q: number; msa_q: number; alloc_q: number; wms_q: number; rest_dc_q: number; ppo_q: number }
+        const rows = (mcData?.rows ?? []) as unknown as McRow[]
+        const depts = Array.from(new Set(rows.map(r => r.department)))
+        return (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input placeholder="Filter Department…" value={mcFilter.dept} onChange={e => setMcFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+              <input placeholder="Filter Display Type…" value={mcFilter.display_type} onChange={e => setMcFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 180 }} />
+              <button onClick={() => { mcFetched.current = false; loadMc() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#6366f1', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
+              {mcData && <span style={{ fontSize: 12, color: '#475569' }}>{mcData.total_rows.toLocaleString()} rows</span>}
+            </div>
+            {mcLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading MC Req data from Oracle…</div>}
+            {mcError && !mcData && <div style={{ color: '#f87171', padding: 20 }}>{mcError}</div>}
+            {mcError && mcData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
+            {mcData && !mcLoading && (
+              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#0a0f1e' }}>
+                      <th colSpan={2} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>MC</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
+                      <th colSpan={2} style={{ padding: '4px 10px', color: '#6366f1', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>MC Req</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
+                      <th colSpan={1} style={{ padding: '4px 10px', color: '#8b5cf6', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>PPO</th>
+                    </tr>
+                    <tr style={{ background: '#131929' }}>
+                      {[['Department','#cbd5e1'],['Display Type','#94a3b8'],
+                        ['Stores','#38bdf8'],['LM Sale','#64748b'],['MTD Sale','#64748b'],['Store Stk','#64748b'],['TO Qty','#64748b'],
+                        ['PBS','#6366f1'],['MC Req','#6366f1'],
+                        ['GRC','#10b981'],['MSA','#10b981'],['Alloc','#10b981'],['WMS','#10b981'],['Rest DC','#10b981'],
+                        ['PPO Qty','#8b5cf6'],
+                      ].map(([lbl, col], i) => (
+                        <th key={i} style={{ padding: '6px 10px', color: col, fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap', textAlign: i > 1 ? 'right' : 'left', borderRight: [1,6,8,13].includes(i) ? '1px solid #1e293b' : undefined, position: 'sticky', top: 0, background: '#131929' }}>{lbl}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {depts.map(dept => {
+                      const dr = rows.filter(r => r.department === dept)
+                      const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), req: a.req+n(r.req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
+                      return [
+                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={15} style={{ padding: '6px 10px', color: '#6366f1', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🧩 {dept}</td></tr>,
+                        ...dr.map((r, i) => (
+                          <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
+                            <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
+                            <td style={{ padding:'5px 10px', color:'#64748b', fontSize:11, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', whiteSpace:'nowrap' }}>{r.display_type ?? '—'}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:600, borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.store_cnt)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#64748b', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.to_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#6366f1', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.pbs)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color: r.req>0?'#818cf8':'#334155', fontWeight: r.req>0?700:400, borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.req)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.grc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.msa_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.alloc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.wms_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#10b981', borderBottom:'1px solid #131929', borderRight:'1px solid #0f172a', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.rest_dc_q)}</td>
+                            <td style={{ padding:'5px 10px', textAlign:'right', color:'#8b5cf6', borderBottom:'1px solid #131929', fontVariantNumeric:'tabular-nums' }}>{fmtN(r.ppo_q)}</td>
+                          </tr>
+                        )),
+                        <tr key={`t-${dept}`} style={{ background: '#0f1f35', borderTop: '1px solid #1e3a2f' }}>
+                          <td colSpan={2} style={{ padding:'5px 10px', color:'#4ade80', fontWeight:700, fontSize:11, borderBottom:'1px solid #1e293b', borderRight:'1px solid #0f172a' }}>{dept} Total</td>
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#38bdf8', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.sc)}</td>
+                          {[tot.lm,tot.mtd,tot.stk,tot.to].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===3?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.pbs,tot.req].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#818cf8', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===1?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          {[tot.grc,tot.msa,tot.alloc,tot.wms,tot.rest].map((v,i)=><td key={i} style={{ padding:'5px 10px', textAlign:'right', color:'#4ade80', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums', ...(i===4?{borderRight:'1px solid #0f172a'}:{}) }}>{fmtN(v)}</td>)}
+                          <td style={{ padding:'5px 10px', textAlign:'right', color:'#a78bfa', fontWeight:700, borderBottom:'1px solid #1e293b', fontVariantNumeric:'tabular-nums' }}>{fmtN(tot.ppo)}</td>
+                        </tr>
+                      ]
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Sparky Req Tab ── */}
       {activeTab === 'sparky' && (

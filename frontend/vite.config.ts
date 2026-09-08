@@ -4,6 +4,19 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Escape non-ASCII chars to \uXXXX so charset doesn't affect rendering
+    modulePreload: false,
+    rollupOptions: {
+      output: {
+        generatedCode: { symbols: false },
+      },
+    },
+    minify: 'esbuild',
+  },
+  esbuild: {
+    charset: 'ascii',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

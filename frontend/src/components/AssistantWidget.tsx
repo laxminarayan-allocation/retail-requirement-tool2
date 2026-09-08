@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+﻿import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContext'
 
 interface Message {
@@ -20,7 +20,7 @@ const s: Record<string, React.CSSProperties> = {
   panel: {
     position: 'fixed', bottom: 84, right: 24, zIndex: 999,
     width: 360, height: 520,
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+    background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12,
     display: 'flex', flexDirection: 'column',
     boxShadow: '0 8px 40px rgba(0,0,0,.5)',
     overflow: 'hidden',
@@ -59,12 +59,12 @@ const s: Record<string, React.CSSProperties> = {
     animation: 'blink .7s step-end infinite',
   },
   inputRow: {
-    borderTop: '1px solid #334155', padding: '10px 12px',
+    borderTop: '1px solid var(--card-border)', padding: '10px 12px',
     display: 'flex', gap: 8, alignItems: 'flex-end',
   },
   textarea: {
-    flex: 1, background: '#0f172a', border: '1px solid #334155',
-    borderRadius: 8, color: '#e2e8f0', fontSize: 12.5,
+    flex: 1, background: 'var(--content-bg)', border: '1px solid var(--card-border)',
+    borderRadius: 8, color: 'var(--text-primary)', fontSize: 12.5,
     padding: '8px 10px', resize: 'none', outline: 'none',
     lineHeight: 1.5, maxHeight: 100, overflowY: 'auto',
     fontFamily: 'inherit',
@@ -218,7 +218,7 @@ export default function AssistantWidget() {
       <button
         style={s.fab}
         onClick={() => setOpen(o => !o)}
-        title="Ask the SS27 Assistant"
+        title="Ask the Allocation Assistant"
       >
         {open ? '✕' : '💬'}
       </button>
@@ -231,7 +231,7 @@ export default function AssistantWidget() {
             <div style={s.headerTitle}>
               <span style={{ fontSize: 18 }}>🤖</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#e0f2fe' }}>SS27 Assistant</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#e0f2fe' }}>Allocation Assistant</div>
                 <div style={{ fontSize: 10, color: '#93c5fd' }}>Ask anything about this app</div>
               </div>
             </div>
@@ -243,19 +243,19 @@ export default function AssistantWidget() {
             {messages.length === 0 ? (
               <div style={s.welcome}>
                 <span style={{ fontSize: 32 }}>💬</span>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
                   How can I help you?
                 </div>
-                <div style={{ fontSize: 11, color: '#475569', marginBottom: 8 }}>
-                  I know everything about the SS27 Retail Replenishment Tool.
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  I know everything about the Allocation Retail Replenishment Tool.
                 </div>
                 {WELCOME_SUGGESTIONS.map(s => (
                   <button
                     key={s}
                     onClick={() => send(s)}
                     style={{
-                      background: '#0f172a', border: '1px solid #334155',
-                      borderRadius: 8, color: '#94a3b8', fontSize: 11,
+                      background: 'var(--content-bg)', border: '1px solid var(--card-border)',
+                      borderRadius: 8, color: 'var(--text-secondary)', fontSize: 11,
                       padding: '7px 12px', cursor: 'pointer', textAlign: 'left',
                       width: '100%', transition: 'border-color .15s',
                     }}
@@ -271,7 +271,7 @@ export default function AssistantWidget() {
                 <div key={i} style={s.bubble(msg.role)}>
                   {msg.content || (msg.streaming ? '' : '…')}
                   {msg.streaming && msg.content === '' && (
-                    <span style={{ color: '#64748b', fontSize: 11 }}>Thinking…</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Thinking…</span>
                   )}
                   {msg.streaming && msg.content !== '' && (
                     <span style={s.cursor} />

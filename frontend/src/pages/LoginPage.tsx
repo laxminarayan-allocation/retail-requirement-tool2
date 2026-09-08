@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+﻿import { useState, useRef, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '@/context/AuthContext'
@@ -10,24 +10,24 @@ function domainOk(email: string) {
 
 const S: Record<string, React.CSSProperties> = {
   shell: {
-    minHeight: '100vh', background: '#0f172a',
+    minHeight: '100vh', background: 'var(--content-bg)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 24, fontFamily: "'Segoe UI', system-ui, sans-serif",
   },
   card: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10,
     padding: '40px 36px', width: '100%', maxWidth: 420,
     boxShadow: '0 8px 32px rgba(0,0,0,.4)',
   },
   cardWide: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10,
     padding: '36px 36px', width: '100%', maxWidth: 680,
     boxShadow: '0 8px 32px rgba(0,0,0,.4)',
   },
   brand: { fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' as const, color: '#38bdf8', marginBottom: 6 },
-  title: { fontSize: 22, fontWeight: 800, color: '#e2e8f0', marginBottom: 4, letterSpacing: '-.02em' },
-  sub: { fontSize: 12, color: '#64748b', marginBottom: 28 },
-  tabs: { display: 'flex', gap: 0, background: '#0f172a', borderRadius: 6, padding: 3, marginBottom: 24 },
+  title: { fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4, letterSpacing: '-.02em' },
+  sub: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 28 },
+  tabs: { display: 'flex', gap: 0, background: 'var(--content-bg)', borderRadius: 6, padding: 3, marginBottom: 24 },
   tab: (active: boolean): React.CSSProperties => ({
     flex: 1, textAlign: 'center', padding: '7px 0', fontSize: 13,
     fontWeight: active ? 700 : 400, color: active ? '#e2e8f0' : '#64748b',
@@ -35,12 +35,12 @@ const S: Record<string, React.CSSProperties> = {
     border: 'none', borderRadius: 4, cursor: 'pointer', transition: 'all .15s',
   }),
   label: {
-    display: 'block', fontSize: 11, fontWeight: 600, color: '#94a3b8',
+    display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
     letterSpacing: '.06em', textTransform: 'uppercase' as const, marginBottom: 6,
   },
   input: {
-    width: '100%', background: '#0f172a', border: '1px solid #334155',
-    borderRadius: 6, padding: '10px 12px', fontSize: 13, color: '#e2e8f0',
+    width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)',
+    borderRadius: 6, padding: '10px 12px', fontSize: 13, color: 'var(--text-primary)',
     outline: 'none', marginBottom: 16, boxSizing: 'border-box' as const, transition: 'border-color .15s',
   },
   btn: {
@@ -61,10 +61,10 @@ const S: Record<string, React.CSSProperties> = {
     background: 'rgba(52,211,153,.08)', border: '1px solid rgba(52,211,153,.3)',
     borderRadius: 6, padding: '12px 14px', fontSize: 12, color: '#34d399', marginBottom: 16, lineHeight: 1.7,
   },
-  note: { marginTop: 20, fontSize: 11, color: '#475569', textAlign: 'center' as const, lineHeight: 1.6 },
+  note: { marginTop: 20, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' as const, lineHeight: 1.6 },
   link: { color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', fontSize: 12, padding: 0 },
   tempPw: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+    background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6,
     padding: '8px 12px', fontFamily: 'monospace', fontSize: 16, fontWeight: 700,
     color: '#fbbf24', letterSpacing: 2, textAlign: 'center' as const, margin: '8px 0',
   },
@@ -95,10 +95,15 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [warnMsg, setWarnMsg] = useState('')   // duplicate email hint
   const [loading, setLoading] = useState(false)
+  const [conflictSessions, setConflictSessions] = useState<{ip: string; device_name: string; browser: string; os: string; since: number}[] | null>(null)
 
   // Forgot password result
   const [tempPw, setTempPw] = useState<string | null>(null)
   const [forgotSent, setForgotSent] = useState(false)
+
+  // Ref to capture credentials at the moment conflict dialog appears.
+  // Needed because browser autofill may not update React state via onChange.
+  const conflictCreds = useRef({ email: '', password: '' })
 
   const emailErr = email.length > 3 && !domainOk(email)
 
@@ -109,12 +114,48 @@ export default function LoginPage() {
   // ── Sign In ──────────────────────────────────────────────────────────────────
   async function handleSignin(e: FormEvent) {
     e.preventDefault()
-    if (!email || !password) return
-    setError(''); setLoading(true)
+    // Read from DOM directly in case browser autofill didn't fire onChange
+    const emailVal = email || (e.currentTarget.querySelector('input[type="email"]') as HTMLInputElement)?.value || ''
+    const pwVal = password || (e.currentTarget.querySelector('input[type="password"]') as HTMLInputElement)?.value || ''
+    if (!emailVal || !pwVal) return
+    if (emailVal !== email) setEmail(emailVal)
+    if (pwVal !== password) setPassword(pwVal)
+    setError(''); setConflictSessions(null); setLoading(true)
     try {
-      const res = await axios.post('/api/auth/signin', { email, password })
-      if (!res.data.success) { setError(res.data.message || 'An error occurred.'); return }
-      signin(res.data.data.token)
+      const res = await axios.post('/api/auth/signin', { email: emailVal, password: pwVal })
+      if (!res.data.success) {
+        setError(res.data.message || 'An error occurred.')
+        if (res.data.data?.conflict_sessions) {
+          // Save credentials in ref so force-login always has them
+          conflictCreds.current = { email: emailVal, password: pwVal }
+          setConflictSessions(res.data.data.conflict_sessions)
+        }
+        return
+      }
+      if (res.data.data.session_id) {
+        try { localStorage.setItem('ck_session_id', res.data.data.session_id) } catch {}
+      }
+      await signin(res.data.data.token)
+      navigate('/', { replace: true })
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'An error occurred.')
+    } finally { setLoading(false) }
+  }
+
+  async function handleForceLogin() {
+    setLoading(true); setError('')
+    // Use saved ref credentials (autofill-safe) or fall back to state
+    const creds = conflictCreds.current.email
+      ? conflictCreds.current
+      : { email, password }
+    try {
+      const res = await axios.post('/api/auth/force-login', creds)
+      if (!res.data.success) { setError(res.data.message || 'Force login failed.'); return }
+      setConflictSessions(null)
+      if (res.data.data.session_id) {
+        try { localStorage.setItem('ck_session_id', res.data.data.session_id) } catch {}
+      }
+      await signin(res.data.data.token)
       navigate('/', { replace: true })
     } catch (err: any) {
       setError(err.response?.data?.message || 'An error occurred.')
@@ -145,7 +186,7 @@ export default function LoginPage() {
         }
         return
       }
-      signin(res.data.data.token)
+      await signin(res.data.data.token)
       navigate('/', { replace: true })
     } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.detail?.[0]?.msg || 'An error occurred.'
@@ -175,9 +216,19 @@ export default function LoginPage() {
   return (
     <div style={S.shell}>
       <div style={mode === 'signup' ? S.cardWide : S.card}>
-        <div style={S.brand}>CityKart · SS27</div>
-        <div style={S.title}>Retail Requirement Tool</div>
-        <div style={S.sub}>Sign in to access replenishment planning</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 13, background: '#b91c1c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+              <path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61h9.72a2 2 0 001.99-1.73L23 6H6"/>
+            </svg>
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
+            CityKart <span style={{ color: '#4ade80' }}>Alloc</span>
+          </div>
+          <div style={{ fontSize: 8, color: '#86efac', letterSpacing: '2px', textTransform: 'uppercase' }}>Allocation Tool</div>
+        </div>
+        <div style={S.sub}>Sign in to access allocation planning</div>
 
         {/* Tabs — Sign In / Sign Up only; Forgot is inline */}
         {mode !== 'forgot' && (
@@ -191,6 +242,31 @@ export default function LoginPage() {
         {mode === 'signin' && (
           <>
             {error && <div style={S.err}>{error}</div>}
+            {conflictSessions && conflictSessions.length > 0 && (
+              <div style={{ background: '#1e1a2e', border: '1px solid #7c3aed', borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#c4b5fd', marginBottom: 8 }}>
+                  Active session(s) on other device(s):
+                </div>
+                {conflictSessions.map((s, i) => (
+                  <div key={i} style={{ fontSize: 11, color: '#a78bfa', marginBottom: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <span>🖥️ {s.device_name || 'Unknown device'}</span>
+                    <span>·</span>
+                    <span>{s.browser} / {s.os}</span>
+                    <span>·</span>
+                    <span>IP: {s.ip || '—'}</span>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleForceLogin}
+                  disabled={loading}
+                  style={{ marginTop: 10, width: '100%', padding: '8px 0', background: '#7c3aed',
+                    color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700,
+                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+                  {loading ? 'Logging in…' : '⚡ Logout from all devices & Login here'}
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSignin}>
               <label style={S.label}>Email</label>
               <input style={{ ...S.input, ...(emailErr ? { borderColor: '#ef4444' } : {}) }}
@@ -326,8 +402,8 @@ export default function LoginPage() {
         {mode === 'forgot' && (
           <>
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0', marginBottom: 4 }}>Reset Password</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Reset Password</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 Enter your registered email. A temporary password will be generated for you.
               </div>
             </div>
@@ -342,7 +418,7 @@ export default function LoginPage() {
                 <div style={{ fontSize: 11, color: '#6ee7b7', marginTop: 4 }}>
                   Copy this password → Sign In → change it immediately.
                 </div>
-                <button style={{ ...S.btn, marginTop: 12, background: '#0f172a', border: '1px solid #334155', fontSize: 12 }}
+                <button style={{ ...S.btn, marginTop: 12, background: 'var(--content-bg)', border: '1px solid var(--card-border)', fontSize: 12 }}
                   onClick={() => { switchMode('signin'); setPassword('') }}>
                   → Go to Sign In
                 </button>
@@ -353,7 +429,7 @@ export default function LoginPage() {
             {forgotSent && (
               <div style={S.success}>
                 📧 If <strong>{email}</strong> is registered, a temporary password has been sent to your email.
-                <button style={{ ...S.btn, marginTop: 12, background: '#0f172a', border: '1px solid #334155', fontSize: 12 }}
+                <button style={{ ...S.btn, marginTop: 12, background: 'var(--content-bg)', border: '1px solid var(--card-border)', fontSize: 12 }}
                   onClick={() => switchMode('signin')}>
                   → Back to Sign In
                 </button>

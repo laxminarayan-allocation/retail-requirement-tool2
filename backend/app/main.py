@@ -6,10 +6,13 @@ Phase 14: production hardening — security headers, global exception handler,
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.logging_config import configure_logging
@@ -29,6 +32,8 @@ from app.api.routes import sop as sop_routes
 from app.api.routes import nso as nso_routes
 from app.api.routes import sale as sale_routes
 from app.api.routes import req_dashboard as req_dashboard_routes
+from app.api.routes import distribution as distribution_routes
+from app.api.routes import simulation as simulation_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -66,6 +71,28 @@ async def lifespan(app: FastAPI):
     register_views_in_master_data()
     if settings.is_oracle_configured:
         start_scheduler()
+
+    # DB Explorer: start configurable auto-refresh scheduler
+    from app.core.db_scheduler import start_scheduler as db_start_scheduler
+    if settings.is_oracle_configured:
+        db_start_scheduler()
+
+        # Layer 3: Dashboard cache warm — refresh every 2 hours so viewers never wait
+        import threading as _th2
+        def _dashboard_cache_loop():
+            import time as _t
+            _t.sleep(30)  # wait 30s for startup warmup to finish first
+            while True:
+                try:
+                    from app.api.routes.dashboard import _fetch_oracle_stats_fresh
+                    _fetch_oracle_stats_fresh()
+                    logger.info("dashboard-cache-refresh: oracle stats refreshed")
+                except Exception as exc:
+                    logger.warning("dashboard-cache-refresh: failed — %s", exc)
+                _t.sleep(2 * 3600)  # sleep 2 hours
+
+        _th2.Thread(target=_dashboard_cache_loop, daemon=True, name="dashboard-cache-refresh").start()
+        logger.info("Dashboard cache refresh thread started (every 2 hrs)")
 
     yield
 
@@ -163,16 +190,19 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/auth/me",                None,          "pending"),
     ("/api/auth/signout",           None,          "pending"),
     ("/api/auth/request-role",      {"POST"},      "pending"),
-    # Any authenticated user can see their own logs
+    # Any authenticated user can see their own data
     ("/api/auth/my-logs",          {"GET"},       "viewer"),
+    ("/api/auth/my-page-access",   {"GET"},       "viewer"),
     # Admin only
     ("/api/auth/",                  None,          "admin"),
     ("/api/system/",               None,          "admin"),
     # Planner+ (write operations, database explorer, factors)
     ("/api/sop/",                  None,          "viewer"),   # read all; write enforced in route
-    ("/api/database/query/export", {"POST"},      "admin"),
-    ("/api/database/output/",      None,          "viewer"),
-    ("/api/database/",             None,          "planner"),
+    ("/api/database/query/export",   {"POST"},      "admin"),
+    ("/api/database/output/freq",    {"POST"},      "planner"),
+    ("/api/database/output/schedule",{"PUT"},       "planner"),
+    ("/api/database/output/",        None,          "viewer"),
+    ("/api/database/",               None,          "planner"),
     ("/api/factors/",              None,          "planner"),
     ("/api/calculation/run",       {"POST"},      "planner"),
     # Viewer+ (read-only browsing)
@@ -187,6 +217,8 @@ _ROUTE_ROLES: list[tuple] = [
     # Notifications — send is admin only, rest is viewer+
     ("/api/notifications/send",    {"POST"},      "admin"),
     ("/api/notifications/",        None,          "viewer"),
+    # Simulation — planner+ (reads Oracle-derived data)
+    ("/api/simulation/",           None,          "planner"),
     # Fallback — any API route needs at least viewer
     ("/api/",                      None,          "viewer"),
 ]
@@ -220,10 +252,15 @@ async def jwt_auth_middleware(request: Request, call_next):
     path = request.url.path
     method = request.method
 
-    if (path in ("/", "/favicon.ico")
+    if (path.startswith("/assets")
+            or path in ("/favicon.ico", "/manifest.json", "/robots.txt")
             or path.startswith("/docs")
             or path.startswith("/redoc")
             or path.startswith("/openapi")):
+        return await call_next(request)
+
+    # SPA routes (non-API paths) — pass through; index.html is public
+    if not path.startswith("/api"):
         return await call_next(request)
 
     min_role = _required_role(path, method)
@@ -331,9 +368,11 @@ app.include_router(sop_routes.router,   prefix="/api")    # SOP / Procedures
 app.include_router(nso_routes.router,   prefix="/api")    # NSO Dashboard
 app.include_router(sale_routes.router,  prefix="/api")    # Sale Dashboard
 app.include_router(req_dashboard_routes.router, prefix="/api")  # Requirements Dashboard
+app.include_router(distribution_routes.router, prefix="/api")  # Distribution Model
+app.include_router(simulation_routes.router, prefix="/api")   # Allocation Simulation
 
 
-@app.get("/", tags=["Root"])
+@app.get("/api", tags=["Root"])
 async def root():
     return {
         "message": "Retail Requirement Tool API",
@@ -341,3 +380,41 @@ async def root():
         "environment": settings.app_env,
         "docs": "/docs" if not settings.is_production else None,
     }
+
+
+# ── Static file serving (production build) ────────────────────────────────────
+# Mount frontend/dist so Tailscale Funnel can proxy port 8000 directly.
+# This must come AFTER all /api routes so it never shadows API endpoints.
+
+_DIST_DIR = Path(__file__).parent.parent.parent / "frontend" / "dist"
+
+
+class _CharsetMiddleware(BaseHTTPMiddleware):
+    """Ensure text/javascript and text/css responses carry charset=utf-8."""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        ct = response.headers.get("content-type", "")
+        if ct and ("javascript" in ct or "css" in ct) and "charset" not in ct:
+            response.headers["content-type"] = ct + "; charset=utf-8"
+        return response
+
+app.add_middleware(_CharsetMiddleware)
+
+if _DIST_DIR.exists():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(_DIST_DIR / "assets")),
+        name="static-assets",
+    )
+
+    @app.get("/citykart-logo.png", include_in_schema=False)
+    async def serve_logo():
+        return FileResponse(str(_DIST_DIR / "citykart-logo.png"))
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        # Serve index.html — no-cache so browser always gets the latest build
+        return FileResponse(
+            str(_DIST_DIR / "index.html"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )

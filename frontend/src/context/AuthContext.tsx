@@ -15,10 +15,11 @@ interface AuthState {
   user: User | null
   token: string | null
   loading: boolean
+  pageAccess: Record<string, boolean>
 }
 
 interface AuthContextValue extends AuthState {
-  signin: (token: string) => void
+  signin: (token: string) => Promise<void>
   signout: () => void
   refreshMe: () => Promise<void>
 }
@@ -26,6 +27,17 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const TOKEN_KEY = 'ck_ss27_token'
+
+async function fetchPageAccess(): Promise<Record<string, boolean>> {
+  try {
+    const res = await axios.get<{ success: boolean; data: { page_access: Record<string, boolean> } }>(
+      '/api/auth/my-page-access'
+    )
+    return res.data.data?.page_access ?? {}
+  } catch {
+    return {}
+  }
+}
 
 function parseToken(token: string): User | null {
   try {
@@ -42,19 +54,20 @@ function setAxiosToken(token: string | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ user: null, token: null, loading: true })
+  const [state, setState] = useState<AuthState>({ user: null, token: null, loading: true, pageAccess: {} })
 
-  const applyToken = useCallback((token: string) => {
+  const applyToken = useCallback(async (token: string) => {
     const user = parseToken(token)
     if (!user) {
       localStorage.removeItem(TOKEN_KEY)
       setAxiosToken(null)
-      setState({ user: null, token: null, loading: false })
+      setState({ user: null, token: null, loading: false, pageAccess: {} })
       return
     }
     localStorage.setItem(TOKEN_KEY, token)
     setAxiosToken(token)
-    setState({ user, token, loading: false })
+    const pageAccess = await fetchPageAccess()
+    setState({ user, token, loading: false, pageAccess })
   }, [])
 
   // Boot: restore from localStorage
@@ -63,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored) {
       applyToken(stored)
     } else {
-      setState({ user: null, token: null, loading: false })
+      setState({ user: null, token: null, loading: false, pageAccess: {} })
     }
   }, [applyToken])
 
@@ -76,7 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         '/api/auth/me'
       )
       if (res.data.success && res.data.data.new_token) {
-        applyToken(res.data.data.new_token)
+        await applyToken(res.data.data.new_token)
+      } else {
+        // Token unchanged but refresh page access in case admin changed it
+        const pageAccess = await fetchPageAccess()
+        setState(s => ({ ...s, pageAccess }))
       }
     } catch {
       // Ignore — 401 interceptor below will sign out if needed
@@ -106,13 +123,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signin = useCallback((token: string) => {
-    applyToken(token)
+    return applyToken(token)
   }, [applyToken])
 
   const signout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     setAxiosToken(null)
-    setState({ user: null, token: null, loading: false })
+    setState({ user: null, token: null, loading: false, pageAccess: {} })
   }, [])
 
   return (

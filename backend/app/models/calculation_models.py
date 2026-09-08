@@ -12,16 +12,40 @@ class RunStatus(str, Enum):
     ERROR = "error"
 
 
+class ScopeRow(BaseModel):
+    """One (division, attribute1, department) combination for a multi-scope run."""
+    division:   Optional[str] = None
+    attribute1: Optional[str] = None
+    department: Optional[str] = None
+
+
 class RunRequest(BaseModel):
     factor_set_id: str
+    # Legacy single-scope fields (kept for backward compat)
     attribute1: Optional[str] = None
-    season: Optional[str] = None
-    division: Optional[str] = None
+    season:     Optional[str] = None
+    division:   Optional[str] = None
     department: Optional[str] = None
+    # Multi-scope: if provided, overrides the single-scope fields above
+    scopes: List[ScopeRow] = Field(default_factory=list)
     include_transit: bool = True
     include_pack_pending: bool = True
     include_transfer_out: bool = True
     label: Optional[str] = None
+
+
+class HoldRule(BaseModel):
+    """One hold rule applied before distribution loop."""
+    type: str  # 'store' | 'attr1'
+    stores: List[str] = Field(default_factory=list)       # for type='store': stores to hold
+    attr1: Optional[str] = None                            # for type='attr1': attribute1 value to hold
+    except_stores: List[str] = Field(default_factory=list) # for type='attr1': stores exempt from hold
+
+
+class DistributeRequest(BaseModel):
+    wh_col: str = "wh_q"
+    max_round: int = 10
+    hold_rules: List[HoldRule] = Field(default_factory=list)
 
 
 class StepLog(BaseModel):

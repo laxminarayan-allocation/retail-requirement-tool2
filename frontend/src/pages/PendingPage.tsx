@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '@/context/AuthContext'
 
@@ -7,7 +7,7 @@ type ReqStatus = { requested_role: string; status: string; created_at: string } 
 const S: Record<string, React.CSSProperties> = {
   shell: {
     minHeight: '100vh',
-    background: '#0f172a',
+    background: 'var(--content-bg)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -15,8 +15,8 @@ const S: Record<string, React.CSSProperties> = {
     fontFamily: "'Segoe UI', system-ui, sans-serif",
   },
   card: {
-    background: '#1e293b',
-    border: '1px solid #334155',
+    background: 'var(--card-bg)',
+    border: '1px solid var(--card-border)',
     borderRadius: 10,
     padding: '40px 36px',
     width: '100%',
@@ -30,20 +30,20 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontSize: 22, marginBottom: 20,
   },
-  title: { fontSize: 20, fontWeight: 800, color: '#e2e8f0', marginBottom: 6, letterSpacing: '-.02em' },
-  sub: { fontSize: 13, color: '#64748b', lineHeight: 1.6, marginBottom: 28 },
+  title: { fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6, letterSpacing: '-.02em' },
+  sub: { fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 28 },
   label: {
-    display: 'block', fontSize: 11, fontWeight: 600, color: '#94a3b8',
+    display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
     letterSpacing: '.06em', textTransform: 'uppercase' as const, marginBottom: 6,
   },
   select: {
-    width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-    padding: '10px 12px', fontSize: 13, color: '#e2e8f0', outline: 'none',
+    width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6,
+    padding: '10px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none',
     marginBottom: 16, boxSizing: 'border-box' as const,
   },
   textarea: {
-    width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-    padding: '10px 12px', fontSize: 13, color: '#e2e8f0', outline: 'none',
+    width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6,
+    padding: '10px 12px', fontSize: 13, color: 'var(--text-primary)', outline: 'none',
     marginBottom: 16, boxSizing: 'border-box' as const, resize: 'vertical' as const,
     minHeight: 80, fontFamily: 'inherit',
   },
@@ -60,10 +60,10 @@ const S: Record<string, React.CSSProperties> = {
   successSub: { fontSize: 12, color: '#6ee7b7', lineHeight: 1.55 },
   divider: { borderTop: '1px solid #1e3a5f', margin: '24px 0' },
   signoutBtn: {
-    background: 'none', border: '1px solid #334155', borderRadius: 5,
-    color: '#64748b', fontSize: 12, padding: '7px 14px', cursor: 'pointer', marginTop: 8,
+    background: 'none', border: '1px solid var(--card-border)', borderRadius: 5,
+    color: 'var(--text-muted)', fontSize: 12, padding: '7px 14px', cursor: 'pointer', marginTop: 8,
   },
-  roleDesc: { fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 16 },
+  roleDesc: { fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 16 },
 }
 
 export default function PendingPage() {
@@ -114,7 +114,7 @@ export default function PendingPage() {
         <div style={S.icon}>⏳</div>
         <div style={S.title}>Access Pending</div>
         <div style={S.sub}>
-          Welcome, <strong style={{ color: '#cbd5e1' }}>{user?.name}</strong>.<br />
+          Welcome, <strong style={{ color: 'var(--text-secondary)' }}>{user?.name}</strong>.<br />
           Your account needs approval before you can use the tool. Request a role below — the admin will be notified.
         </div>
 
@@ -141,8 +141,8 @@ export default function PendingPage() {
         )}
 
         <div style={S.divider} />
-        <div style={{ fontSize: 11, color: '#475569', marginBottom: 8 }}>
-          Signed in as <strong style={{ color: '#64748b' }}>{user?.email}</strong>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+          Signed in as <strong style={{ color: 'var(--text-muted)' }}>{user?.email}</strong>
         </div>
         <button style={S.signoutBtn} onClick={signout}>Sign out</button>
       </div>

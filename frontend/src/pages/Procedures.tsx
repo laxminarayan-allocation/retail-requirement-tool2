@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import http from '@/api/http'
 import { useAuth } from '@/context/AuthContext'
 
@@ -108,13 +108,13 @@ function Badge({ status }: { status: string }) {
 function Card({ title, children, style }: { title?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+      background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10,
       display: 'flex', flexDirection: 'column', overflow: 'hidden', ...style,
     }}>
       {title && (
         <div style={{
-          padding: '10px 14px', borderBottom: '1px solid #334155',
-          fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '.06em',
+          padding: '10px 14px', borderBottom: '1px solid var(--card-border)',
+          fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '.06em',
           textTransform: 'uppercase', flexShrink: 0,
         }}>{title}</div>
       )}
@@ -135,10 +135,10 @@ function Btn({
   disabled?: boolean
 }) {
   const map = {
-    default: { bg: '#1e293b', color: '#94a3b8', border: '#334155' },
+    default: { bg: '#1e293b', color: 'var(--text-secondary)', border: '#334155' },
     primary: { bg: '#1d4ed8', color: '#fff', border: '#2563eb' },
     danger:  { bg: '#7f1d1d', color: '#fca5a5', border: '#991b1b' },
-    ghost:   { bg: 'transparent', color: '#64748b', border: 'transparent' },
+    ghost:   { bg: 'transparent', color: 'var(--text-muted)', border: 'transparent' },
   }
   const s = map[variant]
   return (
@@ -157,8 +157,8 @@ function Input({ value, onChange, placeholder, style }: {
   return (
     <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
       style={{
-        background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-        color: '#e2e8f0', fontSize: 12, padding: '6px 10px', width: '100%',
+        background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5,
+        color: 'var(--text-primary)', fontSize: 12, padding: '6px 10px', width: '100%',
         outline: 'none', boxSizing: 'border-box', ...style,
       }} />
   )
@@ -172,8 +172,8 @@ function Select({ value, onChange, options, style }: {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
       style={{
-        background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-        color: '#e2e8f0', fontSize: 12, padding: '6px 10px',
+        background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5,
+        color: 'var(--text-primary)', fontSize: 12, padding: '6px 10px',
         outline: 'none', ...style,
       }}>
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -187,8 +187,8 @@ function Textarea({ value, onChange, placeholder, rows = 5 }: {
   return (
     <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
       style={{
-        background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-        color: '#e2e8f0', fontSize: 12, padding: '8px 10px', width: '100%',
+        background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5,
+        color: 'var(--text-primary)', fontSize: 12, padding: '8px 10px', width: '100%',
         outline: 'none', resize: 'vertical', fontFamily: "'Segoe UI', monospace",
         boxSizing: 'border-box',
       }} />
@@ -215,16 +215,16 @@ function ColumnsEditor({ value, onChange }: { value: string; onChange: (v: strin
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>COLUMNS ({cols.length})</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>COLUMNS ({cols.length})</span>
         <Btn small onClick={addCol}>+ Add Column</Btn>
       </div>
       {cols.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
-              <tr style={{ background: '#0f172a' }}>
+              <tr style={{ background: 'var(--content-bg)' }}>
                 {['Column Name', 'Data Type', 'Description', 'PK', 'FK', ''].map(h => (
-                  <th key={h} style={{ padding: '4px 8px', color: '#475569', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #1e293b' }}>{h}</th>
+                  <th key={h} style={{ padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #1e293b' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -260,7 +260,7 @@ function ColumnsEditor({ value, onChange }: { value: string; onChange: (v: strin
         </div>
       )}
       {cols.length === 0 && (
-        <div style={{ fontSize: 11, color: '#334155', padding: '8px 0', textAlign: 'center' }}>No columns defined. Click "+ Add Column".</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 0', textAlign: 'center' }}>No columns defined. Click "+ Add Column".</div>
       )}
     </div>
   )
@@ -285,7 +285,7 @@ function RelationsEditor({ value, onChange }: { value: string; onChange: (v: str
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>RELATIONSHIPS ({rels.length})</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>RELATIONSHIPS ({rels.length})</span>
         <Btn small onClick={addRel}>+ Add Relation</Btn>
       </div>
       {rels.map((r, i) => (
@@ -299,7 +299,7 @@ function RelationsEditor({ value, onChange }: { value: string; onChange: (v: str
         </div>
       ))}
       {rels.length === 0 && (
-        <div style={{ fontSize: 11, color: '#334155', padding: '4px 0' }}>No relationships. Click "+ Add Relation".</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '4px 0' }}>No relationships. Click "+ Add Relation".</div>
       )}
     </div>
   )
@@ -340,7 +340,7 @@ function StepsPanel({
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>PROCESS STEPS ({steps.length})</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>PROCESS STEPS ({steps.length})</span>
         {isAdmin && !adding && <Btn small onClick={() => setAdding(true)}>+ Add Step</Btn>}
       </div>
 
@@ -348,7 +348,7 @@ function StepsPanel({
       {steps.map((s, i) => (
         <div key={s.id} style={{
           display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8,
-          padding: 10, background: '#0f172a', borderRadius: 6, border: '1px solid #1e293b',
+          padding: 10, background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)',
         }}>
           <div style={{
             width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
@@ -356,10 +356,10 @@ function StepsPanel({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>{s.step_no}</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', marginBottom: 2 }}>{s.title}</div>
-            {s.detail && <div style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'pre-wrap' }}>{s.detail}</div>}
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{s.title}</div>
+            {s.detail && <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{s.detail}</div>}
             {s.responsible && (
-              <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                 👤 Responsible: <span style={{ color: '#a78bfa' }}>{s.responsible}</span>
               </div>
             )}
@@ -371,12 +371,12 @@ function StepsPanel({
       ))}
 
       {steps.length === 0 && !adding && (
-        <div style={{ fontSize: 11, color: '#334155', padding: '6px 0' }}>No steps defined.</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 0' }}>No steps defined.</div>
       )}
 
       {/* Add step form */}
       {adding && (
-        <div style={{ padding: 10, background: '#0f172a', borderRadius: 6, border: '1px solid #334155', marginTop: 4 }}>
+        <div style={{ padding: 10, background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)', marginTop: 4 }}>
           <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
             <Input value={String(newStep.step_no || '')} onChange={v => setNewStep(p => ({ ...p, step_no: parseInt(v) || 1 }))}
               placeholder="Step #" style={{ width: 70, flexShrink: 0 }} />
@@ -449,7 +449,7 @@ function DocDetail({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #334155', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <span style={{ fontSize: 18 }}>{cat?.icon || '📄'}</span>
@@ -457,9 +457,9 @@ function DocDetail({
               {cat?.label || fullDoc.category}
             </span>
             <Badge status={fullDoc.status} />
-            <span style={{ fontSize: 10, color: '#475569' }}>v{fullDoc.version}</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>v{fullDoc.version}</span>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {fullDoc.title}
           </div>
         </div>
@@ -475,12 +475,12 @@ function DocDetail({
         {!editing ? (
           <>
             {fullDoc.description && (
-              <div style={{ marginBottom: 14, fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>{fullDoc.description}</div>
+              <div style={{ marginBottom: 14, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fullDoc.description}</div>
             )}
             {fullDoc.tags && (
               <div style={{ marginBottom: 12, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 {fullDoc.tags.split(',').filter(Boolean).map(t => (
-                  <span key={t} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 12, background: '#0f172a', color: '#64748b', border: '1px solid #334155' }}>
+                  <span key={t} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 12, background: 'var(--content-bg)', color: 'var(--text-muted)', border: '1px solid var(--card-border)' }}>
                     {t.trim()}
                   </span>
                 ))}
@@ -488,15 +488,15 @@ function DocDetail({
             )}
             {fullDoc.content && (
               <div style={{
-                marginBottom: 16, padding: 12, background: '#0f172a', borderRadius: 6,
-                border: '1px solid #1e293b', fontSize: 12, color: '#94a3b8',
+                marginBottom: 16, padding: 12, background: 'var(--content-bg)', borderRadius: 6,
+                border: '1px solid var(--card-border)', fontSize: 12, color: 'var(--text-secondary)',
                 whiteSpace: 'pre-wrap', lineHeight: 1.7, fontFamily: "'Segoe UI', monospace",
               }}>
                 {fullDoc.content}
               </div>
             )}
             <StepsPanel docId={fullDoc.id} steps={fullDoc.steps || []} isAdmin={isAdmin} onRefresh={loadFull} />
-            <div style={{ marginTop: 14, fontSize: 10, color: '#334155', display: 'flex', gap: 12 }}>
+            <div style={{ marginTop: 14, fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
               <span>Created: {fmtDate(fullDoc.created_at)} by {fullDoc.created_by}</span>
               {fullDoc.updated_by && <span>Updated: {fmtDate(fullDoc.updated_at)} by {fullDoc.updated_by}</span>}
             </div>
@@ -572,7 +572,7 @@ function NewDocForm({ defaultCategory, onSaved, onCancel }: {
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginBottom: 4 }}>New Document</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>New Document</div>
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ flex: 1 }}>
           <label style={S.label}>Category</label>
@@ -653,7 +653,7 @@ function TableDetail({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #334155', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
             <span style={{
@@ -662,9 +662,9 @@ function TableDetail({
               color: table.table_type === 'MAIN' ? '#60a5fa' : '#c4b5fd',
               border: `1px solid ${table.table_type === 'MAIN' ? '#1d4ed8' : '#7c3aed'}`,
             }}>{table.table_type}</span>
-            {table.schema_owner && <span style={{ fontSize: 10, color: '#64748b' }}>{table.schema_owner}</span>}
+            {table.schema_owner && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{table.schema_owner}</span>}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>{table.table_name}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{table.table_name}</div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {isAdmin && !editing && <Btn small onClick={() => { setForm({ ...table }); setEditing(true) }}>✏️ Edit</Btn>}
@@ -676,16 +676,16 @@ function TableDetail({
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
         {!editing ? (
           <>
-            {table.description && <div style={{ marginBottom: 10, fontSize: 12, color: '#94a3b8' }}>{table.description}</div>}
+            {table.description && <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--text-secondary)' }}>{table.description}</div>}
             {table.purpose && (
-              <div style={{ marginBottom: 14, padding: 10, background: '#0f172a', borderRadius: 6, border: '1px solid #1e293b' }}>
-                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 4 }}>PURPOSE</div>
-                <div style={{ fontSize: 12, color: '#94a3b8', whiteSpace: 'pre-wrap' }}>{table.purpose}</div>
+              <div style={{ marginBottom: 14, padding: 10, background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)' }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>PURPOSE</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{table.purpose}</div>
               </div>
             )}
             {table.table_type === 'SUB' && table.parent_id && (
               <div style={{ marginBottom: 10 }}>
-                <span style={{ fontSize: 10, color: '#64748b' }}>Parent Main Table: </span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Parent Main Table: </span>
                 <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace' }}>
                   {allTables.find(t => t.id === table.parent_id)?.table_name || '—'}
                 </span>
@@ -695,13 +695,13 @@ function TableDetail({
             {/* Columns */}
             {cols.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 6 }}>COLUMNS ({cols.length})</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>COLUMNS ({cols.length})</div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
-                      <tr style={{ background: '#0f172a' }}>
+                      <tr style={{ background: 'var(--content-bg)' }}>
                         {['Column', 'Type', 'PK', 'FK', 'Description'].map(h => (
-                          <th key={h} style={{ padding: '4px 8px', color: '#475569', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #1e293b' }}>{h}</th>
+                          <th key={h} style={{ padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #1e293b' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -709,10 +709,10 @@ function TableDetail({
                       {cols.map((c, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
                           <td style={{ padding: '4px 8px', fontFamily: 'monospace', color: c.is_pk ? '#38bdf8' : '#e2e8f0' }}>{c.col}</td>
-                          <td style={{ padding: '4px 8px', color: '#64748b' }}>{c.type}</td>
+                          <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{c.type}</td>
                           <td style={{ padding: '4px 8px', textAlign: 'center' }}>{c.is_pk ? '🔑' : ''}</td>
                           <td style={{ padding: '4px 8px', textAlign: 'center' }}>{c.is_fk ? '🔗' : ''}</td>
-                          <td style={{ padding: '4px 8px', color: '#64748b' }}>{c.desc}</td>
+                          <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{c.desc}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -724,13 +724,13 @@ function TableDetail({
             {/* Relationships */}
             {rels.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 6 }}>RELATIONSHIPS</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>RELATIONSHIPS</div>
                 {rels.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: '#0f172a', borderRadius: 5, marginBottom: 4, fontSize: 11 }}>
-                    <span style={{ color: '#e2e8f0', fontFamily: 'monospace' }}>{table.table_name}</span>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: 'var(--content-bg)', borderRadius: 5, marginBottom: 4, fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{table.table_name}</span>
                     <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700 }}>{r.rel_type}</span>
                     <span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{r.table}</span>
-                    <span style={{ color: '#475569' }}>ON {r.key}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>ON {r.key}</span>
                   </div>
                 ))}
               </div>
@@ -739,12 +739,12 @@ function TableDetail({
             {/* Sub-tables (for MAIN) */}
             {table.table_type === 'MAIN' && subTables.length > 0 && (
               <div>
-                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 6 }}>LINKED SUB TABLES ({subTables.length})</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>LINKED SUB TABLES ({subTables.length})</div>
                 {subTables.map(st => (
-                  <div key={st.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: '#0f172a', borderRadius: 5, marginBottom: 4 }}>
+                  <div key={st.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--content-bg)', borderRadius: 5, marginBottom: 4 }}>
                     <span style={{ fontSize: 11, color: '#c4b5fd', fontFamily: 'monospace' }}>↳ {st.table_name}</span>
-                    {st.schema_owner && <span style={{ fontSize: 10, color: '#475569' }}>{st.schema_owner}</span>}
-                    {st.description && <span style={{ fontSize: 10, color: '#334155' }}>— {st.description}</span>}
+                    {st.schema_owner && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{st.schema_owner}</span>}
+                    {st.description && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>— {st.description}</span>}
                   </div>
                 ))}
               </div>
@@ -787,10 +787,10 @@ function TableDetail({
               <Textarea value={form.purpose || ''} onChange={f('purpose')} placeholder="What is this table used for?" rows={3} />
             </div>
 
-            <div style={{ background: '#0f172a', padding: 10, borderRadius: 6, border: '1px solid #1e293b' }}>
+            <div style={{ background: 'var(--content-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--card-border)' }}>
               <ColumnsEditor value={form.columns_json || '[]'} onChange={v => f('columns_json')(v)} />
             </div>
-            <div style={{ background: '#0f172a', padding: 10, borderRadius: 6, border: '1px solid #1e293b' }}>
+            <div style={{ background: 'var(--content-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--card-border)' }}>
               <RelationsEditor value={form.relations_json || '[]'} onChange={v => f('relations_json')(v)} />
             </div>
 
@@ -827,7 +827,7 @@ function NewTableForm({ mainTables, onSaved, onCancel }: {
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>Add Data Table</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Add Data Table</div>
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ flex: 1 }}>
           <label style={S.label}>Table Name *</label>
@@ -859,10 +859,10 @@ function NewTableForm({ mainTables, onSaved, onCancel }: {
         <label style={S.label}>Purpose</label>
         <Textarea value={form.purpose || ''} onChange={f('purpose')} placeholder="What is this table used for?" rows={3} />
       </div>
-      <div style={{ background: '#0f172a', padding: 10, borderRadius: 6, border: '1px solid #1e293b' }}>
+      <div style={{ background: 'var(--content-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--card-border)' }}>
         <ColumnsEditor value={form.columns_json || '[]'} onChange={v => f('columns_json')(v)} />
       </div>
-      <div style={{ background: '#0f172a', padding: 10, borderRadius: 6, border: '1px solid #1e293b' }}>
+      <div style={{ background: 'var(--content-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--card-border)' }}>
         <RelationsEditor value={form.relations_json || '[]'} onChange={v => f('relations_json')(v)} />
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -878,7 +878,7 @@ function NewTableForm({ mainTables, onSaved, onCancel }: {
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const S: Record<string, React.CSSProperties> = {
-  label: { display: 'block', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 },
+  label: { display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 },
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -944,8 +944,8 @@ export default function Procedures() {
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#e2e8f0' }}>📋 Procedures & Data Structure</h1>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>SOPs, Procedures, Road Maps, Logic, Algorithms & Data Table Catalog</p>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>📋 Procedures & Data Structure</h1>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>SOPs, Procedures, Road Maps, Logic, Algorithms & Data Table Catalog</p>
         </div>
         {isAdmin && (
           <div style={{ display: 'flex', gap: 8 }}>
@@ -956,7 +956,7 @@ export default function Procedures() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #334155', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
         {[
           { key: 'docs', label: '📄 Documents' },
           { key: 'structure', label: '🏗️ Data Structure' },
@@ -1000,7 +1000,7 @@ export default function Procedures() {
                       </div>
                     </div>
                     {(catCounts[cat.code] || 0) > 0 && (
-                      <span style={{ fontSize: 10, fontWeight: 700, background: '#334155', color: '#64748b', borderRadius: 10, padding: '1px 6px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--table-row-hover)', color: 'var(--text-muted)', borderRadius: 10, padding: '1px 6px' }}>
                         {catCounts[cat.code]}
                       </span>
                     )}
@@ -1014,10 +1014,10 @@ export default function Procedures() {
           <Card title={`${CATEGORIES.find(c => c.code === selectedCat)?.icon} ${CATEGORIES.find(c => c.code === selectedCat)?.label} Documents`}
             style={{ width: 300, flexShrink: 0 }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
-              {docsLoading && <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>Loading…</div>}
+              {docsLoading && <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>}
               {!docsLoading && docs.length === 0 && (
-                <div style={{ padding: 16, fontSize: 12, color: '#334155', textAlign: 'center' }}>
-                  No documents in this category.{isAdmin && <><br /><span style={{ color: '#475569' }}>Click "+ New Document" to add one.</span></>}
+                <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  No documents in this category.{isAdmin && <><br /><span style={{ color: 'var(--text-muted)' }}>Click "+ New Document" to add one.</span></>}
                 </div>
               )}
               {docs.map(doc => (
@@ -1028,16 +1028,16 @@ export default function Procedures() {
                     border: selectedDoc?.id === doc.id ? '1px solid #334155' : '1px solid transparent',
                     cursor: 'pointer',
                   }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {doc.title}
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Badge status={doc.status} />
-                    <span style={{ fontSize: 10, color: '#475569' }}>v{doc.version}</span>
-                    <span style={{ fontSize: 10, color: '#334155' }}>· {fmtDate(doc.updated_at)}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>v{doc.version}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>· {fmtDate(doc.updated_at)}</span>
                   </div>
                   {doc.description && (
-                    <div style={{ fontSize: 11, color: '#475569', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {doc.description}
                     </div>
                   )}
@@ -1049,7 +1049,7 @@ export default function Procedures() {
           {/* Detail / Form panel */}
           <Card style={{ flex: 1, minWidth: 0 }}>
             {!selectedDoc && !newDoc && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#334155', fontSize: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
                 Select a document to view details
               </div>
             )}
@@ -1082,10 +1082,10 @@ export default function Procedures() {
           {/* Table tree */}
           <Card title="🏗️ Table Catalog" style={{ width: 280, flexShrink: 0, overflowY: 'auto' }}>
             <div style={{ padding: 8, flex: 1, overflowY: 'auto' }}>
-              {tablesLoading && <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>Loading…</div>}
+              {tablesLoading && <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>}
               {!tablesLoading && tables.length === 0 && (
-                <div style={{ padding: 16, fontSize: 12, color: '#334155', textAlign: 'center' }}>
-                  No tables registered yet.{isAdmin && <><br /><span style={{ color: '#475569' }}>Click "+ Add Table".</span></>}
+                <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  No tables registered yet.{isAdmin && <><br /><span style={{ color: 'var(--text-muted)' }}>Click "+ Add Table".</span></>}
                 </div>
               )}
 
@@ -1103,7 +1103,7 @@ export default function Procedures() {
                         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                       }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', background: '#1d4ed820', padding: '1px 6px', borderRadius: 4 }}>MAIN</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{mt.table_name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{mt.table_name}</span>
                     </button>
                     {/* Sub-tables */}
                     {subs.map(st => {
@@ -1116,9 +1116,9 @@ export default function Procedures() {
                             border: activeSub ? '1px solid #7c3aed40' : '1px solid transparent',
                             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                           }}>
-                          <span style={{ fontSize: 10, color: '#475569' }}>↳</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>↳</span>
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#c4b5fd', background: '#7c3aed20', padding: '1px 5px', borderRadius: 4 }}>SUB</span>
-                          <span style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.table_name}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.table_name}</span>
                         </button>
                       )
                     })}
@@ -1138,15 +1138,15 @@ export default function Procedures() {
                       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                     }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: '#c4b5fd', background: '#7c3aed20', padding: '1px 6px', borderRadius: 4 }}>SUB</span>
-                    <span style={{ fontSize: 12, color: '#94a3b8', fontFamily: 'monospace' }}>{st.table_name}</span>
-                    <span style={{ fontSize: 9, color: '#334155' }}>(unlinked)</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{st.table_name}</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>(unlinked)</span>
                   </button>
                 )
               })}
             </div>
 
             {/* Stats footer */}
-            <div style={{ padding: '8px 12px', borderTop: '1px solid #334155', flexShrink: 0, display: 'flex', gap: 12, fontSize: 10, color: '#475569' }}>
+            <div style={{ padding: '8px 12px', borderTop: '1px solid var(--card-border)', flexShrink: 0, display: 'flex', gap: 12, fontSize: 10, color: 'var(--text-muted)' }}>
               <span>🔵 {mainTables.length} Main</span>
               <span>🟣 {tables.filter(t => t.table_type === 'SUB').length} Sub</span>
               <span>Total: {tables.length}</span>
@@ -1156,7 +1156,7 @@ export default function Procedures() {
           {/* Detail / Form panel */}
           <Card style={{ flex: 1, minWidth: 0 }}>
             {!selectedTable && !newTable && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#334155', fontSize: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
                 Select a table to view its structure
               </div>
             )}

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Calculation History — Phase 8
  *
  * Persistent audit trail of every calculation run stored in SQLite.
@@ -54,31 +54,31 @@ interface HistoryRun {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', gap: 14, height: 'calc(100vh - 100px)', minHeight: 0 },
-  card: { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' },
-  cardHead: { padding: '10px 14px', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { fontSize: 13, fontWeight: 600, color: '#e2e8f0' },
+  card: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' },
+  cardHead: { padding: '10px 14px', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitle: { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' },
   btn: { background: '#0ea5e9', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' },
-  btnSm: { background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
+  btnSm: { background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
   btnDanger: { background: 'transparent', border: '1px solid #ef4444', borderRadius: 5, color: '#f87171', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
   btnCmp: { background: '#7c3aed22', border: '1px solid #7c3aed', borderRadius: 5, color: '#a78bfa', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
-  input: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px' },
-  select: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px' },
+  input: { background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '5px 10px' },
+  select: { background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '5px 10px' },
   tblWrap: { overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 },
   tbl: { borderCollapse: 'collapse' as const, width: '100%', minWidth: 900, fontSize: 12 },
-  th: { background: '#0f172a', color: '#64748b', fontWeight: 600, padding: '7px 12px', textAlign: 'left' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, borderBottom: '1px solid #334155', fontSize: 10, letterSpacing: 0.4 },
-  td: { padding: '7px 12px', color: '#cbd5e1', borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' as const },
+  th: { background: 'var(--content-bg)', color: 'var(--text-muted)', fontWeight: 600, padding: '7px 12px', textAlign: 'left' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, borderBottom: '1px solid var(--card-border)', fontSize: 10, letterSpacing: 0.4 },
+  td: { padding: '7px 12px', color: 'var(--text-secondary)', borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' as const },
   tdNum: { padding: '7px 12px', color: '#7dd3fc', borderBottom: '1px solid #1e293b', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const },
   tdGreen: { padding: '7px 12px', color: '#4ade80', borderBottom: '1px solid #1e293b', textAlign: 'right' as const, fontWeight: 700, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const },
-  empty: { padding: 40, textAlign: 'center' as const, color: '#64748b', fontSize: 13 },
+  empty: { padding: 40, textAlign: 'center' as const, color: 'var(--text-muted)', fontSize: 13 },
   // Detail expand
-  detail: { background: '#0f172a', borderBottom: '1px solid #334155', padding: '14px 16px' },
+  detail: { background: 'var(--content-bg)', borderBottom: '1px solid var(--card-border)', padding: '14px 16px' },
   kpiRow: { display: 'flex', gap: 10, flexWrap: 'wrap' as const, marginBottom: 12 },
-  kpi: { background: '#1e293b', borderRadius: 6, padding: '8px 12px', minWidth: 100 },
+  kpi: { background: 'var(--card-bg)', borderRadius: 6, padding: '8px 12px', minWidth: 100 },
   kpiVal: { fontSize: 18, fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' as const },
-  kpiLabel: { fontSize: 10, color: '#64748b', marginTop: 2 },
+  kpiLabel: { fontSize: 10, color: 'var(--text-muted)', marginTop: 2 },
   // Compare modal
   overlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  modal: { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, width: 900, maxHeight: '85vh', overflowY: 'auto' as const, padding: 20 },
+  modal: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10, width: 900, maxHeight: '85vh', overflowY: 'auto' as const, padding: 20 },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,8 +112,8 @@ function MiniSteps({ steps }: { steps: StepLog[] }) {
           <span style={{ fontWeight: 700, flexShrink: 0 }}>{s.status === 'ok' ? '✓' : '✗'} {s.step}.</span>
           <span>
             {s.name}
-            {s.message && <span style={{ color: '#475569', marginLeft: 4 }}>— {s.message}</span>}
-            {s.rows != null && <span style={{ color: '#475569', marginLeft: 4 }}>({s.rows.toLocaleString()} rows)</span>}
+            {s.message && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>— {s.message}</span>}
+            {s.rows != null && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({s.rows.toLocaleString()} rows)</span>}
           </span>
         </div>
       ))}
@@ -148,7 +148,7 @@ function ExpandedDetail({ run, onDelete }: { run: HistoryRun; onDelete: () => vo
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' as const }}>
         {/* KPIs */}
         <div style={{ flex: 2, minWidth: 280 }}>
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 8, letterSpacing: 0.4 }}>SUMMARY METRICS</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8, letterSpacing: 0.4 }}>SUMMARY METRICS</div>
           <div style={S.kpiRow}>
             {[
               { label: 'Total REQ', val: fmtNum(run.total_req) },
@@ -168,8 +168,8 @@ function ExpandedDetail({ run, onDelete }: { run: HistoryRun; onDelete: () => vo
           </div>
 
           {/* Request params */}
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 6, marginTop: 4, letterSpacing: 0.4 }}>RUN PARAMETERS</div>
-          <div style={{ display: 'flex', gap: 20, fontSize: 11, color: '#94a3b8', flexWrap: 'wrap' as const }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6, marginTop: 4, letterSpacing: 0.4 }}>RUN PARAMETERS</div>
+          <div style={{ display: 'flex', gap: 20, fontSize: 11, color: 'var(--text-secondary)', flexWrap: 'wrap' as const }}>
             {[
               ['Factor Set', run.factor_set_name],
               ['Attribute1', run.attribute1],
@@ -179,7 +179,7 @@ function ExpandedDetail({ run, onDelete }: { run: HistoryRun; onDelete: () => vo
               ['Pack Pending', run.include_pack_pending ? '✓' : '✗'],
               ['Transfer Out', run.include_transfer_out ? '✓' : '✗'],
             ].map(([k, v]) => (
-              <span key={k as string}><span style={{ color: '#475569' }}>{k}: </span>{v || '—'}</span>
+              <span key={k as string}><span style={{ color: 'var(--text-muted)' }}>{k}: </span>{v || '—'}</span>
             ))}
           </div>
 
@@ -192,7 +192,7 @@ function ExpandedDetail({ run, onDelete }: { run: HistoryRun; onDelete: () => vo
 
         {/* Steps */}
         <div style={{ flex: 3, minWidth: 320 }}>
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 8, letterSpacing: 0.4 }}>PIPELINE STEPS</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8, letterSpacing: 0.4 }}>PIPELINE STEPS</div>
           <MiniSteps steps={run.steps} />
         </div>
       </div>
@@ -230,7 +230,7 @@ function CompareModal({ runs, onClose }: { runs: [HistoryRun, HistoryRun]; onClo
     <div style={S.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={S.modal}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>Run Comparison</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Run Comparison</span>
           <button style={S.btnSm} onClick={onClose}>✕ Close</button>
         </div>
 
@@ -245,7 +245,7 @@ function CompareModal({ runs, onClose }: { runs: [HistoryRun, HistoryRun]; onClo
           <tbody>
             {rows.map(row => (
               <tr key={row.label}>
-                <td style={{ ...S.td, color: '#64748b', fontWeight: 600, fontSize: 11 }}>{row.label}</td>
+                <td style={{ ...S.td, color: 'var(--text-muted)', fontWeight: 600, fontSize: 11 }}>{row.label}</td>
                 <td style={{ ...S.td, fontWeight: row.better === 'a' ? 700 : 400, color: row.better === 'a' ? '#4ade80' : '#cbd5e1' }}>
                   {row.aVal}{row.better === 'a' && ' ▲'}
                 </td>
@@ -349,8 +349,8 @@ export default function History() {
     <div style={S.page}>
       {/* Header */}
       <div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', marginBottom: 2 }}>Calculation History</div>
-        <div style={{ fontSize: 12, color: '#64748b' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>Calculation History</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           Persistent audit trail of every calculation run · {total.toLocaleString()} total
         </div>
       </div>
@@ -439,7 +439,7 @@ export default function History() {
 
                         {/* Label */}
                         <td style={{ ...S.td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {run.label || <span style={{ color: '#475569' }}>{run.run_id.slice(0, 8)}…</span>}
+                          {run.label || <span style={{ color: 'var(--text-muted)' }}>{run.run_id.slice(0, 8)}…</span>}
                         </td>
 
                         {/* Status badge */}
@@ -454,10 +454,10 @@ export default function History() {
 
                         <td style={{ ...S.td, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{run.factor_set_name || '—'}</td>
                         <td style={S.td}>{run.attribute1 || '—'}</td>
-                        <td style={{ ...S.td, color: '#64748b', fontSize: 11 }}>
+                        <td style={{ ...S.td, color: 'var(--text-muted)', fontSize: 11 }}>
                           {[run.division, run.department].filter(Boolean).join(' › ') || 'All'}
                         </td>
-                        <td style={{ ...S.td, fontSize: 11, color: '#64748b' }}>{fmtDate(run.started_at)}</td>
+                        <td style={{ ...S.td, fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(run.started_at)}</td>
                         <td style={S.tdNum}>{run.duration_s != null ? run.duration_s.toFixed(1) : '—'}</td>
                         <td style={S.tdGreen}>{run.status === 'complete' ? fmtNum(run.total_req) : '—'}</td>
                         <td style={S.tdNum}>{run.status === 'complete' ? fmtNum(run.stores) : '—'}</td>
@@ -485,7 +485,7 @@ export default function History() {
             </div>
 
             {/* Pagination */}
-            <div style={{ padding: '8px 14px', borderTop: '1px solid #334155', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: '#64748b', flexShrink: 0 }}>
+            <div style={{ padding: '8px 14px', borderTop: '1px solid var(--card-border)', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
               <span>Showing {offset + 1}–{Math.min(offset + limit, total)} of {total.toLocaleString()} runs</span>
               <button style={S.btnSm} disabled={offset === 0} onClick={() => load(Math.max(0, offset - limit))}>← Prev</button>
               <button style={S.btnSm} disabled={offset + limit >= total} onClick={() => load(offset + limit)}>Next →</button>

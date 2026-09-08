@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Database Explorer — Phase 2
  *
  * Three-panel layout:
@@ -7,16 +7,7 @@
  *   Right  : column detail for selected object
  */
 import { useEffect, useState, useCallback } from 'react'
-
-function useIsMobile() {
-  const [mobile, setMobile] = useState(window.innerWidth < 768)
-  useEffect(() => {
-    const fn = () => setMobile(window.innerWidth < 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
-  }, [])
-  return mobile
-}
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { api } from '@/api/client'
 import http from '@/api/http'
 import { useAuth } from '@/context/AuthContext'
@@ -29,7 +20,7 @@ import type { SchemaRow, TableRow, ViewRow, ColumnRow } from '@/types/api'
 
 function Spinner() {
   return (
-    <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+    <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
       Loading…
     </div>
   )
@@ -69,12 +60,12 @@ function SearchBox({
       placeholder={placeholder}
       style={{
         width: '100%',
-        background: '#0f172a',
-        border: '1px solid #334155',
+        background: 'var(--content-bg)',
+        border: '1px solid var(--card-border)',
         borderRadius: 6,
         padding: '7px 10px',
         fontSize: 12,
-        color: '#e2e8f0',
+        color: 'var(--text-primary)',
         outline: 'none',
         marginBottom: 8,
       }}
@@ -137,7 +128,7 @@ function SchemaPanel({
         </div>
       ))}
       {!loading && !error && visible.length === 0 && (
-        <div style={{ fontSize: 12, color: '#475569', padding: 8 }}>No schemas found</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>No schemas found</div>
       )}
     </div>
   )
@@ -202,7 +193,7 @@ function ObjectPanel({
 
   if (!schema) {
     return (
-      <div style={{ padding: 20, fontSize: 13, color: '#475569' }}>
+      <div style={{ padding: 20, fontSize: 13, color: 'var(--text-muted)' }}>
         ← Select a schema
       </div>
     )
@@ -235,7 +226,7 @@ function ObjectPanel({
 
       <SearchBox value={filter} onChange={setFilter} placeholder={`Filter ${objectType.toLowerCase()}s…`} />
 
-      <div style={{ fontSize: 11, color: '#475569', marginBottom: 6 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
         {loading ? '…' : `${visible.length} of ${objects.length}`}
       </div>
 
@@ -338,8 +329,8 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
         </button>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 26, marginBottom: 8 }}>📦</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>No local output file yet.</div>
-          <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>No local output file yet.</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
             Fetches up to 5,000 rows from Oracle and saves a Parquet file.<br />
             Use <strong style={{ color: '#7dd3fc' }}>Refresh</strong> anytime to re-download.
           </div>
@@ -349,7 +340,7 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
   }
 
   if (loading) return (
-    <div style={{ padding: 28, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+    <div style={{ padding: 28, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
       <div style={{ fontSize: 24, marginBottom: 10 }}>⏳</div>
       Fetching from Oracle… this may take up to a minute for large tables.
     </div>
@@ -371,16 +362,16 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
         display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         padding: '6px 0', marginBottom: 8, borderBottom: '1px solid #1e293b',
       }}>
-        <span style={{ fontSize: 11, color: '#64748b' }}>
-          📅 Downloaded: <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{fetchedLabel}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          📅 Downloaded: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{fetchedLabel}</span>
         </span>
         <span style={{
           fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-          background: 'rgba(148,163,184,.12)', color: '#94a3b8',
+          background: 'rgba(148,163,184,.12)', color: 'var(--text-secondary)',
         }}>
           {formatAge(meta.age_seconds)}
         </span>
-        <span style={{ fontSize: 10, color: '#475569' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
           {meta.rows_in_file.toLocaleString()} rows in file · showing {meta.rows_returned}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
@@ -415,8 +406,8 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
             disabled={loading}
             title="Re-fetch from Oracle and overwrite output file"
             style={{
-              padding: '4px 12px', background: '#0f172a', color: '#7dd3fc',
-              border: '1px solid #334155', borderRadius: 5, fontSize: 11,
+              padding: '4px 12px', background: 'var(--content-bg)', color: '#7dd3fc',
+              border: '1px solid var(--card-border)', borderRadius: 5, fontSize: 11,
               fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
             }}
           >
@@ -428,17 +419,17 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
       {/* Data grid */}
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
         {meta.records.length === 0 ? (
-          <div style={{ padding: 20, fontSize: 12, color: '#475569', textAlign: 'center' }}>
+          <div style={{ padding: 20, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
             No rows returned.
           </div>
         ) : (
           <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap' }}>
             <thead>
-              <tr style={{ background: '#0f172a' }}>
+              <tr style={{ background: 'var(--content-bg)' }}>
                 {meta.columns.map(col => (
                   <th key={col} style={{
-                    padding: '5px 10px', color: '#64748b', fontWeight: 600,
-                    position: 'sticky', top: 0, background: '#0f172a',
+                    padding: '5px 10px', color: 'var(--text-muted)', fontWeight: 600,
+                    position: 'sticky', top: 0, background: 'var(--content-bg)',
                     textAlign: 'left', borderBottom: '1px solid #1e293b',
                   }}>
                     {col}
@@ -451,12 +442,12 @@ function DataPreviewTab({ schema, name }: { schema: string; name: string }) {
                 <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
                   {meta.columns.map(col => (
                     <td key={col} style={{
-                      padding: '4px 10px', color: '#94a3b8', fontFamily: 'monospace',
+                      padding: '4px 10px', color: 'var(--text-secondary)', fontFamily: 'monospace',
                       maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
                       title={String(row[col] ?? '')}>
                       {row[col] == null
-                        ? <span style={{ color: '#334155', fontStyle: 'italic' }}>NULL</span>
+                        ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>NULL</span>
                         : String(row[col])}
                     </td>
                   ))}
@@ -517,7 +508,7 @@ function ColumnPanel({
 
   if (!name) {
     return (
-      <div style={{ padding: 20, fontSize: 13, color: '#475569' }}>
+      <div style={{ padding: 20, fontSize: 13, color: 'var(--text-muted)' }}>
         ← Select a table or view
       </div>
     )
@@ -530,7 +521,7 @@ function ColumnPanel({
         <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', fontFamily: 'monospace' }}>
           {schema}.{name}
         </div>
-        <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
           {type}
           {rowEst != null && ` · ~${rowEst.toLocaleString()} rows`}
           {qms != null && ` · ${qms} ms`}
@@ -565,14 +556,14 @@ function ColumnPanel({
             {!loading && (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
-                  <tr style={{ background: '#0f172a' }}>
+                  <tr style={{ background: 'var(--content-bg)' }}>
                     {['#', 'COLUMN', 'TYPE', 'LEN', 'NULL', 'DEFAULT'].map(h => (
                       <th
                         key={h}
                         style={{
-                          textAlign: 'left', padding: '6px 8px', color: '#64748b',
+                          textAlign: 'left', padding: '6px 8px', color: 'var(--text-muted)',
                           fontWeight: 600, position: 'sticky', top: 0,
-                          background: '#0f172a', whiteSpace: 'nowrap',
+                          background: 'var(--content-bg)', whiteSpace: 'nowrap',
                         }}
                       >
                         {h}
@@ -583,7 +574,7 @@ function ColumnPanel({
                 <tbody>
                   {visible.map(col => (
                     <tr key={col.column_id} style={{ borderBottom: '1px solid #1e293b' }} title={col.comments ?? ''}>
-                      <td style={{ padding: '5px 8px', color: '#475569' }}>{col.column_id}</td>
+                      <td style={{ padding: '5px 8px', color: 'var(--text-muted)' }}>{col.column_id}</td>
                       <td style={{ padding: '5px 8px', color: '#7dd3fc', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                         {col.column_name}
                       </td>
@@ -593,12 +584,12 @@ function ColumnPanel({
                           ? `(${col.data_precision}${col.data_scale ? `,${col.data_scale}` : ''})`
                           : col.data_length ? `(${col.data_length})` : ''}
                       </td>
-                      <td style={{ padding: '5px 8px', color: '#64748b' }}>{col.data_length}</td>
+                      <td style={{ padding: '5px 8px', color: 'var(--text-muted)' }}>{col.data_length}</td>
                       <td style={{ padding: '5px 8px' }}>
                         <StatusBadge status={col.nullable === 'Y' ? 'ok' : 'error'} />
                       </td>
                       <td style={{
-                        padding: '5px 8px', color: '#94a3b8', fontFamily: 'monospace',
+                        padding: '5px 8px', color: 'var(--text-secondary)', fontFamily: 'monospace',
                         fontSize: 10, maxWidth: 140, overflow: 'hidden',
                         textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
@@ -664,24 +655,24 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
   }
 
   return (
-    <div style={{ marginTop: 10, border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ marginTop: 10, border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' }}>
       {/* Header toggle */}
       <div
         onClick={() => setOpen(o => !o)}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 14px', background: '#1e293b', cursor: 'pointer',
+          padding: '10px 14px', background: 'var(--card-bg)', cursor: 'pointer',
           userSelect: 'none',
         }}
       >
         <span style={{ fontSize: 12, fontWeight: 700, color: '#7dd3fc' }}>
-          🗂 SQL Query & Export  <span style={{ fontSize: 10, color: '#475569', fontWeight: 400 }}>(Admin · SELECT only · saves to output/)</span>
+          🗂 SQL Query & Export  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>(Admin · SELECT only · saves to output/)</span>
         </span>
-        <span style={{ color: '#475569', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
       </div>
 
       {open && (
-        <div style={{ padding: 14, background: '#0f172a' }}>
+        <div style={{ padding: 14, background: 'var(--content-bg)' }}>
           {/* SQL input */}
           <textarea
             value={sql}
@@ -689,8 +680,8 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
             placeholder={"SELECT * FROM all_views WHERE owner = 'CK_A2166'"}
             rows={4}
             style={{
-              width: '100%', background: '#1e293b', border: '1px solid #334155',
-              borderRadius: 6, padding: '10px 12px', fontSize: 12, color: '#e2e8f0',
+              width: '100%', background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+              borderRadius: 6, padding: '10px 12px', fontSize: 12, color: 'var(--text-primary)',
               fontFamily: 'monospace', outline: 'none', resize: 'vertical',
               boxSizing: 'border-box',
             }}
@@ -701,8 +692,8 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
               onChange={e => setLabel(e.target.value)}
               placeholder="Output filename (e.g. CK_A2166_VIEWS)"
               style={{
-                flex: 1, background: '#1e293b', border: '1px solid #334155',
-                borderRadius: 6, padding: '8px 10px', fontSize: 12, color: '#e2e8f0',
+                flex: 1, background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+                borderRadius: 6, padding: '8px 10px', fontSize: 12, color: 'var(--text-primary)',
                 outline: 'none',
               }}
             />
@@ -730,8 +721,8 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
                 padding: '6px 0', marginBottom: 8, borderBottom: '1px solid #1e293b',
               }}>
                 <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>✓ Saved to output/QUERY__{result.label}.parquet</span>
-                <span style={{ fontSize: 10, color: '#64748b' }}>{result.rows_in_file.toLocaleString()} rows · {result.fetch_ms} ms · showing {result.rows_returned}</span>
-                <span style={{ fontSize: 10, color: '#475569' }}>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{result.rows_in_file.toLocaleString()} rows · {result.fetch_ms} ms · showing {result.rows_returned}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                   {new Date(result.fetched_at ?? '').toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:true })}
                 </span>
               </div>
@@ -740,11 +731,11 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
               <div style={{ overflowX: 'auto', maxHeight: 260, overflowY: 'auto' }}>
                 <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap' }}>
                   <thead>
-                    <tr style={{ background: '#0f172a' }}>
+                    <tr style={{ background: 'var(--content-bg)' }}>
                       {result.columns.map(c => (
                         <th key={c} style={{
-                          padding: '4px 10px', color: '#64748b', fontWeight: 600,
-                          position: 'sticky', top: 0, background: '#0f172a',
+                          padding: '4px 10px', color: 'var(--text-muted)', fontWeight: 600,
+                          position: 'sticky', top: 0, background: 'var(--content-bg)',
                           textAlign: 'left', borderBottom: '1px solid #1e293b',
                         }}>{c}</th>
                       ))}
@@ -755,11 +746,11 @@ function SqlQueryPanel({ userRole }: { userRole: string }) {
                       <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
                         {result.columns.map(c => (
                           <td key={c} style={{
-                            padding: '3px 10px', color: '#94a3b8', fontFamily: 'monospace',
+                            padding: '3px 10px', color: 'var(--text-secondary)', fontFamily: 'monospace',
                             maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis',
                           }} title={String(row[c] ?? '')}>
                             {row[c] == null
-                              ? <span style={{ color: '#334155', fontStyle: 'italic' }}>NULL</span>
+                              ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>NULL</span>
                               : String(row[c])}
                           </td>
                         ))}
@@ -800,7 +791,7 @@ function SqlTextBlock({ file, onSaved }: { file: OutputFile; onSaved: (sql: stri
   }
 
   const labelStyle: React.CSSProperties = {
-    fontSize: 9, fontWeight: 700, color: '#475569',
+    fontSize: 9, fontWeight: 700, color: 'var(--text-muted)',
     textTransform: 'uppercase', letterSpacing: '.07em',
   }
 
@@ -812,7 +803,7 @@ function SqlTextBlock({ file, onSaved }: { file: OutputFile; onSaved: (sql: stri
         <div style={{ display: 'flex', gap: 6 }}>
           {!editing && file.sql_text && (
             <button onClick={() => navigator.clipboard.writeText(file.sql_text!)}
-              style={{ fontSize: 9, fontWeight: 700, color: '#64748b', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+              style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
               ⧉ Copy
             </button>
           )}
@@ -859,7 +850,7 @@ function SqlTextBlock({ file, onSaved }: { file: OutputFile; onSaved: (sql: stri
             </button>
             {file.sql_text && (
               <button onClick={() => { setEditing(false); setErr(null) }}
-                style={{ padding: '4px 10px', background: 'transparent', color: '#64748b', border: '1px solid #334155', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>
+                style={{ padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--card-border)', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>
                 Cancel
               </button>
             )}
@@ -904,6 +895,58 @@ function DownloadedFilesPanel() {
   const [mdStatus,      setMdStatus]      = useState<Record<string, 'idle' | 'adding' | 'done' | 'exists'>>({})
   const [refreshStatus, setRefreshStatus] = useState<Record<string, 'idle' | 'refreshing' | 'done' | 'error'>>({})
   const [removeStatus,  setRemoveStatus]  = useState<Record<string, 'idle' | 'removing'>>({})
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState<'idle' | 'refreshing' | 'removing'>('idle')
+  type SortKey = 'name' | 'rows' | 'size' | 'age' | 'freq'
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [freqFilter, setFreqFilter] = useState<'all' | 'daily' | 'weekly' | 'once'>('all')
+
+  type RefreshFreq = 'daily' | 'weekly' | 'once'
+  const FREQ_CYCLE: RefreshFreq[] = ['daily', 'weekly', 'once']
+  const FREQ_LABEL: Record<RefreshFreq, string> = { daily: '⟳ Daily', weekly: '⟳ Weekly', once: '— Once' }
+  const FREQ_COLOR: Record<RefreshFreq, string> = { daily: '#38bdf8', weekly: '#fbbf24', once: '#64748b' }
+
+  const [freqMap, setFreqMap] = useState<Record<string, RefreshFreq>>({})
+  const [autoTime, setAutoTime] = useState<string>('06:00')
+  const [autoRunLog, setAutoRunLog] = useState<string | null>(null)
+  const [autoRunning, setAutoRunning] = useState(false)
+
+  // Load freq map + schedule time from backend on mount
+  useEffect(() => {
+    http.get('/database/output/freq').then(r => {
+      if (r.data.success) setFreqMap(r.data.data.freq_map ?? {})
+    }).catch(() => {
+      // fallback to localStorage if backend fails
+      try { setFreqMap(JSON.parse(localStorage.getItem('db_refresh_freq') ?? '{}')) } catch {}
+    })
+    http.get('/database/output/schedule').then(r => {
+      if (r.data.success) setAutoTime(r.data.data.time ?? '06:00')
+    }).catch(() => {
+      try { setAutoTime(localStorage.getItem('db_auto_refresh_time') ?? '06:00') } catch {}
+    })
+  }, [])
+
+  async function saveAutoTime(t: string) {
+    setAutoTime(t)
+    try { await http.put('/database/output/schedule', { time: t }) } catch {
+      try { localStorage.setItem('db_auto_refresh_time', t) } catch {}
+    }
+  }
+
+  function cycleFreq(key: string) {
+    const [owner, obj] = key.split('__')
+    setFreqMap(prev => {
+      const cur = prev[key] ?? 'once'
+      const next = FREQ_CYCLE[(FREQ_CYCLE.indexOf(cur) + 1) % FREQ_CYCLE.length]
+      const updated = { ...prev, [key]: next }
+      // Persist to backend (fire-and-forget)
+      http.post('/database/output/freq', { owner, object_name: obj, freq: next }).catch(() => {
+        try { localStorage.setItem('db_refresh_freq', JSON.stringify(updated)) } catch {}
+      })
+      return updated
+    })
+  }
 
   async function addToMasterData(owner: string, obj: string) {
     const key = `${owner}__${obj}`
@@ -1011,136 +1054,263 @@ function DownloadedFilesPanel() {
 
   const fmtSize = (b: number) => b > 1048576 ? `${(b/1048576).toFixed(1)} MB` : `${(b/1024).toFixed(0)} KB`
 
+  const FREQ_BORDER: Record<RefreshFreq, string> = { daily: '#185FA5', weekly: '#854F0B', once: '#334155' }
+  const FREQ_BG: Record<RefreshFreq, string>     = { daily: '#0c2340', weekly: '#1c0f02', once: '#0f172a' }
+
+  function isStale(f: OutputFile): boolean {
+    const freq = freqMap[`${f.owner}__${f.object}`] ?? 'once'
+    const ageMs = Date.now() - new Date(f.fetched_at).getTime()
+    if (freq === 'daily'  && ageMs > 86_400_000) return true
+    if (freq === 'weekly' && ageMs > 604_800_000) return true
+    return false
+  }
+
+  const totalSize = files.reduce((s, f) => s + f.size_bytes, 0)
+  const fmtTotalSize = totalSize > 1073741824
+    ? `${(totalSize / 1073741824).toFixed(1)} GB`
+    : totalSize > 1048576 ? `${(totalSize / 1048576).toFixed(0)} MB` : `${(totalSize / 1024).toFixed(0)} KB`
+  const staleCount  = files.filter(f => isStale(f)).length
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortAsc(a => !a)
+    else { setSortKey(k); setSortAsc(true) }
+  }
+
+  const FREQ_ORDER: Record<RefreshFreq, number> = { daily: 0, weekly: 1, once: 2 }
+
+  const filteredFiles = files
+    .filter(f => {
+      const key = `${f.owner}__${f.object}`
+      if (freqFilter !== 'all' && (freqMap[key] ?? 'once') !== freqFilter) return false
+      if (fileFilter.trim() && !`${f.owner}.${f.object}`.toLowerCase().includes(fileFilter.toLowerCase())) return false
+      return true
+    })
+    .sort((a, b) => {
+      const ak = `${a.owner}__${a.object}`, bk = `${b.owner}__${b.object}`
+      let cmp = 0
+      if (sortKey === 'name')  cmp = `${a.owner}.${a.object}`.localeCompare(`${b.owner}.${b.object}`)
+      else if (sortKey === 'rows') cmp = a.rows - b.rows
+      else if (sortKey === 'size') cmp = a.size_bytes - b.size_bytes
+      else if (sortKey === 'age')  cmp = new Date(b.fetched_at).getTime() - new Date(a.fetched_at).getTime()
+      else if (sortKey === 'freq') cmp = FREQ_ORDER[freqMap[ak] ?? 'once'] - FREQ_ORDER[freqMap[bk] ?? 'once']
+      return sortAsc ? cmp : -cmp
+    })
+
+  function toggleSelect(key: string) {
+    setSelected(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
+  }
+  function toggleAll() {
+    if (selected.size === filteredFiles.length) setSelected(new Set())
+    else setSelected(new Set(filteredFiles.map(f => `${f.owner}__${f.object}`)))
+  }
+
+  async function bulkRefresh() {
+    const keys = [...selected]
+    setBulkAction('refreshing')
+    for (const key of keys) {
+      const [owner, obj] = key.split('__')
+      await refreshFile(owner, obj).catch(() => {})
+    }
+    setBulkAction('idle')
+    setSelected(new Set())
+  }
+
+  async function bulkRemove() {
+    if (!confirm(`Remove ${selected.size} file(s)?`)) return
+    setBulkAction('removing')
+    for (const key of [...selected]) {
+      const [owner, obj] = key.split('__')
+      try { await http.delete(`/database/output/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}`) } catch { /* ignore */ }
+      setFiles(prev => prev.filter(f => !(f.owner === owner && f.object === obj)))
+    }
+    setBulkAction('idle')
+    setSelected(new Set())
+  }
+
+  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
+    <button onClick={() => toggleSort(k)} style={{
+      padding: '2px 8px', fontSize: 9, fontWeight: 600, border: '0.5px solid #1e293b',
+      borderRadius: 4, background: sortKey === k ? '#0f2a3f' : 'transparent',
+      color: sortKey === k ? '#38bdf8' : '#475569', cursor: 'pointer', whiteSpace: 'nowrap' as const,
+    }}>
+      {label} {sortKey === k ? (sortAsc ? '↑' : '↓') : ''}
+    </button>
+  )
+
+  const chipStyle = (active: boolean, color: string) => ({
+    padding: '2px 8px', fontSize: 9, fontWeight: 600, borderRadius: 10,
+    border: `1px solid ${active ? color : '#1e293b'}`,
+    background: active ? `${color}22` : 'transparent',
+    color: active ? color : '#475569', cursor: 'pointer', whiteSpace: 'nowrap' as const,
+  })
+
+  const actBtn = (color: string) => ({
+    padding: '2px 7px', fontSize: 9, fontWeight: 700, borderRadius: 4,
+    border: `1px solid ${color}44`, background: 'transparent', color, cursor: 'pointer', whiteSpace: 'nowrap' as const,
+  })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Sub-header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexShrink: 0 }}>
-        <span style={{ fontSize: 11, color: '#64748b' }}>
-          {files.length} file{files.length !== 1 ? 's' : ''} · available to all users
-        </span>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={loadList}
-            style={{ fontSize: 10, color: '#7dd3fc', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-            ↻ Refresh
-          </button>
-          <button onClick={() => setPanelExpanded(true)}
-            style={{ fontSize: 10, color: '#a78bfa', background: 'none', border: '1px solid #334155', borderRadius: 4, cursor: 'pointer', fontWeight: 600, padding: '2px 8px' }}>
-            ⊞ View All
-          </button>
-        </div>
-      </div>
 
-      {/* Column headers — hidden on mobile */}
-      {files.length > 0 && !isMobile && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 90px 330px', gap: 6, padding: '4px 6px', borderBottom: '1px solid #1e293b', marginBottom: 2, flexShrink: 0, background: '#0f1c2e' }}>
-          {[
-            { label: 'TABLE / QUERY', color: '#334155' },
-            { label: 'ROWS',          color: '#334155' },
-            { label: 'SIZE',          color: '#334155' },
-            { label: 'DOWNLOADED',    color: '#334155' },
-            { label: 'ACTIONS',       color: '#64748b' },
-          ].map(h => (
-            <span key={h.label} style={{ fontSize: 9, fontWeight: 700, color: h.color, letterSpacing: '.06em', textTransform: 'uppercase' }}>{h.label}</span>
+      {/* Toolbar */}
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4, alignItems: 'center', padding: '4px 2px 6px', flexShrink: 0, borderBottom: '1px solid #1e293b', marginBottom: 4 }}>
+          {/* Select-all */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, userSelect: 'none' as const, marginRight: 2 }}>
+            <input type="checkbox"
+              checked={filteredFiles.length > 0 && selected.size === filteredFiles.length}
+              onChange={toggleAll}
+              style={{ accentColor: '#38bdf8', width: 11, height: 11 }}
+            />
+            ALL
+          </label>
+
+          {/* Sort buttons */}
+          <SortBtn k="name" label="Name" />
+          <SortBtn k="rows" label="Rows" />
+          <SortBtn k="size" label="Size" />
+          <SortBtn k="age"  label="Age"  />
+          <SortBtn k="freq" label="Freq" />
+
+          <div style={{ width: 1, height: 14, background: 'var(--card-bg)', margin: '0 2px' }} />
+
+          {/* Freq filter chips */}
+          {(['all','daily','weekly','once'] as const).map(f => (
+            <button key={f} onClick={() => setFreqFilter(f)}
+              style={chipStyle(freqFilter === f, f === 'daily' ? '#38bdf8' : f === 'weekly' ? '#fbbf24' : f === 'once' ? '#64748b' : '#7dd3fc')}>
+              {f === 'all' ? 'All' : f === 'daily' ? '⟳ Daily' : f === 'weekly' ? '⟳ Weekly' : '— Once'}
+            </button>
           ))}
+
+          <div style={{ flex: 1 }} />
+
+          {/* Search */}
+          <input value={fileFilter} onChange={e => setFileFilter(e.target.value)} placeholder="Filter…"
+            style={{ padding: '2px 8px', fontSize: 10, background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-primary)', outline: 'none', fontFamily: 'monospace', width: 110 }} />
+
+          {/* Bulk actions (visible when selection exists) */}
+          {selected.size > 0 && (
+            <>
+              <button onClick={bulkRefresh} disabled={bulkAction !== 'idle'} style={actBtn('#a78bfa')}>
+                {bulkAction === 'refreshing' ? '↻…' : `↻ (${selected.size})`}
+              </button>
+              <button onClick={bulkRemove} disabled={bulkAction !== 'idle'} style={actBtn('#f87171')}>
+                {bulkAction === 'removing' ? '…' : `✕ (${selected.size})`}
+              </button>
+            </>
+          )}
+
+          {/* Stats summary */}
+          <span style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap' as const }}>
+            {filteredFiles.length}/{files.length} · {fmtTotalSize}
+            {staleCount > 0 && <span style={{ color: '#f87171' }}> · ⚠{staleCount}</span>}
+          </span>
+
+          <button onClick={loadList} style={{ fontSize: 9, color: '#7dd3fc', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, padding: '0 2px' }} title="Reload list">↻</button>
+
+          {/* Auto-refresh time setting */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderLeft: '1px solid #1e293b', paddingLeft: 6 }}>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' as const }}>Auto:</span>
+            <input
+              type="time"
+              value={autoTime}
+              onChange={e => saveAutoTime(e.target.value)}
+              style={{ fontSize: 9, padding: '1px 4px', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: '#38bdf8', outline: 'none', cursor: 'pointer', width: 72 }}
+              title="Auto-refresh time for Daily files"
+            />
+            {autoRunning && <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700 }}>⟳</span>}
+          </div>
         </div>
       )}
 
-      {/* File list */}
+      {/* Auto-refresh log banner */}
+      {autoRunLog && (
+        <div style={{ fontSize: 10, color: autoRunLog.startsWith('✓') ? '#4ade80' : '#fbbf24', background: '#0c1628', border: '1px solid var(--card-border)', borderRadius: 4, padding: '4px 10px', marginBottom: 4, flexShrink: 0 }}>
+          {autoRunLog}
+        </div>
+      )}
+
+      {/* File list — Style A: ultra compact */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-        {loading && <div style={{ fontSize: 12, color: '#64748b', padding: '8px 0' }}>Loading…</div>}
+        {loading && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 4px' }}>Loading…</div>}
         {!loading && files.length === 0 && (
-          <div style={{ fontSize: 12, color: '#475569', padding: '12px 0', textAlign: 'center' }}>
-            No files yet. Admin can download tables/views using the Data Preview tab or SQL Query &amp; Export.
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '16px 0', textAlign: 'center' }}>
+            No files yet. Admin can download tables/views using Data Preview or SQL Query &amp; Export.
           </div>
         )}
+        {!loading && filteredFiles.length === 0 && files.length > 0 && (
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '8px 0', textAlign: 'center' }}>No match</div>
+        )}
 
-        {files.map(f => {
+        {filteredFiles.map(f => {
           const key = `${f.owner}__${f.object}`
           const isOpen = !!wins[key]
+          const mdSt  = mdStatus[key]      ?? 'idle'
+          const rfSt  = refreshStatus[key] ?? 'idle'
+          const rmSt  = removeStatus[key]  ?? 'idle'
+          const freq: RefreshFreq = freqMap[key] ?? 'once'
+          const stale = isStale(f)
+          const isSel = selected.has(key)
+
+          const mdColor: Record<string, string> = { idle: '#38bdf8', adding: '#64748b', done: '#4ade80', exists: '#fbbf24' }
+          const rfColor: Record<string, string> = { idle: '#a78bfa', refreshing: '#64748b', done: '#4ade80', error: '#f87171' }
+
           return (
             <div key={key}>
-              {/* File row */}
-              {(() => {
-                const rowKey = `${f.owner}__${f.object}`
-                const mdSt  = mdStatus[rowKey]      ?? 'idle'
-                const rfSt  = refreshStatus[rowKey] ?? 'idle'
-                const rmSt  = removeStatus[rowKey]  ?? 'idle'
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '3px 8px 3px 6px',
+                background: isSel ? '#0f2233' : isOpen ? '#0c1628' : FREQ_BG[freq],
+                borderLeft: `2px solid ${isSel ? '#38bdf8' : FREQ_BORDER[freq]}`,
+                borderBottom: '1px solid #0d1b2a',
+              }}>
+                {/* Checkbox */}
+                <input type="checkbox" checked={isSel} onChange={() => toggleSelect(key)}
+                  style={{ accentColor: '#38bdf8', width: 11, height: 11, flexShrink: 0, cursor: 'pointer' }} />
 
-                const mdLabel: Record<string, string> = { idle: '＋ MD', adding: '…', done: '✓ MD', exists: '⚠ MD' }
-                const rfLabel: Record<string, string> = { idle: '↻ Refresh', refreshing: '↻ Fetching…', done: '✓ Refreshed', error: '✕ Failed' }
-                const mdColor: Record<string, string> = { idle: '#38bdf8', adding: '#64748b', done: '#4ade80', exists: '#fbbf24' }
-                const rfColor: Record<string, string> = { idle: '#a78bfa', refreshing: '#64748b', done: '#4ade80', error: '#f87171' }
+                {/* Stale dot */}
+                {stale && <span title="Stale" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f87171', flexShrink: 0 }} />}
 
-                return (
-                  <div style={{
-                    display: isMobile ? 'flex' : 'grid',
-                    gridTemplateColumns: isMobile ? undefined : '1fr 80px 60px 90px 330px',
-                    flexDirection: isMobile ? 'column' as const : undefined,
-                    gap: isMobile ? 5 : 6, alignItems: isMobile ? undefined : 'center',
-                    padding: isMobile ? '10px 8px' : '5px 6px',
-                    borderBottom: '1px solid #1e293b',
-                    background: isOpen ? '#0c1628' : 'transparent',
-                  }}>
-                    {/* Table name */}
-                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#e2e8f0', wordBreak: 'break-all' as const, fontWeight: 600 }}
-                      title={`${f.owner}.${f.object}`}>
-                      {f.owner}.{f.object}
-                    </span>
-                    {/* Meta info */}
-                    {isMobile
-                      ? <span style={{ fontSize: 11, color: '#64748b' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>
-                      : <>
-                          <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
-                          <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
-                          <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
-                        </>
-                    }
-                    {/* Actions row */}
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                      {/* View */}
-                      <button onClick={() => openWindow(f)}
-                        style={{ padding: '3px 9px', background: activeWin === key ? '#0c4a6e' : isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        {activeWin === key ? '▼ Close' : isOpen ? '👁 View ✓' : '👁 View'}
-                      </button>
+                {/* Name */}
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180, flexShrink: 1 }}
+                  title={`${f.owner}.${f.object}`}>
+                  <span style={{ color: 'var(--text-muted)' }}>{f.owner}.</span><span style={{ color: '#7dd3fc' }}>{f.object}</span>
+                </span>
 
-                      {/* CSV */}
-                      <button onClick={() => downloadCsv(f.owner, f.object)}
-                        style={{ padding: '3px 9px', background: '#14532d', color: '#4ade80', border: '1px solid #166534', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        ⬇ CSV
-                      </button>
+                {/* Meta */}
+                <span style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  {f.rows.toLocaleString()} · {fmtSize(f.size_bytes)} · <span style={{ color: stale ? '#f87171' : '#334155' }}>{f.age_label}</span>
+                </span>
 
-                      {/* Add to Master Data */}
-                      <button
-                        onClick={() => addToMasterData(f.owner, f.object)}
-                        disabled={mdSt === 'adding' || mdSt === 'done'}
-                        title="Add to Master Data page"
-                        style={{ padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', cursor: (mdSt === 'adding' || mdSt === 'done') ? 'default' : 'pointer', color: mdColor[mdSt], background: 'transparent', border: `1px solid ${mdColor[mdSt]}33` }}>
-                        {mdLabel[mdSt]}
-                      </button>
+                <div style={{ flex: 1 }} />
 
-                      {/* Refresh Now */}
-                      <button
-                        onClick={() => refreshFile(f.owner, f.object)}
-                        disabled={rfSt === 'refreshing'}
-                        title="Re-fetch from Oracle and overwrite local file"
-                        style={{ padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', cursor: rfSt === 'refreshing' ? 'default' : 'pointer', color: rfColor[rfSt], background: 'transparent', border: `1px solid ${rfColor[rfSt]}44` }}>
-                        {rfLabel[rfSt]}
-                      </button>
+                {/* Freq badge */}
+                <button onClick={() => cycleFreq(key)} title="Click to cycle frequency"
+                  style={{ padding: '1px 6px', fontSize: 8, fontWeight: 700, borderRadius: 8, border: `1px solid ${FREQ_COLOR[freq]}55`, color: FREQ_COLOR[freq], background: `${FREQ_COLOR[freq]}15`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {FREQ_LABEL[freq]}
+                </button>
 
-                      {/* Remove */}
-                      <button
-                        onClick={() => removeFile(f.owner, f.object)}
-                        disabled={rmSt === 'removing'}
-                        title="Delete this file from the server"
-                        style={{ padding: '3px 9px', borderRadius: 4, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', cursor: rmSt === 'removing' ? 'default' : 'pointer', color: '#f87171', background: 'transparent', border: '1px solid rgba(248,113,113,.3)' }}>
-                        {rmSt === 'removing' ? '…' : '✕ Remove'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })()}
+                {/* Action buttons */}
+                <button onClick={() => openWindow(f)} title="View"
+                  style={{ ...actBtn('#7dd3fc'), background: isOpen ? '#0f2a3f' : 'transparent' }}>
+                  {isOpen ? '▼' : '👁'}
+                </button>
+                <button onClick={() => downloadCsv(f.owner, f.object)} title="Download CSV" style={actBtn('#4ade80')}>⬇</button>
+                <button onClick={() => addToMasterData(f.owner, f.object)} disabled={mdSt === 'adding' || mdSt === 'done'} title="Add to Master Data"
+                  style={actBtn(mdColor[mdSt])}>
+                  {mdSt === 'idle' ? '+MD' : mdSt === 'adding' ? '…' : mdSt === 'done' ? '✓' : '⚠'}
+                </button>
+                <button onClick={() => refreshFile(f.owner, f.object)} disabled={rfSt === 'refreshing'} title="Re-fetch from Oracle"
+                  style={actBtn(rfColor[rfSt])}>
+                  {rfSt === 'refreshing' ? '…' : '↻'}
+                </button>
+                <button onClick={() => removeFile(f.owner, f.object)} disabled={rmSt === 'removing'} title="Delete file"
+                  style={actBtn('#f87171')}>
+                  {rmSt === 'removing' ? '…' : '✕'}
+                </button>
+              </div>
 
-              {/* SQL block inline (QUERY rows only, not a popup) */}
+              {/* SQL block inline (QUERY rows only) */}
               {f.owner === 'QUERY' && isOpen && (
                 <div style={{ background: '#080f1a', borderBottom: '1px solid #1e293b', padding: '8px 12px' }}>
                   <SqlTextBlock file={f} onSaved={(sql) => {
@@ -1166,25 +1336,25 @@ function DownloadedFilesPanel() {
             width: isMobile ? '100vw' : 'min(96vw, 1200px)',
             height: isMobile ? '100dvh' : undefined,
             borderRadius: isMobile ? 0 : 12,
-            background: '#0c1628', border: '1px solid #334155',
+            background: '#0c1628', border: '1px solid var(--card-border)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
             boxShadow: '0 24px 80px rgba(0,0,0,.75)', zIndex: 1,
           }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0a1220', flexWrap: 'wrap' as const }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>📁 Downloaded Files</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>{files.length} files</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📁 Downloaded Files</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{files.length} files</span>
               <input value={fileFilter} onChange={e => setFileFilter(e.target.value)}
                 placeholder="🔍 Search table name…"
-                style={{ flex: 1, minWidth: 120, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '5px 10px', outline: 'none' }} />
+                style={{ flex: 1, minWidth: 120, background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '5px 10px', outline: 'none' }} />
               <button onClick={() => { setPanelExpanded(false); setFileFilter('') }}
-                style={{ width: 28, height: 28, border: '1px solid #334155', borderRadius: 5, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                style={{ width: 28, height: 28, border: '1px solid var(--card-border)', borderRadius: 5, background: '#1e2030', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
             </div>
             {/* Column headers — hidden on mobile */}
             {!isMobile && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 70px 100px 340px', gap: 6, padding: '6px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#080f1a' }}>
                 {['TABLE / QUERY', 'ROWS', 'SIZE', 'DOWNLOADED', 'ACTIONS'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '.07em', textTransform: 'uppercase' }}>{h}</span>
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '.07em', textTransform: 'uppercase' }}>{h}</span>
                 ))}
               </div>
             )}
@@ -1214,21 +1384,21 @@ function DownloadedFilesPanel() {
                       background: isOpen ? '#0c1a30' : 'transparent',
                     }}>
                       {/* Table name — always visible */}
-                      <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#e2e8f0', wordBreak: 'break-all' as const, fontWeight: 600 }}>
+                      <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-primary)', wordBreak: 'break-all' as const, fontWeight: 600 }}>
                         {f.owner}.{f.object}
                       </span>
                       {/* Meta info — inline on mobile, separate columns on desktop */}
                       {isMobile
-                        ? <span style={{ fontSize: 11, color: '#64748b' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>
+                        ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{f.rows.toLocaleString()} rows · {fmtSize(f.size_bytes)} · {f.age_label}</span>
                         : <>
-                            <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
-                            <span style={{ fontSize: 10, color: '#475569' }}>{fmtSize(f.size_bytes)}</span>
-                            <span style={{ fontSize: 10, color: '#94a3b8' }}>{f.age_label}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{f.rows.toLocaleString()}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtSize(f.size_bytes)}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{f.age_label}</span>
                           </>
                       }
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' as const }}>
                         <button onClick={() => openWindow(f)}
-                          style={{ padding: '5px 12px', background: isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid #334155', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          style={{ padding: '5px 12px', background: isOpen ? '#0f2a3f' : '#1e293b', color: '#7dd3fc', border: '1px solid var(--card-border)', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                           {isOpen ? '👁 View ✓' : '👁 View'}
                         </button>
                         <button onClick={() => downloadCsv(f.owner, f.object)}
@@ -1257,7 +1427,7 @@ function DownloadedFilesPanel() {
       {/* Active floating popup */}
       {activeWin && wins[activeWin] && (() => {
         const win = wins[activeWin]
-        const btnSt: React.CSSProperties = { width: 24, height: 24, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }
+        const btnSt: React.CSSProperties = { width: 24, height: 24, border: '1px solid var(--card-border)', borderRadius: 4, background: '#1e2030', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }
         const { columns, records, loading: wLoading, error, limit, label, rows } = win
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'stretch' }}
@@ -1268,20 +1438,20 @@ function DownloadedFilesPanel() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid #1e293b', flexShrink: 0, background: '#0a1220' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#38bdf8', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-                <span style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>{rows.toLocaleString()} rows · {columns.length} cols</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{rows.toLocaleString()} rows · {columns.length} cols</span>
                 {/* limit selector */}
-                <label style={{ fontSize: 10, color: '#475569' }}>Show</label>
+                <label style={{ fontSize: 10, color: 'var(--text-muted)' }}>Show</label>
                 <select value={limit} onChange={e => {
                   const nl = Number(e.target.value)
                   setWins(p => ({ ...p, [activeWin]: { ...p[activeWin], limit: nl } }))
                   const [owner, ...rest] = activeWin.split('__')
                   loadWinData(activeWin, owner, rest.join('__'), nl, rows, label)
-                }} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '2px 6px' }}>
+                }} style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-secondary)', fontSize: 11, padding: '2px 6px' }}>
                   {[100, 200, 500, 1000, 2000].concat(rows <= 2000 ? [] : []).map(n => <option key={n} value={n}>{n}</option>)}
                   {rows <= 2000 && <option value={rows}>{rows.toLocaleString()} (all)</option>}
                 </select>
                 <button title="Minimize" onClick={() => setActiveWin(null)} style={btnSt}>▬</button>
-                <button title="Close" onClick={() => closeWindow(activeWin)} style={{ ...btnSt, color: '#94a3b8' }}>✕</button>
+                <button title="Close" onClick={() => closeWindow(activeWin)} style={{ ...btnSt, color: 'var(--text-secondary)' }}>✕</button>
               </div>
               {/* Body */}
               <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
@@ -1306,12 +1476,12 @@ function DownloadedFilesPanel() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 8px' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#38bdf8', flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{w.label}</span>
-                  {!w.loading && <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', flexShrink: 0 }}>{w.rows.toLocaleString()}</span>}
-                  {w.loading && <span style={{ fontSize: 10, color: '#334155', flexShrink: 0 }}>…</span>}
+                  {!w.loading && <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{w.rows.toLocaleString()}</span>}
+                  {w.loading && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>…</span>}
                   <button title="Restore" onClick={e => { e.stopPropagation(); setActiveWin(wk) }}
-                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
+                    style={{ width: 20, height: 20, border: '1px solid var(--card-border)', borderRadius: 4, background: '#1e2030', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
                   <button title="Close" onClick={e => { e.stopPropagation(); closeWindow(wk) }}
-                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                    style={{ width: 20, height: 20, border: '1px solid var(--card-border)', borderRadius: 4, background: '#1e2030', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
                 </div>
               </div>
             )
@@ -1351,12 +1521,12 @@ function GlobalSearch({ onSelect }: { onSelect: (owner: string, name: string, ty
           placeholder="Search across all schemas (Enter to search)…"
           style={{
             width: '100%',
-            background: '#0f172a',
-            border: '1px solid #334155',
+            background: 'var(--content-bg)',
+            border: '1px solid var(--card-border)',
             borderRadius: 6,
             padding: '8px 12px',
             fontSize: 13,
-            color: '#e2e8f0',
+            color: 'var(--text-primary)',
             outline: 'none',
           }}
         />
@@ -1384,8 +1554,8 @@ function GlobalSearch({ onSelect }: { onSelect: (owner: string, name: string, ty
             top: 44,
             left: 0,
             right: 80,
-            background: '#1e293b',
-            border: '1px solid #334155',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--card-border)',
             borderRadius: 6,
             zIndex: 100,
             maxHeight: 300,
@@ -1409,10 +1579,10 @@ function GlobalSearch({ onSelect }: { onSelect: (owner: string, name: string, ty
                 justifyContent: 'space-between',
               }}
             >
-              <span style={{ fontSize: 12, fontFamily: 'monospace', color: '#e2e8f0' }}>
+              <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-primary)' }}>
                 {r.owner}.{r.object_name}
               </span>
-              <span style={{ fontSize: 10, color: '#64748b' }}>{r.object_type}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.object_type}</span>
             </div>
           ))}
         </div>
@@ -1431,6 +1601,7 @@ export default function DatabaseExplorer() {
   const [selectedName, setSelectedName] = useState('')
   const [selectedType, setSelectedType] = useState<ObjType>('TABLE')
   const [mobilePanelTab, setMobilePanelTab] = useState(0)
+  const [mainTab, setMainTab] = useState<'explorer' | 'downloads'>('explorer')
 
   const handleObjectSelect = (name: string, type: ObjType) => {
     setSelectedName(name)
@@ -1449,26 +1620,53 @@ export default function DatabaseExplorer() {
     setSelectedName('')
   }
 
+  const TAB_STYLE = (active: boolean) => ({
+    padding: '7px 18px', fontSize: 13, fontWeight: active ? 600 : 400,
+    color: active ? '#38bdf8' : '#64748b',
+    background: 'none', border: 'none', borderBottom: active ? '2px solid #38bdf8' : '2px solid transparent',
+    cursor: 'pointer', whiteSpace: 'nowrap' as const,
+  })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 110px)', gap: 10 }}>
 
       {/* Title + search + SQL export */}
       <div style={{ flexShrink: 0 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 10 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900, color: '#f1f5f9', marginBottom: 10, letterSpacing: '-0.5px' }}>
           Database Explorer
         </h1>
-        <div style={{ position: 'relative' }}>
-          <GlobalSearch onSelect={handleSearchSelect} />
-        </div>
-        <SqlQueryPanel userRole={user?.role ?? ''} />
+        {mainTab === 'explorer' && (
+          <>
+            <div style={{ position: 'relative' }}>
+              <GlobalSearch onSelect={handleSearchSelect} />
+            </div>
+            <SqlQueryPanel userRole={user?.role ?? ''} />
+          </>
+        )}
       </div>
 
-      {/* Three-panel body */}
-      {isMobile ? (
+      {/* Main tab switcher */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #1e293b', flexShrink: 0, gap: 2 }}>
+        <button style={TAB_STYLE(mainTab === 'explorer')} onClick={() => setMainTab('explorer')}>
+          🗃 Schema Explorer
+        </button>
+        <button style={TAB_STYLE(mainTab === 'downloads')} onClick={() => setMainTab('downloads')}>
+          📁 Downloaded Files
+        </button>
+      </div>
+
+      {/* Three-panel body — only when explorer tab active */}
+      {mainTab === 'downloads' && (
+        <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <DownloadedFilesPanel />
+        </div>
+      )}
+
+      {mainTab === 'explorer' && isMobile ? (
         // Mobile: tab switcher — Schema → Objects → Columns
         <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {/* Tab bar */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #334155', flexShrink: 0 }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
             {(['Schemas', 'Objects', 'Columns'] as const).map((tab, i) => {
               const active = mobilePanelTab === i
               return (
@@ -1510,7 +1708,7 @@ export default function DatabaseExplorer() {
             )}
           </div>
         </div>
-      ) : (
+      ) : mainTab === 'explorer' ? (
         // Desktop: three panels side by side
         <div style={{ display: 'flex', gap: 10, flex: '1 1 0', minHeight: 0 }}>
           <Card title="Schemas" style={{ width: 200, flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1529,15 +1727,7 @@ export default function DatabaseExplorer() {
             <ColumnPanel schema={selectedSchema} name={selectedName} type={selectedType} />
           </Card>
         </div>
-      )}
-
-      {/* Downloaded Files — full-width panel at bottom */}
-      <Card
-        title="📁 Downloaded Files"
-        style={{ flexShrink: 0, maxHeight: 260, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-      >
-        <DownloadedFilesPanel />
-      </Card>
+      ) : null}
 
     </div>
   )

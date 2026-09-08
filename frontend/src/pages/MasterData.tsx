@@ -1,6 +1,48 @@
-﻿import { useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import http from '@/api/http'
 import { DataGrid } from '@/components/DataGrid'
+
+// ── Default descriptions for known custom views ───────────────────────────────
+const VIEW_DESC: Record<string, string> = {
+  V_WH_STOCK:                    'Warehouse stock — quantity on hand at each stockpoint (GRC/MSA/WMS/ALLOCATED)',
+  V_MC_REQ_GM:                   'MC-level requirement: gross margin, sell-thru & cover by merch category',
+  V_ART_REQ_APPS:                'Article-level requirement for APPS allocation — qty, cover & distribution plan',
+  V_ART_REQ_GM:                  'Article-level requirement: gross margin view with buy vs sell comparison',
+  V_MRP_REQ_APPS:                'MRP requirement for APPS — material requirement planning by article',
+  V_BARCODE_REQ_APPS:            'Barcode-level requirement for APPS — SKU/EAN wise allocation qty',
+  V_BARCODE_REQ_A:               'Barcode requirement (alternate) — EAN level store-wise distribution',
+  V_SZ_REQ_APPS:                 'Size-level requirement for APPS — size curve & qty break-up per article',
+  V_SPARKY_PBS_REQ:              'Sparky PBS requirement — pattern-based store distribution with PBS logic',
+  V_TABLE_REQ_APPS:              'Tabular requirement view for APPS — flat row format for bulk review',
+  V_OPTION_REQ_AP:               'Option-level requirement — option count & width planning per MC/division',
+  V_LIST_PBS_REQ:                'List view PBS requirement — store-wise PBS allocation list with filters',
+  V_MC_REQ_APPS_2:               'MC-level requirement for APPS (v2) — updated merch category allocation plan',
+  V_MC_STOCK:                    'Merch category stock — current inventory by MC across all stores',
+  V_MC_SALES:                    'Merch category sales — store-wise sales data by MC for analysis',
+  V_DC_STOCK:                    'DC/warehouse stock — distribution centre inventory by article',
+  V_NSO:                         'NSO store data — new store opening details and timeline',
+  V_ALL_WITH_NSO:                'All stores including NSO — full store universe with new openings',
+  SALE_TY_STORE_DATE:            'Current year sales — store & date level TY sales transactions',
+  SALE_LY_STORE_DATE:            'Last year sales — store & date level LY sales for YoY comparison',
+  T_ALLOCATION_TGT_DATA:         'Allocation target data — store-wise quantity targets for allocation',
+  T_ALLOCATION_FOR_ALL_DIVISION: 'Allocation data across all divisions — division-wise allocation summary',
+  T_STORE_OPENING_DATE:          'Store opening dates — master list of store launch and opening dates',
+}
+
+function viewDesc(objectName: string, saved?: string | null): string {
+  const trimmed = saved?.trim() ?? ''
+  // skip saved value if it's just the object name or schema.objectname (default DB value)
+  const upper = trimmed.toUpperCase()
+  const objUpper = objectName.toUpperCase()
+  const isDefault = upper === objUpper || upper.endsWith('.' + objUpper)
+  if (trimmed && !isDefault) return trimmed
+  const key = objectName.toUpperCase().replace(/\s+/g, '_')
+  // exact match first
+  if (VIEW_DESC[key]) return VIEW_DESC[key]
+  // prefix match
+  const match = Object.keys(VIEW_DESC).find(k => key.startsWith(k) || k.startsWith(key))
+  return match ? VIEW_DESC[match] : ''
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +71,7 @@ interface CustomTable {
   label: string
   added_by: string
   added_at: string
+  description?: string | null
 }
 
 interface PreviewData {
@@ -56,6 +99,8 @@ interface TableKpi {
   date_from?: string
   date_to?: string
 }
+
+interface ItemMasterStatus { ready: boolean; rows: number; cached_at: string | null }
 
 // ── Per-window state ──────────────────────────────────────────────────────────
 
@@ -131,20 +176,20 @@ function ColSelect({ value, options, onChange, minWidth = 160, placeholder = 'Se
         type="button"
         onClick={() => setOpen(o => !o)}
         style={{
-          width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
+          width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5,
           color: value ? '#94a3b8' : '#475569', fontSize: 11, padding: '4px 28px 4px 8px',
           outline: 'none', cursor: 'pointer', textAlign: 'left', whiteSpace: 'nowrap',
           overflow: 'hidden', textOverflow: 'ellipsis', position: 'relative',
         }}
       >
         {value || placeholder}
-        <span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: 9, pointerEvents: 'none' }}>▼</span>
+        <span style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 9, pointerEvents: 'none' }}>▼</span>
       </button>
 
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 999,
-          background: '#0f1c2e', border: '1px solid #334155', borderRadius: 6,
+          background: '#0f1c2e', border: '1px solid var(--card-border)', borderRadius: 6,
           minWidth: Math.max(minWidth, 200), maxHeight: 260, display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 24px rgba(0,0,0,.6)', marginTop: 3,
         }}>
@@ -157,14 +202,14 @@ function ColSelect({ value, options, onChange, minWidth = 160, placeholder = 'Se
               placeholder="Search columns…"
               style={{
                 width: '100%', background: '#070d1a', border: '1px solid #253761', borderRadius: 4,
-                color: '#e2e8f0', fontSize: 11, padding: '4px 8px', outline: 'none', boxSizing: 'border-box',
+                color: 'var(--text-primary)', fontSize: 11, padding: '4px 8px', outline: 'none', boxSizing: 'border-box',
               }}
             />
           </div>
           {/* Options list */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {filtered.length === 0 ? (
-              <div style={{ padding: '10px 12px', fontSize: 11, color: '#475569', fontStyle: 'italic' }}>No match</div>
+              <div style={{ padding: '10px 12px', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>No match</div>
             ) : filtered.map(o => (
               <div
                 key={o}
@@ -183,7 +228,7 @@ function ColSelect({ value, options, onChange, minWidth = 160, placeholder = 'Se
             ))}
           </div>
           {/* Count footer */}
-          <div style={{ padding: '4px 10px', borderTop: '1px solid #1e293b', fontSize: 10, color: '#334155', flexShrink: 0 }}>
+          <div style={{ padding: '4px 10px', borderTop: '1px solid #1e293b', fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
             {filtered.length} of {options.length} columns
           </div>
         </div>
@@ -238,10 +283,10 @@ function MultiColSelect({ value, options, onChange, minWidth = 200 }: {
               background: 'rgba(56,189,248,.12)', border: '1px solid rgba(56,189,248,.35)',
               borderRadius: 4, padding: '2px 5px', fontSize: 10, color: '#7dd3fc',
             }}>
-              <span style={{ color: '#475569', fontSize: 9, cursor: 'pointer', userSelect: 'none' }} onClick={() => moveUp(i)}>▲</span>
-              <span style={{ color: '#475569', fontSize: 9, cursor: 'pointer', userSelect: 'none' }} onClick={() => moveDown(i)}>▼</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 9, cursor: 'pointer', userSelect: 'none' }} onClick={() => moveUp(i)}>▲</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 9, cursor: 'pointer', userSelect: 'none' }} onClick={() => moveDown(i)}>▼</span>
               {col}
-              <span onClick={() => remove(col)} style={{ color: '#475569', cursor: 'pointer', fontSize: 11, lineHeight: 1, marginLeft: 2 }}>×</span>
+              <span onClick={() => remove(col)} style={{ color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, lineHeight: 1, marginLeft: 2 }}>×</span>
             </span>
           ))}
         </div>
@@ -252,8 +297,8 @@ function MultiColSelect({ value, options, onChange, minWidth = 200 }: {
         type="button"
         onClick={() => setOpen(o => !o)}
         style={{
-          background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-          color: '#475569', fontSize: 11, padding: '4px 28px 4px 8px',
+          background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5,
+          color: 'var(--text-muted)', fontSize: 11, padding: '4px 28px 4px 8px',
           outline: 'none', cursor: 'pointer', textAlign: 'left', position: 'relative',
         }}
       >
@@ -264,7 +309,7 @@ function MultiColSelect({ value, options, onChange, minWidth = 200 }: {
       {open && (
         <div style={{
           position: 'absolute', zIndex: 999,
-          background: '#0f1c2e', border: '1px solid #334155', borderRadius: 6,
+          background: '#0f1c2e', border: '1px solid var(--card-border)', borderRadius: 6,
           minWidth: Math.max(minWidth, 220), maxHeight: 280, display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 24px rgba(0,0,0,.6)', marginTop: 2,
         }}>
@@ -276,13 +321,13 @@ function MultiColSelect({ value, options, onChange, minWidth = 200 }: {
               placeholder="Search columns…"
               style={{
                 width: '100%', background: '#070d1a', border: '1px solid #253761', borderRadius: 4,
-                color: '#e2e8f0', fontSize: 11, padding: '4px 8px', outline: 'none', boxSizing: 'border-box',
+                color: 'var(--text-primary)', fontSize: 11, padding: '4px 8px', outline: 'none', boxSizing: 'border-box',
               }}
             />
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {filtered.length === 0
-              ? <div style={{ padding: '10px 12px', fontSize: 11, color: '#475569', fontStyle: 'italic' }}>No match</div>
+              ? <div style={{ padding: '10px 12px', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>No match</div>
               : filtered.map(o => {
                 const checked = value.includes(o)
                 return (
@@ -303,10 +348,10 @@ function MultiColSelect({ value, options, onChange, minWidth = 200 }: {
               })
             }
           </div>
-          <div style={{ padding: '4px 10px', borderTop: '1px solid #1e293b', fontSize: 10, color: '#334155', flexShrink: 0, display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ padding: '4px 10px', borderTop: '1px solid #1e293b', fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, display: 'flex', justifyContent: 'space-between' }}>
             <span>{value.length} selected · {filtered.length} of {options.length}</span>
             {value.length > 0 && (
-              <span onClick={() => onChange([])} style={{ cursor: 'pointer', color: '#475569' }}>Clear all</span>
+              <span onClick={() => onChange([])} style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>Clear all</span>
             )}
           </div>
         </div>
@@ -431,10 +476,10 @@ function VizPanel({
   }
 
   const sel: React.CSSProperties = {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 5,
-    color: '#94a3b8', fontSize: 11, padding: '4px 8px', outline: 'none',
+    background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5,
+    color: 'var(--text-secondary)', fontSize: 11, padding: '4px 8px', outline: 'none',
   }
-  const label: React.CSSProperties = { fontSize: 10, color: '#475569', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 3 }
+  const label: React.CSSProperties = { fontSize: 10, color: 'var(--text-muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 3 }
   const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2 }
   const runBtn = (onClick: () => void, loading: boolean): React.CSSProperties => ({
     padding: '5px 16px', borderRadius: 6, border: '1px solid #1e40af',
@@ -456,15 +501,15 @@ function VizPanel({
   return (
     <div style={{
       flex: '1 1 0', minHeight: 0,
-      background: '#1e293b',
+      background: 'var(--card-bg)',
       border: `1px solid ${color}40`,
       borderRadius: 10, display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #334155', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color }}>📊 {rowLabel} — Visualize</span>
         {/* Mode toggle */}
-        <div style={{ display: 'flex', gap: 0, marginLeft: 12, border: '1px solid #334155', borderRadius: 6, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: 0, marginLeft: 12, border: '1px solid var(--card-border)', borderRadius: 6, overflow: 'hidden' }}>
           {(['card', 'pivot'] as VizMode[]).map(m => (
             <button key={m} onClick={() => setMode(m)}
               style={{
@@ -478,13 +523,13 @@ function VizPanel({
           ))}
         </div>
         <button onClick={onClose}
-          style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14 }}>✕</button>
       </div>
 
       {/* Body */}
       <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }}>
         {colsLoading ? (
-          <div style={{ color: '#475569', fontSize: 12 }}>Loading columns…</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading columns…</div>
         ) : columns.length === 0 ? (
           <div style={{ color: '#f87171', fontSize: 12 }}>No column data — download this table first.</div>
         ) : mode === 'card' ? (
@@ -511,16 +556,16 @@ function VizPanel({
             {cardResult && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
                 <div style={{
-                  background: '#0f172a', border: `1px solid ${color}40`, borderRadius: 10,
+                  background: 'var(--content-bg)', border: `1px solid ${color}40`, borderRadius: 10,
                   padding: '20px 28px', display: 'inline-flex', flexDirection: 'column', gap: 4, minWidth: 200,
                 }}>
-                  <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
                     {cardResult.func}({cardResult.field})
                   </span>
                   <span style={{ fontSize: 32, fontWeight: 800, color, fontFamily: 'monospace', letterSpacing: '-.02em' }}>
                     {fmtVal(cardResult.value, cardResult.func)}
                   </span>
-                  <span style={{ fontSize: 10, color: '#334155' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                     across {cardResult.total_rows.toLocaleString()} rows
                   </span>
                 </div>
@@ -565,7 +610,7 @@ function VizPanel({
             {pivotResult && (
               <div style={{ overflowX: 'auto', flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, color: '#475569' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                     {pivotResult.func}({pivotResult.value_col}) grouped by {(pivotResult.row_cols ?? [pivotResult.row_col]).join(' › ')} — {pivotResult.total_groups} groups
                   </div>
                   <button
@@ -581,9 +626,9 @@ function VizPanel({
                 </div>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11, whiteSpace: 'nowrap' }}>
                   <thead>
-                    <tr style={{ background: '#0f172a' }}>
+                    <tr style={{ background: 'var(--content-bg)' }}>
                       {(pivotResult.row_cols ?? [pivotResult.row_col]).map(rc => (
-                        <th key={rc} style={{ padding: '5px 12px', textAlign: 'left', color: '#64748b', fontWeight: 700, fontSize: 10, borderBottom: '2px solid #334155', letterSpacing: '.05em', textTransform: 'uppercase', borderRight: '1px solid #1e293b' }}>
+                        <th key={rc} style={{ padding: '5px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 700, fontSize: 10, borderBottom: '2px solid #334155', letterSpacing: '.05em', textTransform: 'uppercase', borderRight: '1px solid #1e293b' }}>
                           {rc}
                         </th>
                       ))}
@@ -599,7 +644,7 @@ function VizPanel({
                       return (
                         <tr key={i} style={{ borderBottom: '1px solid #1e293b', background: i % 2 === 0 ? 'transparent' : '#ffffff04' }}>
                           {rowCols.map(rc => (
-                            <td key={rc} style={{ padding: '4px 12px', color: '#94a3b8', borderRight: '1px solid #1e293b' }}>
+                            <td key={rc} style={{ padding: '4px 12px', color: 'var(--text-secondary)', borderRight: '1px solid #1e293b' }}>
                               {r[rc] == null ? <i>NULL</i> : String(r[rc])}
                             </td>
                           ))}
@@ -624,7 +669,7 @@ function VizPanel({
 
 function StatusBadge({ exists, stale }: { exists: boolean; stale?: boolean }) {
   if (!exists) return (
-    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: '#1e293b', color: '#475569', border: '1px solid #334155' }}>No file</span>
+    <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'var(--card-bg)', color: 'var(--text-muted)', border: '1px solid var(--card-border)' }}>No file</span>
   )
   if (stale) return (
     <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(251,191,36,.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,.35)' }}>⚠ Stale</span>
@@ -667,10 +712,39 @@ export default function MasterData() {
   const [activeWin, setActiveWin]   = useState<string | null>(null)
   const [refreshingWin, setRefreshingWin] = useState<string | null>(null)
 
+  // ── Item Master (Distribution) ─────────────────────────────────────────────
+  const [imStatus,  setImStatus]  = useState<ItemMasterStatus | null>(null)
+  const [imLoading, setImLoading] = useState(false)
+  const [imMsg,     setImMsg]     = useState<string | null>(null)
+
+  const fetchImStatus = useCallback(async () => {
+    try {
+      const res = await http.get('/distribution/item-master/status')
+      if (res.data.success) setImStatus(res.data.data)
+    } catch { /* silent */ }
+  }, [])
+
+  const downloadItemMaster = async () => {
+    setImLoading(true); setImMsg(null)
+    try {
+      const res = await http.post('/distribution/item-master/download')
+      if (res.data.success) {
+        const d = res.data.data as { rows: number; elapsed_ms: number }
+        setImMsg(`✓ Downloaded ${d.rows.toLocaleString('en-IN')} rows in ${Math.round(d.elapsed_ms / 1000)}s`)
+        await fetchImStatus()
+      } else {
+        setImMsg(`✗ ${res.data.message ?? 'Error'}`)
+      }
+    } catch (e: unknown) {
+      setImMsg(`✗ ${e instanceof Error ? e.message : 'Error'}`)
+    } finally { setImLoading(false) }
+  }
+
   useEffect(() => {
     TABLE_KEYS.forEach(k => { loadStatus(k); loadKpi(k) })
     loadCustomTables()
-  }, [])
+    fetchImStatus()
+  }, [fetchImStatus])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setActiveWin(null) }
@@ -852,21 +926,27 @@ export default function MasterData() {
 
   // ── Editable descriptions ──────────────────────────────────────────────────
 
-  const [customDescs, setCustomDescs] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('md_descs') || '{}') } catch { return {} }
-  })
   const [editingDesc, setEditingDesc] = useState<string | null>(null)
   const [editDraft,   setEditDraft]   = useState('')
 
   function startEditDesc(id: string, current: string) {
-    setEditingDesc(id); setEditDraft(customDescs[id] ?? current)
+    setEditingDesc(id); setEditDraft(current)
   }
+
   function saveDesc(id: string) {
-    const next = { ...customDescs, [id]: editDraft.trim() }
-    if (!editDraft.trim()) delete next[id]
-    setCustomDescs(next)
-    localStorage.setItem('md_descs', JSON.stringify(next))
+    const trimmed = editDraft.trim()
     setEditingDesc(null)
+    // Optimistically update local customTables state
+    setCustomTables(prev => prev.map(ct =>
+      ct.id === id ? { ...ct, description: trimmed || null } : ct
+    ))
+    // Persist to backend (fire-and-forget; row was already optimistically updated)
+    http.patch(`/master/custom/${id}/description`, { description: trimmed }).catch(() => {
+      // Revert on failure
+      setCustomTables(prev => prev.map(ct =>
+        ct.id === id ? { ...ct, description: ct.description } : ct
+      ))
+    })
   }
 
   // ── Resize ─────────────────────────────────────────────────────────────────
@@ -968,11 +1048,11 @@ export default function MasterData() {
   }))
 
   const customRows: RowData[] = customTables.map(ct => ({
-    id: ct.id, isCustom: true,
+    id: ct.id ?? `custom::${ct.object_name}`, isCustom: true,
     name: ct.object_name,
     schema: ct.schema_owner,
     view: ct.object_name,
-    desc: ct.object_name,
+    desc: viewDesc(ct.object_name, ct.description) || ct.label,
     color: '#f59e0b',
     status: statuses[ct.id] ?? null,
     loading: statusLoading[ct.id] ?? false,
@@ -1025,17 +1105,17 @@ export default function MasterData() {
   }
 
   const THGroup: React.CSSProperties = {
-    padding: '0 10px', fontSize: 9, fontWeight: 700, color: '#334155',
+    padding: '0 10px', fontSize: 9, fontWeight: 700, color: 'var(--text-muted)',
     textAlign: 'left', letterSpacing: '.08em', textTransform: 'uppercase',
     background: '#0a0f1a', borderBottom: '1px solid #1e293b',
     height: 24, lineHeight: '24px',
   }
   const TD: React.CSSProperties = {
-    padding: '7px 10px', fontSize: 12, color: '#94a3b8',
+    padding: '7px 10px', fontSize: 12, color: 'var(--text-secondary)',
     borderBottom: '1px solid #1e293b', verticalAlign: 'middle',
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   }
-  const TDVal: React.CSSProperties = { ...TD, color: '#e2e8f0', fontWeight: 500 }
+  const TDVal: React.CSSProperties = { ...TD, color: 'var(--text-primary)', fontWeight: 500 }
 
   function rowBg(exists: boolean, stale?: boolean, isActive?: boolean) {
     if (isActive) return 'rgba(56,189,248,.05)'
@@ -1055,14 +1135,14 @@ export default function MasterData() {
 
       {/* Page header */}
       <div style={{ flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#e2e8f0' }}>📊 Master Data</h1>
-        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#64748b' }}>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>📊 Master Data</h1>
+        <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
           Core Oracle tables — auto-loaded from local Parquet cache.
         </p>
       </div>
 
       {/* Master table */}
-      <div style={{ flex: 1, minHeight: 0, border: '1px solid #334155', borderRadius: 10, background: '#1e293b' }}>
+      <div style={{ flex: 1, minHeight: 0, border: '1px solid var(--card-border)', borderRadius: 10, background: 'var(--card-bg)' }}>
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'auto', borderRadius: 10 }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: colOrder.reduce((s, k) => s + colWidths[k], 0) }}>
             <colgroup>
@@ -1136,7 +1216,7 @@ export default function MasterData() {
                     case 'name': return (
                       <td key={col} style={{ ...TDVal, color }}>
                         {name}
-                        {ic && <span style={{ marginLeft: 6, fontSize: 9, color: '#475569', background: '#0f172a', padding: '1px 6px', borderRadius: 8, border: '1px solid #334155' }}>custom</span>}
+                        {ic && <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--text-muted)', background: 'var(--content-bg)', padding: '1px 6px', borderRadius: 8, border: '1px solid var(--card-border)' }}>custom</span>}
                       </td>
                     )
                     case 'schema': return (
@@ -1145,13 +1225,13 @@ export default function MasterData() {
                       </td>
                     )
                     case 'desc': {
-                      const displayed = customDescs[id] || desc || name
+                      const displayed = desc || name
                       const isEditing = editingDesc === id
                       return (
                         <td key={col}
-                          title={isEditing ? undefined : 'Click to edit description'}
-                          onClick={() => !isEditing && startEditDesc(id, desc)}
-                          style={{ ...TD, color: '#64748b', cursor: 'text', padding: isEditing ? '4px 6px' : TD.padding }}>
+                          title={ic && !isEditing ? 'Click to edit description' : undefined}
+                          onClick={() => ic && !isEditing && startEditDesc(id, viewDesc(name, row.ct?.description) || '')}
+                          style={{ ...TD, color: 'var(--text-muted)', cursor: ic ? 'text' : 'default', padding: isEditing ? '4px 6px' : TD.padding }}>
                           {isEditing ? (
                             <input
                               autoFocus
@@ -1163,8 +1243,8 @@ export default function MasterData() {
                                 if (e.key === 'Escape') setEditingDesc(null)
                               }}
                               style={{
-                                width: '100%', background: '#0f172a', border: '1px solid #38bdf8',
-                                borderRadius: 4, color: '#e2e8f0', fontSize: 11, padding: '3px 6px',
+                                width: '100%', background: 'var(--content-bg)', border: '1px solid #38bdf8',
+                                borderRadius: 4, color: 'var(--text-primary)', fontSize: 11, padding: '3px 6px',
                                 outline: 'none',
                               }}
                             />
@@ -1201,7 +1281,7 @@ export default function MasterData() {
                     )
                     case 'status': return (
                       <td key={col} style={TD}>
-                        {loading ? <span style={{ color: '#334155', fontSize: 11 }}>…</span> : <StatusBadge exists={exists} stale={stale} />}
+                        {loading ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>…</span> : <StatusBadge exists={exists} stale={stale} />}
                       </td>
                     )
                     case 'rows': return (
@@ -1279,7 +1359,7 @@ export default function MasterData() {
         const win   = wins[key]
         const accent = isCustom(key) ? '#f59e0b' : (TABLE_META[key]?.color ?? '#38bdf8')
         const isRefreshing = refreshingWin === key
-        const winBtnSt: React.CSSProperties = { width: 26, height: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
+        const winBtnSt: React.CSSProperties = { width: 26, height: 26, border: '1px solid var(--card-border)', borderRadius: 5, background: '#1e2030', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }
         const { data, loading, error, limit } = win
 
         return (
@@ -1295,21 +1375,21 @@ export default function MasterData() {
                 </span>
                 {data && (
                   <>
-                    <span style={{ fontSize: 10, color: '#334155' }}>—</span>
-                    <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{data.oracle_view}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>—</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{data.oracle_view}</span>
                     <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: data.served_from === 'oracle' ? '#052e16' : '#0f172a', color: data.served_from === 'oracle' ? '#4ade80' : '#64748b', border: `1px solid ${data.served_from === 'oracle' ? '#166534' : '#334155'}` }}>
                       {data.served_from === 'oracle' ? '⚡ fresh' : '💾 cache'}
                     </span>
                     <span style={{ fontSize: 10, color: data.stale ? '#fbbf24' : '#64748b', whiteSpace: 'nowrap' }}>{data.age_label}</span>
-                    <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{data.rows_in_file.toLocaleString()} rows · {data.columns.length} cols</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{data.rows_in_file.toLocaleString()} rows · {data.columns.length} cols</span>
                   </>
                 )}
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <label style={{ fontSize: 11, color: '#475569' }}>Show</label>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Show</label>
                   <select value={limit} onChange={e => {
                     const nl = Number(e.target.value)
                     setWins(p => ({ ...p, [key]: { ...p[key], limit: nl } }))
-                  }} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '3px 6px' }}>
+                  }} style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-secondary)', fontSize: 11, padding: '3px 6px' }}>
                     {(() => {
                       const total = data?.rows_in_file ?? statuses[key]?.rows
                       const fixed = [100, 200, 500, 1000, 2000]
@@ -1322,7 +1402,7 @@ export default function MasterData() {
                     ↻ Reload
                   </button>
                   <button title="Minimize" onClick={() => setActiveWin(null)} style={winBtnSt}>▬</button>
-                  <button title="Close" onClick={() => closeWindow(key)} style={{ ...winBtnSt, color: '#94a3b8' }}>✕</button>
+                  <button title="Close" onClick={() => closeWindow(key)} style={{ ...winBtnSt, color: 'var(--text-secondary)' }}>✕</button>
                 </div>
               </div>
 
@@ -1339,7 +1419,7 @@ export default function MasterData() {
                   <style>{`@keyframes md-spin { to { transform: rotate(360deg) } }`}</style>
                   <span style={{ animation: 'md-spin 1.2s linear infinite', display: 'inline-block', fontSize: 13 }}>↻</span>
                   Downloading fresh data from Oracle…
-                  {data && <span style={{ color: '#475569', marginLeft: 4 }}>Showing cached ({data.age_label} old).</span>}
+                  {data && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>Showing cached ({data.age_label} old).</span>}
                 </div>
               )}
 
@@ -1349,9 +1429,9 @@ export default function MasterData() {
                   <div style={{ padding: 48, textAlign: 'center' }}>
                     <div style={{ fontSize: 30, marginBottom: 10 }}>⚠️</div>
                     <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Failed to load data</div>
-                    <div style={{ color: '#64748b', fontSize: 12, maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>{error}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12, maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>{error}</div>
                     <button onClick={() => loadWinPreview(key, false, limit)}
-                      style={{ marginTop: 16, padding: '7px 20px', background: '#1e3a5f', border: '1px solid #334155', borderRadius: 6, color: '#7dd3fc', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ marginTop: 16, padding: '7px 20px', background: '#1e3a5f', border: '1px solid var(--card-border)', borderRadius: 6, color: '#7dd3fc', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                       ↻ Retry
                     </button>
                   </div>
@@ -1363,6 +1443,44 @@ export default function MasterData() {
           </div>
         )
       })()}
+
+      {/* Distribution Cache — Item Master */}
+      <div style={{ flexShrink: 0, border: '1px solid var(--card-border)', borderRadius: 10, background: 'var(--card-bg)', padding: '14px 18px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+          Distribution Cache · REPORT.V_ITEM_MASTER
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 600,
+            background: imStatus?.ready ? '#065f4620' : '#92400e20',
+            color: imStatus?.ready ? '#34d399' : '#f59e0b',
+          }}>
+            {imStatus === null ? '…' : imStatus.ready ? '✓ Cached' : '⚠ Not Downloaded'}
+          </span>
+          {imStatus?.ready && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {imStatus.rows.toLocaleString('en-IN')} rows
+              {imStatus.cached_at ? ` · ${new Date(imStatus.cached_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
+            </span>
+          )}
+          <button
+            onClick={downloadItemMaster}
+            disabled={imLoading}
+            style={{
+              padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: 'none',
+              cursor: imLoading ? 'not-allowed' : 'pointer',
+              background: imLoading ? '#334155' : '#6366f1', color: '#fff', opacity: imLoading ? 0.6 : 1,
+            }}>
+            {imLoading ? 'Downloading…' : imStatus?.ready ? '↻ Re-download' : '⬇ Download'}
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            Used by Distribution Model — fetches: <code style={{ fontSize: 10 }}>icode, option_level, allocation_option, sz_grp</code>
+          </span>
+        </div>
+        {imMsg && (
+          <div style={{ marginTop: 8, fontSize: 12, color: imMsg.startsWith('✓') ? '#34d399' : '#f87171' }}>{imMsg}</div>
+        )}
+      </div>
 
       {/* Minimized windows taskbar */}
       {Object.keys(wins).filter(k => k !== activeWin).length > 0 && (
@@ -1378,12 +1496,12 @@ export default function MasterData() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 8px' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{label}</span>
-                  {win.data && <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', flexShrink: 0 }}>{win.data.rows_in_file.toLocaleString()}</span>}
-                  {win.loading && <span style={{ fontSize: 10, color: '#334155', flexShrink: 0 }}>…</span>}
+                  {win.data && <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{win.data.rows_in_file.toLocaleString()}</span>}
+                  {win.loading && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>…</span>}
                   <button title="Restore" onClick={e => { e.stopPropagation(); setActiveWin(key) }}
-                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#64748b', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
+                    style={{ width: 20, height: 20, border: '1px solid var(--card-border)', borderRadius: 4, background: '#1e2030', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>▲</button>
                   <button title="Close" onClick={e => { e.stopPropagation(); closeWindow(key) }}
-                    style={{ width: 20, height: 20, border: '1px solid #334155', borderRadius: 4, background: '#1e2030', color: '#94a3b8', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                    style={{ width: 20, height: 20, border: '1px solid var(--card-border)', borderRadius: 4, background: '#1e2030', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
                 </div>
               </div>
             )

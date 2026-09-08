@@ -1,24 +1,16 @@
-/**
+﻿/**
  * Calculation — Phase 7
  *
  * Configure and launch a replenishment calculation run.
  * Polls for status, shows step-by-step progress, then renders summary + result grid + exceptions.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-function useIsMobile() {
-  const [mobile, setMobile] = useState(window.innerWidth < 768)
-  useEffect(() => {
-    const fn = () => setMobile(window.innerWidth < 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
-  }, [])
-  return mobile
-}
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ExportPanel from '@/components/ExportPanel'
 import http from '@/api/http'
 import { DataGrid } from '@/components/DataGrid'
+import Simulation from '@/pages/Simulation'
 
 async function apiFetch<T>(method: string, url: string, data?: unknown): Promise<T> {
   const res = await http.request<{ success: boolean; data: T; message: string | null }>({ method, url, data })
@@ -61,19 +53,19 @@ const S: Record<string, React.CSSProperties> = {
   page: { display: 'flex', gap: 16, height: 'calc(100vh - 100px)', minHeight: 0 },
   sidebar: { width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 },
   main: { flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, overflowY: 'auto' },
-  card: { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' },
+  card: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' },
   cardHead: {
-    padding: '10px 14px', borderBottom: '1px solid #334155',
+    padding: '10px 14px', borderBottom: '1px solid var(--card-border)',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   },
-  cardTitle: { fontSize: 13, fontWeight: 600, color: '#e2e8f0' },
+  cardTitle: { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' },
   cardBody: { padding: '14px' },
-  label: { fontSize: 11, color: '#64748b', fontWeight: 500, letterSpacing: 0.3, marginBottom: 4, display: 'block' },
-  select: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 13, padding: '6px 10px', width: '100%', marginBottom: 12 },
-  input: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#e2e8f0', fontSize: 13, padding: '6px 10px', width: '100%', boxSizing: 'border-box' as const, marginBottom: 12 },
+  label: { fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: 0.3, marginBottom: 4, display: 'block' },
+  select: { background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, padding: '6px 10px', width: '100%', marginBottom: 12 },
+  input: { background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, padding: '6px 10px', width: '100%', boxSizing: 'border-box' as const, marginBottom: 12 },
   btn: { background: '#0ea5e9', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 20px', cursor: 'pointer', width: '100%' },
-  btnSm: { background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 12, padding: '4px 12px', cursor: 'pointer' },
-  checkRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 12, color: '#94a3b8', cursor: 'pointer' },
+  btnSm: { background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 12, padding: '4px 12px', cursor: 'pointer' },
+  checkRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' },
   // steps
   step: (status: string): React.CSSProperties => ({
     display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 0',
@@ -82,20 +74,20 @@ const S: Record<string, React.CSSProperties> = {
   }),
   stepNum: { width: 20, fontWeight: 700, flexShrink: 0 },
   stepName: { flex: 1 },
-  stepRows: { color: '#64748b', fontSize: 11 },
+  stepRows: { color: 'var(--text-muted)', fontSize: 11 },
   // summary KPIs
   kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, padding: '14px' },
-  kpi: { background: '#0f172a', borderRadius: 8, padding: '12px 14px' },
+  kpi: { background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px' },
   kpiVal: { fontSize: 22, fontWeight: 700, color: '#38bdf8', fontVariantNumeric: 'tabular-nums' as const },
-  kpiLabel: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  kpiLabel: { fontSize: 11, color: 'var(--text-muted)', marginTop: 2 },
   // result table
   tblWrap: { overflowX: 'auto', overflowY: 'auto', maxHeight: 400 },
   tbl: { borderCollapse: 'collapse' as const, width: '100%', fontSize: 11 },
-  th: { background: '#0f172a', color: '#94a3b8', fontWeight: 600, padding: '6px 10px', textAlign: 'left' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, borderBottom: '1px solid #334155', fontSize: 10, letterSpacing: 0.3 },
-  td: { padding: '5px 10px', color: '#cbd5e1', borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' as const },
+  th: { background: 'var(--content-bg)', color: 'var(--text-secondary)', fontWeight: 600, padding: '6px 10px', textAlign: 'left' as const, whiteSpace: 'nowrap' as const, position: 'sticky' as const, top: 0, borderBottom: '1px solid var(--card-border)', fontSize: 10, letterSpacing: 0.3 },
+  td: { padding: '5px 10px', color: 'var(--text-secondary)', borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' as const },
   tdNum: { padding: '5px 10px', color: '#7dd3fc', borderBottom: '1px solid #1e293b', textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const },
   tdReq: { padding: '5px 10px', color: '#4ade80', borderBottom: '1px solid #1e293b', textAlign: 'right' as const, fontWeight: 700, fontVariantNumeric: 'tabular-nums' as const, whiteSpace: 'nowrap' as const },
-  empty: { padding: 40, textAlign: 'center' as const, color: '#64748b', fontSize: 13 },
+  empty: { padding: 40, textAlign: 'center' as const, color: 'var(--text-muted)', fontSize: 13 },
 }
 
 const NUM_COLS = new Set(['pbs', 'fnl_pbs', 'mdq', 'bgt_mc_str', 'bgt_cap', 'ttl_stk_q', 'l4w_sl', 'daily_sales', 'stock_cover_days', 'fill_req', 'net_req', 'req', 'pbs_multiplier'])
@@ -117,8 +109,8 @@ function RunHistoryItem({ run, selected, onClick }: { run: RunRecord; selected: 
       background: selected ? '#0f172a' : 'transparent',
       borderLeft: selected ? '3px solid #38bdf8' : '3px solid transparent',
     }}>
-      <div style={{ fontSize: 12, fontWeight: 500, color: '#e2e8f0', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{run.label}</div>
-      <div style={{ fontSize: 11, color: '#64748b', display: 'flex', gap: 8 }}>
+      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{run.label}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
         <span style={{ color: statusColor, fontWeight: 600 }}>{run.status.toUpperCase()}</span>
         {run.duration_s && <span>{run.duration_s}s</span>}
         {run.summary && <span>{run.summary.total_req.toLocaleString()} REQ</span>}
@@ -149,7 +141,7 @@ function StepList({ steps, running }: { steps: StepLog[]; running: boolean }) {
             <span style={S.stepNum}>{done ? (done.status === 'ok' ? '✓' : '✗') : isCurrent ? '⋯' : String(i + 1)}</span>
             <span style={S.stepName}>
               {name}
-              {done?.message && <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>{done.message}</div>}
+              {done?.message && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{done.message}</div>}
             </span>
             {done?.rows != null && <span style={S.stepRows}>{done.rows.toLocaleString()} rows</span>}
           </div>
@@ -222,11 +214,11 @@ function ResultGrid({ runId }: { runId: string }) {
       <div style={S.cardHead}>
         <span style={S.cardTitle}>Results — {total.toLocaleString()} rows</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#64748b' }}>Min REQ:</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Min REQ:</span>
           <input style={{ ...S.input, width: 70, marginBottom: 0, padding: '3px 6px' }}
             value={minReq} onChange={e => setMinReq(e.target.value)} placeholder="0"
             onKeyDown={e => e.key === 'Enter' && load(0)} />
-          <span style={{ fontSize: 11, color: '#64748b' }}>Sort by:</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sort by:</span>
           <select style={{ ...S.select, width: 120, marginBottom: 0, padding: '3px 6px' }}
             value={sortBy} onChange={e => { setSortBy(e.target.value); load(0) }}>
             {['req', 'net_req', 'ttl_stk_q', 'l4w_sl', 'fnl_pbs', 'store_name', 'department'].map(c =>
@@ -249,7 +241,7 @@ function ResultGrid({ runId }: { runId: string }) {
         />
       </div>
       {!loading && rows.length > 0 && (
-        <div style={{ padding: '8px 14px', borderTop: '1px solid #334155', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: '#64748b' }}>
+        <div style={{ padding: '8px 14px', borderTop: '1px solid var(--card-border)', display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
           <span>Showing {offset + 1}–{Math.min(offset + limit, total)} of {total.toLocaleString()}</span>
           <button style={S.btnSm} disabled={offset === 0} onClick={() => load(Math.max(0, offset - limit))}>← Prev</button>
           <button style={S.btnSm} disabled={offset + limit >= total} onClick={() => load(offset + limit)}>Next →</button>
@@ -282,7 +274,7 @@ function ExceptionsPanel({ runId }: { runId: string }) {
     }).catch(console.error).finally(() => setLoading(false))
   }, [runId])
 
-  if (loading) return <div style={{ ...S.card, padding: 20, textAlign: 'center', color: '#64748b', fontSize: 13 }}>Loading exceptions…</div>
+  if (loading) return <div style={{ ...S.card, padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading exceptions…</div>
 
   return (
     <div style={S.card}>
@@ -326,10 +318,10 @@ function ExceptionsPanel({ runId }: { runId: string }) {
               {exc.severity}
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>{exc.title}</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>{exc.message}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{exc.title}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{exc.message}</div>
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', flexShrink: 0, textAlign: 'right' as const }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' as const }}>
               <div style={{ fontWeight: 600, color: SEV_COLOR[exc.severity] }}>{exc.row_count.toLocaleString()} rows</div>
               <div style={{ marginTop: 2 }}>{expanded === exc.rule ? '▲ hide' : '▼ show'} samples</div>
             </div>
@@ -354,7 +346,7 @@ function ExceptionsPanel({ runId }: { runId: string }) {
                 </tbody>
               </table>
               {exc.sample_rows.length === 50 && (
-                <div style={{ fontSize: 10, color: '#475569', marginTop: 6 }}>Showing first 50 sample rows</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Showing first 50 sample rows</div>
               )}
             </div>
           )}
@@ -369,11 +361,23 @@ function ExceptionsPanel({ runId }: { runId: string }) {
 export default function Calculation() {
   const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [pageTab, setPageTab] = useState<'calculation' | 'simulation'>(
+    searchParams.get('tab') === 'simulation' ? 'simulation' : 'calculation'
+  )
   const [factorSets, setFactorSets] = useState<FactorSetMeta[]>([])
   const [selectedFs, setSelectedFs] = useState(searchParams.get('factor_set_id') ?? '')
   const [attribute1, setAttribute1] = useState(searchParams.get('attribute1') ?? 'PREWINTER')
   const [division, setDivision] = useState(searchParams.get('division') ?? '')
   const [department, setDepartment] = useState(searchParams.get('department') ?? '')
+  // Multi-scope
+  interface ScopeRow { division: string; attribute1: string; department: string }
+  const [scopes, setScopes] = useState<ScopeRow[]>([{ division: '', attribute1: searchParams.get('attribute1') ?? 'PREWINTER', department: '' }])
+
+  const addScope    = () => setScopes(s => [...s, { division: '', attribute1: '', department: '' }])
+  const removeScope = (i: number) => setScopes(s => s.filter((_, idx) => idx !== i))
+  const updateScope = (i: number, field: keyof ScopeRow, val: string) =>
+    setScopes(s => s.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
+
   const [inclTransit, setInclTransit] = useState(true)
   const [inclPack, setInclPack] = useState(true)
   const [inclTransferOut, setInclTransferOut] = useState(true)
@@ -428,11 +432,16 @@ export default function Calculation() {
     if (!selectedFs) { alert('Select a factor set'); return }
     setLaunching(true)
     try {
+      const effectiveScopes = scopes
+        .filter(s => s.division || s.attribute1 || s.department)
+        .map(s => ({ division: s.division || null, attribute1: s.attribute1 || null, department: s.department || null }))
       const d = await apiFetch<{ run_id: string }>('POST', '/calculation/run', {
         factor_set_id: selectedFs,
-        attribute1: attribute1 || null,
-        division: division || null,
-        department: department || null,
+        scopes: effectiveScopes,
+        // keep legacy fields for backward compat (used if scopes is empty)
+        attribute1: effectiveScopes.length === 0 ? (attribute1 || null) : null,
+        division:   effectiveScopes.length === 0 ? (division || null) : null,
+        department: effectiveScopes.length === 0 ? (department || null) : null,
         include_transit: inclTransit,
         include_pack_pending: inclPack,
         include_transfer_out: inclTransferOut,
@@ -456,13 +465,47 @@ export default function Calculation() {
 
   const isRunning = activeRun?.status === 'running' || activeRun?.status === 'pending'
 
+  // ── Tab bar ─────────────────────────────────────────────────────────────────
+  const tabBar = (
+    <div style={{
+      display: 'flex', gap: 2, borderBottom: '1px solid var(--card-border)',
+      marginBottom: 0, flexShrink: 0, background: 'var(--content-bg)',
+    }}>
+      {([
+        { key: 'calculation', label: '▶ Calculation' },
+        { key: 'simulation',  label: '🧮 Simulation' },
+      ] as const).map(({ key, label }) => (
+        <button key={key} onClick={() => setPageTab(key)} style={{
+          background: pageTab === key ? '#1e293b' : 'transparent',
+          border: 'none',
+          borderBottom: pageTab === key ? '2px solid #38bdf8' : '2px solid transparent',
+          color: pageTab === key ? '#e2e8f0' : '#64748b',
+          fontSize: 12, fontWeight: 600, padding: '8px 18px', cursor: 'pointer',
+        }}>{label}</button>
+      ))}
+    </div>
+  )
+
+  if (pageTab === 'simulation') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+        {tabBar}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <Simulation />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ ...S.page, flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : 'calc(100vh - 100px)', overflowY: isMobile ? 'auto' : undefined }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+      {tabBar}
+      <div style={{ ...S.page, flexDirection: isMobile ? 'column' : 'row', flex: 1, height: undefined, overflowY: isMobile ? 'auto' : undefined, marginTop: 12, minHeight: 0 }}>
       {/* ── Sidebar ── */}
       <div style={{ ...S.sidebar, width: isMobile ? '100%' : 300, flexShrink: 0 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', marginBottom: 2 }}>Calculation</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>Configure and run replenishment</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>Calculation</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Configure and run replenishment</div>
         </div>
 
         {/* Config card */}
@@ -479,16 +522,35 @@ export default function Calculation() {
               ))}
             </select>
 
-            <label style={S.label}>ATTRIBUTE1 (CAMPAIGN)</label>
-            <input style={S.input} value={attribute1} onChange={e => setAttribute1(e.target.value)} placeholder="e.g. PREWINTER" />
+            {/* ── Scope Builder ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label style={{ ...S.label, marginBottom: 0 }}>SCOPE (Division × Attribute1)</label>
+              <button onClick={addScope} style={{
+                background: '#1d4ed8', border: 'none', borderRadius: 4, color: '#fff',
+                fontSize: 11, padding: '2px 10px', cursor: 'pointer', fontWeight: 700,
+              }}>+ Add</button>
+            </div>
+            {scopes.map((sc, i) => (
+              <div key={i} style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, padding: '8px 10px', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Scope {i + 1}</span>
+                  {scopes.length > 1 && (
+                    <button onClick={() => removeScope(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13, padding: 0 }}>✕</button>
+                  )}
+                </div>
+                <label style={{ ...S.label, marginBottom: 2 }}>Division</label>
+                <input style={{ ...S.input, marginBottom: 6 }} value={sc.division}
+                  onChange={e => updateScope(i, 'division', e.target.value)} placeholder="e.g. MENS (blank = all)" />
+                <label style={{ ...S.label, marginBottom: 2 }}>Attribute1</label>
+                <input style={{ ...S.input, marginBottom: 6 }} value={sc.attribute1}
+                  onChange={e => updateScope(i, 'attribute1', e.target.value)} placeholder="e.g. PREWINTER (blank = all)" />
+                <label style={{ ...S.label, marginBottom: 2 }}>Department</label>
+                <input style={{ ...S.input, marginBottom: 0 }} value={sc.department}
+                  onChange={e => updateScope(i, 'department', e.target.value)} placeholder="blank = all" />
+              </div>
+            ))}
 
-            <label style={S.label}>DIVISION (optional)</label>
-            <input style={S.input} value={division} onChange={e => setDivision(e.target.value)} placeholder="e.g. MENS" />
-
-            <label style={S.label}>DEPARTMENT (optional)</label>
-            <input style={S.input} value={department} onChange={e => setDepartment(e.target.value)} placeholder="leave blank for all" />
-
-            <div style={{ borderTop: '1px solid #334155', paddingTop: 10, marginTop: 2, marginBottom: 10 }}>
+            <div style={{ borderTop: '1px solid var(--card-border)', paddingTop: 10, marginTop: 2, marginBottom: 10 }}>
               <label style={S.label}>STOCK COMPONENTS</label>
               {[
                 { label: 'Include In-Transit', val: inclTransit, set: setInclTransit },
@@ -514,7 +576,7 @@ export default function Calculation() {
             <span style={S.cardTitle}>Recent Runs</span>
             <button style={S.btnSm} onClick={loadRuns}>↻</button>
           </div>
-          {runs.length === 0 && <div style={{ padding: '20px 14px', fontSize: 12, color: '#64748b' }}>No runs yet.</div>}
+          {runs.length === 0 && <div style={{ padding: '20px 14px', fontSize: 12, color: 'var(--text-muted)' }}>No runs yet.</div>}
           {runs.map(r => (
             <RunHistoryItem key={r.run_id} run={r} selected={activeRunId === r.run_id} onClick={() => selectRun(r)} />
           ))}
@@ -527,7 +589,7 @@ export default function Calculation() {
           <div style={{ ...S.card, flex: 1 }}>
             <div style={S.empty}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>▶️</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
                 Configure and run a calculation
               </div>
               <div style={{ fontSize: 12 }}>
@@ -544,8 +606,8 @@ export default function Calculation() {
             <div style={S.card}>
               <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>{activeRun.label}</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{activeRun.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     Factor set: {activeRun.factor_set_name}
                     {activeRun.duration_s && ` · ${activeRun.duration_s}s`}
                     {activeRun.result_rows > 0 && ` · ${activeRun.result_rows.toLocaleString()} rows`}
@@ -590,7 +652,7 @@ export default function Calculation() {
             {/* Results / Exceptions tabs */}
             {activeRun.status === 'complete' && (
               <>
-                <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #334155' }}>
+                <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--card-border)' }}>
                   {(['results', 'exceptions'] as const).map(tab => (
                     <button
                       key={tab}
@@ -614,6 +676,7 @@ export default function Calculation() {
           </>
         )}
       </div>
+    </div>
     </div>
   )
 }

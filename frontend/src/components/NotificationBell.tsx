@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import http from '@/api/http'
 
 interface Notification {
@@ -88,13 +88,13 @@ export default function NotificationBell() {
         <div style={{
           position: 'absolute', top: '110%', right: 0, zIndex: 2000,
           width: 340, maxHeight: 440,
-          background: '#1e293b', border: '1px solid #334155',
+          background: 'var(--card-bg)', border: '1px solid var(--card-border)',
           borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,.5)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           {/* Header */}
           <div style={{
-            padding: '10px 14px', borderBottom: '1px solid #334155',
+            padding: '10px 14px', borderBottom: '1px solid var(--card-border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>
@@ -111,7 +111,7 @@ export default function NotificationBell() {
           {/* List */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {notifs.length === 0 ? (
-              <div style={{ padding: '32px 16px', textAlign: 'center', color: '#475569', fontSize: 12 }}>
+              <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
                 No notifications yet
               </div>
             ) : notifs.map(n => (
@@ -130,15 +130,15 @@ export default function NotificationBell() {
                   {!n.is_read && (
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#38bdf8', flexShrink: 0 }} />
                   )}
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>{n.subject}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 10, color: '#334155', flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{n.subject}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
                     {n.created_at?.slice(0, 16).replace('T', ' ')}
                   </span>
                 </div>
-                <div style={{ fontSize: 11.5, color: '#94a3b8', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
                   {n.message}
                 </div>
-                <div style={{ fontSize: 10, color: '#475569', marginTop: 4 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                   — {n.from_name}
                 </div>
               </div>

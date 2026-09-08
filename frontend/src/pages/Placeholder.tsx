@@ -1,4 +1,4 @@
-interface Props {
+﻿interface Props {
   title: string
   phase: string
   description: string
@@ -23,7 +23,7 @@ export default function Placeholder({ title, phase, description }: Props) {
       >
         {phase}
       </div>
-      <p style={{ fontSize: 14, color: '#64748b', maxWidth: 480, margin: '0 auto' }}>{description}</p>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', maxWidth: 480, margin: '0 auto' }}>{description}</p>
     </div>
   )
 }

@@ -88,6 +88,84 @@ class BCVars(BaseModel):
     sl_projection_days: int = 30
 
 
+# ── MRP Variables (from V_MRP_REQ_APPS) ──────────────────────────────────────
+
+class MRPVars(BaseModel):
+    model_config = {"extra": "allow"}
+    sl_window_days: int = 7
+    sl_projection_days: int = 30
+    pbs_period_days: int = 30
+    min_store_cnt: int = 1
+    pbs_fill_threshold: float = 0.85
+    fill_bucket_low: float = 0.50
+    fill_bucket_mid_low: float = 0.70
+    fill_bucket_mid: float = 0.80
+    fill_bucket_high: float = 1.00
+
+
+# ── Art Variables (from V_ART_REQ_APPS) ──────────────────────────────────────
+
+class ArtVars(BaseModel):
+    model_config = {"extra": "allow"}
+    sl_window_days: int = 7
+    sl_projection_days: int = 30
+    pbs_period_days: int = 30
+    min_store_cnt: int = 1
+    pbs_fill_threshold: float = 0.85
+    fill_bucket_low: float = 0.50
+    fill_bucket_mid_low: float = 0.70
+    fill_bucket_mid: float = 0.80
+    fill_bucket_high: float = 1.00
+
+
+# ── Sparky Variables (from V_SPARKY_PBS_REQ) ─────────────────────────────────
+
+class SparkVars(BaseModel):
+    model_config = {"extra": "allow"}
+    sl_window_days: int = 7
+    sl_projection_days: int = 30
+    max_slq_cap: int = 0
+    pbs_multiplier: float = 1.0
+    min_store_cnt: int = 1
+    pbs_fill_threshold: float = 0.85
+
+
+# ── Option Variables (from V_OPTION_REQ_APPS) ────────────────────────────────
+
+class OptionVars(BaseModel):
+    model_config = {"extra": "allow"}
+    sl_window_days: int = 7
+    sl_projection_days: int = 30
+    pbs_period_days: int = 30
+    option_pbs_multiplier: float = 1.0
+    min_store_cnt: int = 1
+    pbs_fill_threshold: float = 0.85
+
+
+# ── List Variables (from V_LIST_PBS_REQ) ─────────────────────────────────────
+
+class ListVars(BaseModel):
+    model_config = {"extra": "allow"}
+    list_cover_days: int = 30
+    sl_window_days: int = 7
+    sl_projection_days: int = 30
+    adj_stock_days: int = 7
+    min_list_req: int = 0
+    min_store_cnt: int = 1
+
+
+# ── Size Variables (from V_SZ_REQ_APPS) ──────────────────────────────────────
+
+class SizeVars(BaseModel):
+    model_config = {"extra": "allow"}
+    sl_window_days: int = 7
+    sl_projection_days: int = 30
+    pbs_period_days: int = 30
+    size_ratio_cap: float = 2.0
+    min_size_pbs: int = 1
+    pbs_fill_threshold: float = 0.85
+
+
 # ── Factor config (global params) ─────────────────────────────────────────────
 
 class FactorConfig(BaseModel):
@@ -98,6 +176,12 @@ class FactorConfig(BaseModel):
     use_grade_pbs: bool = True
     mc_vars: Optional[MCVars] = None
     bc_vars: Optional[BCVars] = None
+    mrp_vars: Optional[MRPVars] = None
+    art_vars: Optional[ArtVars] = None
+    spark_vars: Optional[SparkVars] = None
+    option_vars: Optional[OptionVars] = None
+    list_vars: Optional[ListVars] = None
+    size_vars: Optional[SizeVars] = None
 
 
 # ── Factor set ────────────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react'
 import http from '@/api/http'
+import NumFilterDropdown, { NumFilterIcon, useNumFilter } from '@/components/NumFilterDropdown'
+import StaleBanner from '@/components/StaleBanner'
 
 interface SparkRow {
   department: string
@@ -58,7 +60,7 @@ const GROUP_META: Record<string, { label: string; icon: string; color: string }>
   SPARKY_REQ:  { label: 'Sparky Requirement',  icon: '⚡', color: '#f97316' },
   TABLE_REQ:   { label: 'Table Requirement',   icon: '📋', color: '#8b5cf6' },
   OPTION_REQ:  { label: 'Option Requirement',  icon: '🎛️', color: '#14b8a6' },
-  LIST_REQ:    { label: 'List Requirement',    icon: '📝', color: '#64748b' },
+  LIST_REQ:    { label: 'List Requirement',    icon: '📝', color: 'var(--text-muted)' },
 }
 
 const fmtRows = (n: number | null) => n == null ? '—' : n >= 1_000_000
@@ -90,12 +92,12 @@ function MultiSelect({ label, options, value, onChange, accentColor = '#0ea5e9' 
   const pill = value.length ? `${value.length} selected` : label
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${value.length ? accentColor : '#334155'}`, background: '#1e293b', color: value.length ? accentColor : '#94a3b8', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 120 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${value.length ? accentColor : '#334155'}`, background: 'var(--card-bg)', color: value.length ? accentColor : '#94a3b8', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 120 }}>
         {pill} ▾
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 36, left: 0, zIndex: 200, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '6px 0', minWidth: 180, maxHeight: 260, overflowY: 'auto', boxShadow: '0 8px 24px #00000088' }}>
-          {options.length === 0 && <div style={{ padding: '6px 12px', color: '#475569', fontSize: 12 }}>Loading…</div>}
+        <div style={{ position: 'absolute', top: 36, left: 0, zIndex: 200, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '6px 0', minWidth: 180, maxHeight: 260, overflowY: 'auto', boxShadow: '0 8px 24px #00000088' }}>
+          {options.length === 0 && <div style={{ padding: '6px 12px', color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>}
           {value.length > 0 && <button onClick={() => onChange([])} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 12px', background: 'none', border: 'none', color: '#f87171', fontSize: 11, cursor: 'pointer' }}>✕ Clear all</button>}
           {options.map(opt => (
             <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', cursor: 'pointer', color: value.includes(opt) ? accentColor : '#cbd5e1', fontSize: 12 }}>
@@ -126,28 +128,28 @@ function StoreSelect({ stores, value, onChange, accentColor = '#0ea5e9' }: {
   const pill = value.length ? `${value.length} stores` : 'All Stores'
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${value.length ? accentColor : '#334155'}`, background: '#1e293b', color: value.length ? accentColor : '#94a3b8', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 110 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${value.length ? accentColor : '#334155'}`, background: 'var(--card-bg)', color: value.length ? accentColor : '#94a3b8', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 110 }}>
         🏪 {pill} ▾
       </button>
       {nsoStores.length > 0 && (
-        <button onClick={() => onChange(nsoStores)} title="Select NSO stores only" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${JSON.stringify(value.sort()) === JSON.stringify(nsoStores.sort()) ? accentColor : '#334155'}`, background: '#1e293b', color: '#f59e0b', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>NSO</button>
+        <button onClick={() => onChange(nsoStores)} title="Select NSO stores only" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${JSON.stringify(value.sort()) === JSON.stringify(nsoStores.sort()) ? accentColor : '#334155'}`, background: 'var(--card-bg)', color: '#f59e0b', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>NSO</button>
       )}
       {value.length > 0 && (
-        <button onClick={() => onChange([])} title="All stores" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#94a3b8', fontSize: 11, cursor: 'pointer' }}>All</button>
+        <button onClick={() => onChange([])} title="All stores" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer' }}>All</button>
       )}
       {open && (
-        <div style={{ position: 'absolute', top: 36, left: 0, zIndex: 300, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 0 6px', minWidth: 220, maxHeight: 320, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 24px #00000099' }}>
+        <div style={{ position: 'absolute', top: 36, left: 0, zIndex: 300, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '8px 0 6px', minWidth: 220, maxHeight: 320, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 24px #00000099' }}>
           <div style={{ padding: '0 8px 6px' }}>
             <input autoFocus placeholder="Search store…" value={search} onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', height: 28, padding: '0 8px', borderRadius: 6, border: '1px solid #475569', background: '#0f172a', color: '#e2e8f0', fontSize: 12 }} />
+              style={{ width: '100%', boxSizing: 'border-box', height: 28, padding: '0 8px', borderRadius: 6, border: '1px solid #475569', background: 'var(--content-bg)', color: 'var(--text-primary)', fontSize: 12 }} />
           </div>
           <div style={{ display: 'flex', gap: 4, padding: '0 8px 6px', borderBottom: '1px solid #1e293b' }}>
-            <button onClick={() => onChange(filtered)} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid #334155', background: 'none', color: '#64748b', cursor: 'pointer' }}>Select All</button>
-            <button onClick={() => onChange([])} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid #334155', background: 'none', color: '#f87171', cursor: 'pointer' }}>Clear</button>
+            <button onClick={() => onChange(filtered)} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid var(--card-border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Select All</button>
+            <button onClick={() => onChange([])} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid var(--card-border)', background: 'none', color: '#f87171', cursor: 'pointer' }}>Clear</button>
             {nsoStores.length > 0 && <button onClick={() => onChange(nsoStores)} style={{ flex: 1, fontSize: 10, padding: '2px 0', borderRadius: 4, border: '1px solid #92400e', background: 'none', color: '#f59e0b', cursor: 'pointer' }}>NSO Only</button>}
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {filtered.length === 0 && <div style={{ padding: '8px 12px', color: '#475569', fontSize: 12 }}>No match</div>}
+            {filtered.length === 0 && <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12 }}>No match</div>}
             {filtered.map(s => (
               <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 12px', cursor: 'pointer', color: value.includes(s) ? accentColor : '#cbd5e1', fontSize: 12, background: value.includes(s) ? '#0f2a1a' : 'transparent' }}>
                 <input type="checkbox" checked={value.includes(s)} onChange={() => toggle(s)} style={{ accentColor }} />
@@ -162,6 +164,7 @@ function StoreSelect({ stores, value, onChange, accentColor = '#0ea5e9' }: {
 }
 
 export default function ReqDashboard() {
+  const numFilter = useNumFilter()
   const [activeTab, setActiveTab] = useState<'views' | 'sparky' | 'size' | 'mrp' | 'art' | 'mc' | 'barcode' | 'option' | 'list'>('views')
   const [views, setViews] = useState<ViewStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -174,18 +177,18 @@ export default function ReqDashboard() {
   const [sparkData, setSparkData] = useState<SparkData | null>(null)
   const [sparkLoading, setSparkLoading] = useState(false)
   const [sparkError, setSparkError] = useState<string | null>(null)
-  const [sparkFilter, setSparkFilter] = useState({ dept: '', article: '', cat4: '' })
+  const [sparkFilter, setSparkFilter] = useState({ dept: [] as string[], article: '', cat4: '' })
   const sparkFetched = useRef(false)
 
   // Size Req pivot state
   const [sizeData, setSizeData] = useState<SparkData | null>(null)
   const [sizeLoading, setSizeLoading] = useState(false)
   const [sizeError, setSizeError] = useState<string | null>(null)
-  const [sizeFilter, setSizeFilter] = useState({ dept: '', article: '', cat4: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
+  const [sizeFilter, setSizeFilter] = useState({ dept: [] as string[], article: '', cat4: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const sizeFetched = useRef(false)
 
   // Filter meta (Division + Attribute1 options from SSRK.ITEM_MV)
-  const [filterMeta, setFilterMeta] = useState<{ divisions: string[]; attribute1s: string[] }>({ divisions: [], attribute1s: [] })
+  const [filterMeta, setFilterMeta] = useState<{ divisions: string[]; attribute1s: string[]; departments: string[]; display_types: string[] }>({ divisions: [], attribute1s: [], departments: [], display_types: [] })
   const [allStores, setAllStores] = useState<string[]>([])
   useEffect(() => {
     http.get('/req/filter_meta').then(r => setFilterMeta(r.data.data)).catch(() => {})
@@ -196,50 +199,63 @@ export default function ReqDashboard() {
   const [mrpData, setMrpData] = useState<SparkData | null>(null)
   const [mrpLoading, setMrpLoading] = useState(false)
   const [mrpError, setMrpError] = useState<string | null>(null)
-  const [mrpFilter, setMrpFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
+  const [mrpFilter, setMrpFilter] = useState({ dept: [] as string[], display_type: [] as string[], article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const mrpFetched = useRef(false)
 
   // Article Req state
   const [artData, setArtData] = useState<SparkData | null>(null)
   const [artLoading, setArtLoading] = useState(false)
   const [artError, setArtError] = useState<string | null>(null)
-  const [artFilter, setArtFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
+  const [artFilter, setArtFilter] = useState({ dept: [] as string[], display_type: [] as string[], article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const artFetched = useRef(false)
 
   // MC Req state
   const [mcData, setMcData] = useState<SparkData | null>(null)
   const [mcLoading, setMcLoading] = useState(false)
   const [mcError, setMcError] = useState<string | null>(null)
-  const [mcFilter, setMcFilter] = useState({ dept: '', display_type: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
+  const [mcFilter, setMcFilter] = useState({ dept: [] as string[], display_type: [] as string[], division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const mcFetched = useRef(false)
 
   // Barcode Req state
   const [barcodeData, setBarcodeData] = useState<SparkData | null>(null)
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [barcodeError, setBarcodeError] = useState<string | null>(null)
-  const [barcodeFilter, setBarcodeFilter] = useState({ dept: '', display_type: '', article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
+  const [barcodeFilter, setBarcodeFilter] = useState({ dept: [] as string[], display_type: [] as string[], article: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const barcodeFetched = useRef(false)
 
   // Option Req state
   const [optionData, setOptionData] = useState<SparkData | null>(null)
   const [optionLoading, setOptionLoading] = useState(false)
   const [optionError, setOptionError] = useState<string | null>(null)
-  const [optionFilter, setOptionFilter] = useState({ dept: '', display_type: '', division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
+  const [optionFilter, setOptionFilter] = useState({ dept: [] as string[], display_type: [] as string[], division: [] as string[], attribute1: [] as string[], store_names: [] as string[] })
   const optionFetched = useRef(false)
 
   // List Req state
   const [listData, setListData] = useState<SparkData | null>(null)
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
-  const [listFilter, setListFilter] = useState({ dept: '', display_type: '', article: '', store_names: [] as string[] })
+  const [listFilter, setListFilter] = useState({ dept: [] as string[], display_type: [] as string[], article: '', store_names: [] as string[] })
   const listFetched = useRef(false)
+
+  const [invalidating, setInvalidating] = useState(false)
+  const [invalidateMsg, setInvalidateMsg] = useState('')
+  async function handleInvalidate() {
+    if (!confirm('Requirement cache clear hoga — next load Oracle se fresh data lega. Continue?')) return
+    setInvalidating(true)
+    try {
+      const res = await http.post<{ success: boolean; message: string }>('/system/cache/invalidate')
+      setInvalidateMsg(res.data.message ?? 'Cache cleared')
+    } catch { setInvalidateMsg('Error clearing cache') }
+    setInvalidating(false)
+    setTimeout(() => setInvalidateMsg(''), 4000)
+  }
 
   const loadMrp = useCallback(async () => {
     setMrpLoading(true); setMrpError(null)
     try {
       const params = new URLSearchParams()
-      if (mrpFilter.dept)         params.set('department',   mrpFilter.dept)
-      if (mrpFilter.display_type) params.set('display_type', mrpFilter.display_type)
+      mrpFilter.dept.forEach(v => params.append('department', v))
+      mrpFilter.display_type.forEach(v => params.append('display_type', v))
       if (mrpFilter.article)      params.set('article',      mrpFilter.article)
       mrpFilter.division.forEach(v    => params.append('division',    v))
       mrpFilter.attribute1.forEach(v  => params.append('attribute1',  v))
@@ -256,8 +272,8 @@ export default function ReqDashboard() {
     setArtLoading(true); setArtError(null)
     try {
       const params = new URLSearchParams()
-      if (artFilter.dept)         params.set('department',   artFilter.dept)
-      if (artFilter.display_type) params.set('display_type', artFilter.display_type)
+      artFilter.dept.forEach(v => params.append('department', v))
+      artFilter.display_type.forEach(v => params.append('display_type', v))
       if (artFilter.article)      params.set('article',      artFilter.article)
       artFilter.division.forEach(v    => params.append('division',    v))
       artFilter.attribute1.forEach(v  => params.append('attribute1',  v))
@@ -274,8 +290,8 @@ export default function ReqDashboard() {
     setMcLoading(true); setMcError(null)
     try {
       const params = new URLSearchParams()
-      if (mcFilter.dept)         params.set('department',   mcFilter.dept)
-      if (mcFilter.display_type) params.set('display_type', mcFilter.display_type)
+      mcFilter.dept.forEach(v => params.append('department', v))
+      mcFilter.display_type.forEach(v => params.append('display_type', v))
       mcFilter.division.forEach(v    => params.append('division',    v))
       mcFilter.attribute1.forEach(v  => params.append('attribute1',  v))
       mcFilter.store_names.forEach(v => params.append('store_names', v))
@@ -291,8 +307,8 @@ export default function ReqDashboard() {
     setBarcodeLoading(true); setBarcodeError(null)
     try {
       const params = new URLSearchParams()
-      if (barcodeFilter.dept)         params.set('department',   barcodeFilter.dept)
-      if (barcodeFilter.display_type) params.set('display_type', barcodeFilter.display_type)
+      barcodeFilter.dept.forEach(v => params.append('department', v))
+      barcodeFilter.display_type.forEach(v => params.append('display_type', v))
       if (barcodeFilter.article)      params.set('article',      barcodeFilter.article)
       barcodeFilter.division.forEach(v    => params.append('division',    v))
       barcodeFilter.attribute1.forEach(v  => params.append('attribute1',  v))
@@ -309,8 +325,8 @@ export default function ReqDashboard() {
     setOptionLoading(true); setOptionError(null)
     try {
       const params = new URLSearchParams()
-      if (optionFilter.dept)         params.set('department',   optionFilter.dept)
-      if (optionFilter.display_type) params.set('display_type', optionFilter.display_type)
+      optionFilter.dept.forEach(v => params.append('department', v))
+      optionFilter.display_type.forEach(v => params.append('display_type', v))
       optionFilter.division.forEach(v    => params.append('division',    v))
       optionFilter.attribute1.forEach(v  => params.append('attribute1',  v))
       optionFilter.store_names.forEach(v => params.append('store_names', v))
@@ -326,8 +342,8 @@ export default function ReqDashboard() {
     setListLoading(true); setListError(null)
     try {
       const params = new URLSearchParams()
-      if (listFilter.dept)         params.set('department',   listFilter.dept)
-      if (listFilter.display_type) params.set('display_type', listFilter.display_type)
+      listFilter.dept.forEach(v => params.append('department', v))
+      listFilter.display_type.forEach(v => params.append('display_type', v))
       if (listFilter.article)      params.set('article',      listFilter.article)
       listFilter.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/list_pivot', { params })
@@ -350,7 +366,7 @@ export default function ReqDashboard() {
     setSizeError(null)
     try {
       const params = new URLSearchParams()
-      if (sizeFilter.dept)    params.set('department', sizeFilter.dept)
+      sizeFilter.dept.forEach(v => params.append('department', v))
       if (sizeFilter.article) params.set('article',    sizeFilter.article)
       if (sizeFilter.cat4)    params.set('cat4',       sizeFilter.cat4)
       sizeFilter.division.forEach(v     => params.append('division',    v))
@@ -385,13 +401,11 @@ export default function ReqDashboard() {
     setSparkLoading(true)
     setSparkError(null)
     try {
-      const r = await http.get('/req/sparky_pivot', {
-        params: {
-          department: sparkFilter.dept || undefined,
-          article: sparkFilter.article || undefined,
-          cat4: sparkFilter.cat4 || undefined,
-        }
-      })
+      const params = new URLSearchParams()
+      sparkFilter.dept.forEach(v => params.append('department', v))
+      if (sparkFilter.article) params.set('article', sparkFilter.article)
+      if (sparkFilter.cat4)    params.set('cat4',    sparkFilter.cat4)
+      const r = await http.get('/req/sparky_pivot', { params })
       setSparkData(r.data.data)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Sparky data'
@@ -449,56 +463,64 @@ export default function ReqDashboard() {
 
   // Sparky grouped rows for rendering subtotals
   const sparkRows = sparkData?.rows ?? []
-  const sparkDepts = Array.from(new Set(sparkRows.map(r => r.department)))
+  const filteredSparkRows = numFilter.applyToRows(sparkRows as unknown as Record<string, unknown>[]) as unknown as SparkRow[]
+  const sparkDepts = Array.from(new Set(filteredSparkRows.map(r => r.department)))
 
   return (
-    <div style={{ padding: '20px 24px', background: '#0a0f1e', minHeight: '100vh', color: '#e2e8f0' }}>
+    <div style={{ padding: '20px 24px', background: '#0a0f1e', minHeight: '100vh', color: 'var(--text-primary)' }}>
+      <StaleBanner />
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', letterSpacing: -0.5 }}>
+          <div style={{ fontSize: 28, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.5px' }}>
             Requirements Dashboard
           </div>
-          <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
             Oracle views — auto-refreshed daily at 06:00 AM
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={handleInvalidate}
+            disabled={invalidating}
+            style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#7f1d1d', border: 'none', color: '#fff', cursor: invalidating ? 'not-allowed' : 'pointer', opacity: invalidating ? 0.7 : 1 }}
+          >{invalidating ? 'Clearing…' : '🗑 Clear Cache'}</button>
+          {invalidateMsg && <span style={{ fontSize: 12, color: '#4ade80' }}>{invalidateMsg}</span>}
           {activeTab === 'views' && (
             <button onClick={loadStatus} style={{
               fontSize: 12, padding: '6px 14px', borderRadius: 8,
-              background: '#1e293b', border: '1px solid #334155',
-              color: '#94a3b8', cursor: 'pointer',
+              background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+              color: 'var(--text-secondary)', cursor: 'pointer',
             }}>↻ Reload</button>
           )}
           {activeTab === 'sparky' && (
             <button onClick={() => { sparkFetched.current = false; loadSparky() }} style={{
               fontSize: 12, padding: '6px 14px', borderRadius: 8,
-              background: '#1e293b', border: '1px solid #334155',
-              color: '#94a3b8', cursor: 'pointer',
+              background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+              color: 'var(--text-secondary)', cursor: 'pointer',
             }}>↻ Refresh</button>
           )}
           {activeTab === 'size' && (
-            <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { sizeFetched.current = false; loadSize() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
           {activeTab === 'mrp' && (
-            <button onClick={() => { mrpFetched.current = false; loadMrp() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { mrpFetched.current = false; loadMrp() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
           {activeTab === 'art' && (
-            <button onClick={() => { artFetched.current = false; loadArt() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { artFetched.current = false; loadArt() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
           {activeTab === 'mc' && (
-            <button onClick={() => { mcFetched.current = false; loadMc() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { mcFetched.current = false; loadMc() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
           {activeTab === 'barcode' && (
-            <button onClick={() => { barcodeFetched.current = false; loadBarcode() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { barcodeFetched.current = false; loadBarcode() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
           {activeTab === 'option' && (
-            <button onClick={() => { optionFetched.current = false; loadOption() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { optionFetched.current = false; loadOption() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
           {activeTab === 'list' && (
-            <button onClick={() => { listFetched.current = false; loadList() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'pointer' }}>↻ Refresh</button>
+            <button onClick={() => { listFetched.current = false; loadList() }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Refresh</button>
           )}
         </div>
       </div>
@@ -528,19 +550,19 @@ export default function ReqDashboard() {
           { label: 'Last Refresh', value: fmtTs(lastRefresh ?? null), sub: 'most recent' },
         ].map(s => (
           <div key={s.label} style={{
-            background: '#131929', border: '1px solid #1e293b', borderRadius: 10,
+            background: '#131929', border: '1px solid var(--card-border)', borderRadius: 10,
             padding: '12px 16px',
           }}>
-            <div style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{s.label}</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2 }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: '#334155', marginTop: 2 }}>{s.sub}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.sub}</div>
           </div>
         ))}
       </div>
 
       {/* ── Loading ── */}
       {loading && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#475569', fontSize: 13 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
           <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Loading…
         </div>
       )}
@@ -591,11 +613,11 @@ export default function ReqDashboard() {
                       borderBottom: i < rows.length - 1 ? '1px solid #0d1525' : 'none',
                     }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#cbd5e1', fontWeight: 600 }}>
+                        <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-secondary)', fontWeight: 600 }}>
                           {v.obj}
                         </div>
                         {v.fetched_at && (
-                          <div style={{ fontSize: 10, color: '#334155', marginTop: 2 }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                             {fmtTs(v.fetched_at)}
                           </div>
                         )}
@@ -606,7 +628,7 @@ export default function ReqDashboard() {
                           <div style={{ fontSize: 13, fontWeight: 700, color: gm.color, fontVariantNumeric: 'tabular-nums' }}>
                             {fmtRows(v.rows)}
                           </div>
-                          <div style={{ fontSize: 10, color: '#475569' }}>rows</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>rows</div>
                         </div>
                       )}
 
@@ -621,7 +643,7 @@ export default function ReqDashboard() {
                             View ↗
                           </button>
                         )
-                        : <span style={{ fontSize: 11, color: '#334155', minWidth: 60 }}>Not cached</span>
+                        : <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 60 }}>Not cached</span>
                       }
                     </div>
                   ))}
@@ -640,7 +662,7 @@ export default function ReqDashboard() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000,
         }} onClick={closeModal}>
           <div style={{
-            background: '#131929', border: '1px solid #1e293b', borderRadius: 14,
+            background: '#131929', border: '1px solid var(--card-border)', borderRadius: 14,
             width: 'calc(100vw - 32px)', height: 'calc(100vh - 32px)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }} onClick={e => e.stopPropagation()}>
@@ -654,10 +676,10 @@ export default function ReqDashboard() {
               <span style={{ fontSize: 20 }}>{meta?.icon}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, color: '#f1f5f9', fontFamily: 'monospace' }}>{modal.obj}</div>
-                <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{meta?.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{meta?.label}</div>
               </div>
               {preview && (
-                <div style={{ fontSize: 12, color: '#64748b', background: '#0d1525', padding: '4px 10px', borderRadius: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#0d1525', padding: '4px 10px', borderRadius: 6 }}>
                   {preview.total_rows.toLocaleString()} rows · {preview.columns.length} columns · showing 200
                 </div>
               )}
@@ -672,7 +694,7 @@ export default function ReqDashboard() {
             {/* table */}
             <div style={{ flex: 1, overflow: 'auto' }}>
               {previewLoading && (
-                <div style={{ padding: 32, color: '#475569', textAlign: 'center', fontSize: 14 }}>Loading preview…</div>
+                <div style={{ padding: 32, color: 'var(--text-muted)', textAlign: 'center', fontSize: 14 }}>Loading preview…</div>
               )}
               {previewError && (
                 <div style={{ padding: 32, color: '#f87171', textAlign: 'center', fontSize: 14 }}>{previewError}</div>
@@ -683,7 +705,7 @@ export default function ReqDashboard() {
                     <tr>
                       {preview.columns.map(c => (
                         <th key={c} style={{
-                          padding: '8px 12px', background: '#0a0f1e', color: '#64748b',
+                          padding: '8px 12px', background: '#0a0f1e', color: 'var(--text-muted)',
                           borderBottom: '1px solid #1e293b', fontWeight: 600,
                           position: 'sticky', top: 0, whiteSpace: 'nowrap',
                           textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.5,
@@ -721,24 +743,24 @@ export default function ReqDashboard() {
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Filter Department…" value={mrpFilter.dept} onChange={e => setMrpFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
-              <input placeholder="Filter Display Type…" value={mrpFilter.display_type} onChange={e => setMrpFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
-              <input placeholder="Filter Article…" value={mrpFilter.article} onChange={e => setMrpFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              <MultiSelect label="Department" options={filterMeta.departments} value={mrpFilter.dept} onChange={v => setMrpFilter(f => ({ ...f, dept: v }))} accentColor="#f59e0b" />
+              <MultiSelect label="Display Type" options={filterMeta.display_types} value={mrpFilter.display_type} onChange={v => setMrpFilter(f => ({ ...f, display_type: v }))} accentColor="#f59e0b" />
+              <input placeholder="Filter Article…" value={mrpFilter.article} onChange={e => setMrpFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 160 }} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={mrpFilter.division} onChange={v => setMrpFilter(f => ({ ...f, division: v }))} accentColor="#f59e0b" />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={mrpFilter.attribute1} onChange={v => setMrpFilter(f => ({ ...f, attribute1: v }))} accentColor="#f59e0b" />
               <StoreSelect stores={allStores} value={mrpFilter.store_names} onChange={v => setMrpFilter(f => ({ ...f, store_names: v }))} accentColor="#f59e0b" />
               <button onClick={() => { mrpFetched.current = false; loadMrp() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#f59e0b', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
-              {mrpData && <span style={{ fontSize: 12, color: '#475569' }}>{mrpData.total_rows.toLocaleString()} rows</span>}
+              {mrpData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{mrpData.total_rows.toLocaleString()} rows</span>}
             </div>
-            {mrpLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading MRP data from Oracle…</div>}
+            {mrpLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading MRP data from Oracle…</div>}
             {mrpError && !mrpData && <div style={{ color: '#f87171', padding: 20 }}>{mrpError}</div>}
             {mrpError && mrpData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
             {mrpData && !mrpLoading && (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={2} style={{ padding: '4px 10px', color: '#f59e0b', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>MRP Req</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
@@ -760,7 +782,7 @@ export default function ReqDashboard() {
                       const dr = rows.filter(r => r.department === dept)
                       const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), req: a.req+n(r.req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
                       return [
-                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={17} style={{ padding: '6px 10px', color: '#f59e0b', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🏷️ {dept}</td></tr>,
+                        <tr key={`h-${dept}`} style={{ background: 'var(--content-bg)' }}><td colSpan={17} style={{ padding: '6px 10px', color: '#f59e0b', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🏷️ {dept}</td></tr>,
                         ...dr.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
@@ -808,24 +830,24 @@ export default function ReqDashboard() {
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Filter Department…" value={artFilter.dept} onChange={e => setArtFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
-              <input placeholder="Filter Display Type…" value={artFilter.display_type} onChange={e => setArtFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
-              <input placeholder="Filter Article…" value={artFilter.article} onChange={e => setArtFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              <MultiSelect label="Department" options={filterMeta.departments} value={artFilter.dept} onChange={v => setArtFilter(f => ({ ...f, dept: v }))} accentColor="#0ea5e9" />
+              <MultiSelect label="Display Type" options={filterMeta.display_types} value={artFilter.display_type} onChange={v => setArtFilter(f => ({ ...f, display_type: v }))} accentColor="#0ea5e9" />
+              <input placeholder="Filter Article…" value={artFilter.article} onChange={e => setArtFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 160 }} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={artFilter.division} onChange={v => setArtFilter(f => ({ ...f, division: v }))} accentColor="#0ea5e9" />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={artFilter.attribute1} onChange={v => setArtFilter(f => ({ ...f, attribute1: v }))} accentColor="#0ea5e9" />
               <StoreSelect stores={allStores} value={artFilter.store_names} onChange={v => setArtFilter(f => ({ ...f, store_names: v }))} accentColor="#0ea5e9" />
               <button onClick={() => { artFetched.current = false; loadArt() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#0ea5e9', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
-              {artData && <span style={{ fontSize: 12, color: '#475569' }}>{artData.total_rows.toLocaleString()} rows</span>}
+              {artData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{artData.total_rows.toLocaleString()} rows</span>}
             </div>
-            {artLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Article Req data from Oracle…</div>}
+            {artLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading Article Req data from Oracle…</div>}
             {artError && !artData && <div style={{ color: '#f87171', padding: 20 }}>{artError}</div>}
             {artError && artData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
             {artData && !artLoading && (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={3} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={3} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={2} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Art Req</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
@@ -847,7 +869,7 @@ export default function ReqDashboard() {
                       const dr = rows.filter(r => r.department === dept)
                       const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), req: a.req+n(r.req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
                       return [
-                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={16} style={{ padding: '6px 10px', color: '#0ea5e9', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📦 {dept}</td></tr>,
+                        <tr key={`h-${dept}`} style={{ background: 'var(--content-bg)' }}><td colSpan={16} style={{ padding: '6px 10px', color: '#0ea5e9', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📦 {dept}</td></tr>,
                         ...dr.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
@@ -894,23 +916,23 @@ export default function ReqDashboard() {
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Filter Department…" value={mcFilter.dept} onChange={e => setMcFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
-              <input placeholder="Filter Display Type…" value={mcFilter.display_type} onChange={e => setMcFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
+              <MultiSelect label="Department" options={filterMeta.departments} value={mcFilter.dept} onChange={v => setMcFilter(f => ({ ...f, dept: v }))} accentColor="#6366f1" />
+              <MultiSelect label="Display Type" options={filterMeta.display_types} value={mcFilter.display_type} onChange={v => setMcFilter(f => ({ ...f, display_type: v }))} accentColor="#6366f1" />
               <MultiSelect label="Division" options={filterMeta.divisions} value={mcFilter.division} onChange={v => setMcFilter(f => ({ ...f, division: v }))} accentColor="#6366f1" />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={mcFilter.attribute1} onChange={v => setMcFilter(f => ({ ...f, attribute1: v }))} accentColor="#6366f1" />
               <StoreSelect stores={allStores} value={mcFilter.store_names} onChange={v => setMcFilter(f => ({ ...f, store_names: v }))} accentColor="#6366f1" />
               <button onClick={() => { mcFetched.current = false; loadMc() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: '#6366f1', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
-              {mcData && <span style={{ fontSize: 12, color: '#475569' }}>{mcData.total_rows.toLocaleString()} rows</span>}
+              {mcData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{mcData.total_rows.toLocaleString()} rows</span>}
             </div>
-            {mcLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading MC Req data from Oracle…</div>}
+            {mcLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading MC Req data from Oracle…</div>}
             {mcError && !mcData && <div style={{ color: '#f87171', padding: 20 }}>{mcError}</div>}
             {mcError && mcData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
             {mcData && !mcLoading && (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={2} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>MC</th>
+                      <th colSpan={2} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>MC</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={2} style={{ padding: '4px 10px', color: '#6366f1', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>MC Req</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
@@ -932,7 +954,7 @@ export default function ReqDashboard() {
                       const dr = rows.filter(r => r.department === dept)
                       const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), req: a.req+n(r.req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
                       return [
-                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={15} style={{ padding: '6px 10px', color: '#6366f1', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🧩 {dept}</td></tr>,
+                        <tr key={`h-${dept}`} style={{ background: 'var(--content-bg)' }}><td colSpan={15} style={{ padding: '6px 10px', color: '#6366f1', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🧩 {dept}</td></tr>,
                         ...dr.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
@@ -979,24 +1001,24 @@ export default function ReqDashboard() {
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Filter Department…" value={barcodeFilter.dept} onChange={e => setBarcodeFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
-              <input placeholder="Filter Display Type…" value={barcodeFilter.display_type} onChange={e => setBarcodeFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
-              <input placeholder="Filter Article…" value={barcodeFilter.article} onChange={e => setBarcodeFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              <MultiSelect label="Department" options={filterMeta.departments} value={barcodeFilter.dept} onChange={v => setBarcodeFilter(f => ({ ...f, dept: v }))} accentColor={AC} />
+              <MultiSelect label="Display Type" options={filterMeta.display_types} value={barcodeFilter.display_type} onChange={v => setBarcodeFilter(f => ({ ...f, display_type: v }))} accentColor={AC} />
+              <input placeholder="Filter Article…" value={barcodeFilter.article} onChange={e => setBarcodeFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 160 }} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={barcodeFilter.division} onChange={v => setBarcodeFilter(f => ({ ...f, division: v }))} accentColor={AC} />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={barcodeFilter.attribute1} onChange={v => setBarcodeFilter(f => ({ ...f, attribute1: v }))} accentColor={AC} />
               <StoreSelect stores={allStores} value={barcodeFilter.store_names} onChange={v => setBarcodeFilter(f => ({ ...f, store_names: v }))} accentColor={AC} />
               <button onClick={() => { barcodeFetched.current = false; loadBarcode() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: AC, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
-              {barcodeData && <span style={{ fontSize: 12, color: '#475569' }}>{barcodeData.total_rows.toLocaleString()} rows</span>}
+              {barcodeData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{barcodeData.total_rows.toLocaleString()} rows</span>}
             </div>
-            {barcodeLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Barcode data from Oracle…</div>}
+            {barcodeLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading Barcode data from Oracle…</div>}
             {barcodeError && !barcodeData && <div style={{ color: '#f87171', padding: 20 }}>{barcodeError}</div>}
             {barcodeError && barcodeData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
             {barcodeData && !barcodeLoading && (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={3} style={{ padding: '4px 10px', color: AC, borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Barcode Req</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#34d399', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
@@ -1018,7 +1040,7 @@ export default function ReqDashboard() {
                       const dr = rows.filter(r => r.department === dept)
                       const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), to: a.to+n(r.to_q), pbs: a.pbs+n(r.pbs), greq: a.greq+n(r.grc_req), wreq: a.wreq+n(r.wms_req), grc: a.grc+n(r.grc_q), msa: a.msa+n(r.msa_q), alloc: a.alloc+n(r.alloc_q), wms: a.wms+n(r.wms_q), rest: a.rest+n(r.rest_dc_q), ppo: a.ppo+n(r.ppo_q) }), { sc:0,lm:0,mtd:0,stk:0,to:0,pbs:0,greq:0,wreq:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
                       return [
-                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={18} style={{ padding: '6px 10px', color: AC, fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🔖 {dept}</td></tr>,
+                        <tr key={`h-${dept}`} style={{ background: 'var(--content-bg)' }}><td colSpan={18} style={{ padding: '6px 10px', color: AC, fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🔖 {dept}</td></tr>,
                         ...dr.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
@@ -1068,23 +1090,23 @@ export default function ReqDashboard() {
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Filter Department…" value={optionFilter.dept} onChange={e => setOptionFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
-              <input placeholder="Filter Display Type…" value={optionFilter.display_type} onChange={e => setOptionFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
+              <MultiSelect label="Department" options={filterMeta.departments} value={optionFilter.dept} onChange={v => setOptionFilter(f => ({ ...f, dept: v }))} accentColor={AC} />
+              <MultiSelect label="Display Type" options={filterMeta.display_types} value={optionFilter.display_type} onChange={v => setOptionFilter(f => ({ ...f, display_type: v }))} accentColor={AC} />
               <MultiSelect label="Division" options={filterMeta.divisions} value={optionFilter.division} onChange={v => setOptionFilter(f => ({ ...f, division: v }))} accentColor={AC} />
               <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={optionFilter.attribute1} onChange={v => setOptionFilter(f => ({ ...f, attribute1: v }))} accentColor={AC} />
               <StoreSelect stores={allStores} value={optionFilter.store_names} onChange={v => setOptionFilter(f => ({ ...f, store_names: v }))} accentColor={AC} />
               <button onClick={() => { optionFetched.current = false; loadOption() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: AC, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
-              {optionData && <span style={{ fontSize: 12, color: '#475569' }}>{optionData.total_rows.toLocaleString()} rows</span>}
+              {optionData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{optionData.total_rows.toLocaleString()} rows</span>}
             </div>
-            {optionLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Option data from Oracle…</div>}
+            {optionLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading Option data from Oracle…</div>}
             {optionError && !optionData && <div style={{ color: '#f87171', padding: 20 }}>{optionError}</div>}
             {optionError && optionData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
             {optionData && !optionLoading && (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Option</th>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Option</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={3} style={{ padding: '4px 10px', color: AC, borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>Option Req</th>
                     </tr>
@@ -1102,7 +1124,7 @@ export default function ReqDashboard() {
                       const dr = rows.filter(r => r.department === dept)
                       const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lm: a.lm+n(r.lm_sl_q), mtd: a.mtd+n(r.mtd_sl_q), stk: a.stk+n(r.ttl_stk_q), adj: a.adj+n(r.ttl_stk_q_adj), pbs: a.pbs+n(r.pbs), opbs: a.opbs+n(r.option_pbs), oreq: a.oreq+n(r.option_req) }), { sc:0,lm:0,mtd:0,stk:0,adj:0,pbs:0,opbs:0,oreq:0 })
                       return [
-                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={12} style={{ padding: '6px 10px', color: AC, fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🎯 {dept}</td></tr>,
+                        <tr key={`h-${dept}`} style={{ background: 'var(--content-bg)' }}><td colSpan={12} style={{ padding: '6px 10px', color: AC, fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>🎯 {dept}</td></tr>,
                         ...dr.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
@@ -1144,22 +1166,22 @@ export default function ReqDashboard() {
         return (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input placeholder="Filter Department…" value={listFilter.dept} onChange={e => setListFilter(f => ({ ...f, dept: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
-              <input placeholder="Filter Display Type…" value={listFilter.display_type} onChange={e => setListFilter(f => ({ ...f, display_type: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
-              <input placeholder="Filter Article…" value={listFilter.article} onChange={e => setListFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              <MultiSelect label="Department" options={filterMeta.departments} value={listFilter.dept} onChange={v => setListFilter(f => ({ ...f, dept: v }))} accentColor={AC} />
+              <MultiSelect label="Display Type" options={filterMeta.display_types} value={listFilter.display_type} onChange={v => setListFilter(f => ({ ...f, display_type: v }))} accentColor={AC} />
+              <input placeholder="Filter Article…" value={listFilter.article} onChange={e => setListFilter(f => ({ ...f, article: e.target.value }))} style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 160 }} />
               <StoreSelect stores={allStores} value={listFilter.store_names} onChange={v => setListFilter(f => ({ ...f, store_names: v }))} accentColor={AC} />
               <button onClick={() => { listFetched.current = false; loadList() }} style={{ height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer', background: AC, border: 'none', color: '#fff', fontSize: 12, fontWeight: 600 }}>Search</button>
-              {listData && <span style={{ fontSize: 12, color: '#475569' }}>{listData.total_rows.toLocaleString()} rows</span>}
+              {listData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{listData.total_rows.toLocaleString()} rows</span>}
             </div>
-            {listLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading List data from Oracle…</div>}
+            {listLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading List data from Oracle…</div>}
             {listError && !listData && <div style={{ color: '#f87171', padding: 20 }}>{listError}</div>}
             {listError && listData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
             {listData && !listLoading && (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={5} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={5} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
                       <th colSpan={4} style={{ padding: '4px 10px', color: AC, borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center' }}>List Req</th>
                     </tr>
                     <tr style={{ background: '#131929' }}>
@@ -1175,7 +1197,7 @@ export default function ReqDashboard() {
                       const dr = rows.filter(r => r.department === dept)
                       const tot = dr.reduce((a, r) => ({ sc: a.sc+n(r.store_cnt), lq: a.lq+n(r.list_q), adj: a.adj+n(r.adj_ttl_stk_q), lreq: a.lreq+n(r.list_req) }), { sc:0,lq:0,adj:0,lreq:0 })
                       return [
-                        <tr key={`h-${dept}`} style={{ background: '#0f172a' }}><td colSpan={9} style={{ padding: '6px 10px', color: AC, fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📝 {dept}</td></tr>,
+                        <tr key={`h-${dept}`} style={{ background: 'var(--content-bg)' }}><td colSpan={9} style={{ padding: '6px 10px', color: AC, fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📝 {dept}</td></tr>,
                         ...dr.map((r, i) => (
                           <tr key={`${dept}-${i}`} style={{ background: i%2===0?'transparent':'#0d1525' }}>
                             <td style={{ padding:'5px 10px', color:'#94a3b8', fontSize:11, borderBottom:'1px solid #131929', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.department}</td>
@@ -1209,33 +1231,31 @@ export default function ReqDashboard() {
         <div>
           {/* filters */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input placeholder="Filter Department…" value={sparkFilter.dept}
-              onChange={e => setSparkFilter(f => ({ ...f, dept: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+            <MultiSelect label="Department" options={filterMeta.departments} value={sparkFilter.dept} onChange={v => setSparkFilter(f => ({ ...f, dept: v }))} accentColor="#f97316" />
             <input placeholder="Filter Article…" value={sparkFilter.article}
               onChange={e => setSparkFilter(f => ({ ...f, article: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 200 }} />
             <input placeholder="Filter CAT4…" value={sparkFilter.cat4}
               onChange={e => setSparkFilter(f => ({ ...f, cat4: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 160 }} />
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 160 }} />
             <button onClick={() => { sparkFetched.current = false; loadSparky() }} style={{
               height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer',
               background: '#f97316', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,
             }}>Search</button>
-            {sparkData && <span style={{ fontSize: 12, color: '#475569' }}>{sparkData.total_rows.toLocaleString()} rows</span>}
+            {sparkData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sparkData.total_rows.toLocaleString()} rows</span>}
           </div>
 
-          {sparkLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Sparky data from Oracle…</div>}
+          {sparkLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading Sparky data from Oracle…</div>}
           {sparkError && !sparkData && <div style={{ color: '#f87171', padding: 20 }}>{sparkError}</div>}
           {sparkError && sparkData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data. {sparkError}</div>}
 
           {sparkData && !sparkLoading && (
-            <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+            <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
               <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#0a0f1e' }}>
                     {/* section headers */}
-                    <th colSpan={3} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                    <th colSpan={3} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
                     <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                     <th colSpan={2} style={{ padding: '4px 10px', color: '#f97316', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Sparky</th>
                     <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
@@ -1243,26 +1263,29 @@ export default function ReqDashboard() {
                   </tr>
                   <tr style={{ background: '#131929' }}>
                     {[
-                      ['Department', '#cbd5e1'], ['Article Name', '#cbd5e1'], ['CAT4', '#cbd5e1'],
-                      ['Stores', '#38bdf8'], ['LM Sale', '#64748b'], ['MTD Sale', '#64748b'], ['Store Stk', '#64748b'], ['TO Qty', '#64748b'],
-                      ['PBS', '#f97316'], ['Sparky Req', '#f97316'],
-                      ['GRC', '#10b981'], ['MSA', '#10b981'], ['Alloc', '#10b981'], ['WMS', '#10b981'], ['Rest DC', '#10b981'],
-                      ['PPO Qty', '#8b5cf6'],
-                    ].map(([lbl, col], i) => (
+                      ['Department', '#cbd5e1', ''], ['Article Name', '#cbd5e1', ''], ['CAT4', '#cbd5e1', ''],
+                      ['Stores', '#38bdf8', 'store_cnt'], ['LM Sale', '#64748b', 'lm_sl_q'], ['MTD Sale', '#64748b', 'mtd_sl_q'], ['Store Stk', '#64748b', 'ttl_stk_q'], ['TO Qty', '#64748b', 'to_q'],
+                      ['PBS', '#f97316', 'sparky_pbs'], ['Sparky Req', '#f97316', 'sparky_req'],
+                      ['GRC', '#10b981', 'grc_q'], ['MSA', '#10b981', 'msa_q'], ['Alloc', '#10b981', 'alloc_q'], ['WMS', '#10b981', 'wms_q'], ['Rest DC', '#10b981', 'rest_dc_q'],
+                      ['PPO Qty', '#8b5cf6', 'ppo_q'],
+                    ].map(([lbl, col, fld], i) => (
                       <th key={i} style={{
                         padding: '6px 10px', color: col as string, fontWeight: 600,
                         fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4,
                         borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap',
                         textAlign: i > 2 ? 'right' : 'left',
                         borderRight: [2, 7, 9, 14].includes(i) ? '1px solid #1e293b' : undefined,
-                        position: 'sticky', top: 0, background: '#131929',
-                      }}>{lbl}</th>
+                        position: 'sticky', top: 0, background: numFilter.numFilters[fld as string] ? '#1a2e1a' : '#131929',
+                      }}>
+                        {lbl}
+                        {fld && <NumFilterIcon col={fld as string} active={!!numFilter.numFilters[fld as string]} onOpen={numFilter.openFilter} />}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {sparkDepts.map(dept => {
-                    const deptRows = sparkRows.filter(r => r.department === dept)
+                    const deptRows = filteredSparkRows.filter(r => r.department === dept)
                     const tot = deptRows.reduce((a, r) => ({
                       lm: a.lm + n(r.lm_sl_q), mtd: a.mtd + n(r.mtd_sl_q), stk: a.stk + n(r.ttl_stk_q),
                       to: a.to + n(r.to_q), pbs: a.pbs + n(r.sparky_pbs), req: a.req + n(r.sparky_req),
@@ -1272,7 +1295,7 @@ export default function ReqDashboard() {
 
                     return [
                       // dept header row
-                      <tr key={`hdr-${dept}`} style={{ background: '#0f172a' }}>
+                      <tr key={`hdr-${dept}`} style={{ background: 'var(--content-bg)' }}>
                         <td colSpan={16} style={{ padding: '6px 10px', color: '#f97316', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>
                           ⚡ {dept}
                         </td>
@@ -1280,14 +1303,14 @@ export default function ReqDashboard() {
                       // data rows
                       ...deptRows.map((r, i) => (
                         <tr key={`${dept}-${i}`} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1525' }}>
-                          <td style={{ padding: '5px 10px', color: '#94a3b8', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
-                          <td style={{ padding: '5px 10px', color: '#e2e8f0', borderBottom: '1px solid #131929', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.article_name}</td>
-                          <td style={{ padding: '5px 10px', color: '#94a3b8', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', whiteSpace: 'nowrap' }}>{r.cat4 ?? '—'}</td>
+                          <td style={{ padding: '5px 10px', color: 'var(--text-secondary)', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.department}</td>
+                          <td style={{ padding: '5px 10px', color: 'var(--text-primary)', borderBottom: '1px solid #131929', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.article_name}</td>
+                          <td style={{ padding: '5px 10px', color: 'var(--text-secondary)', fontSize: 11, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', whiteSpace: 'nowrap' }}>{r.cat4 ?? '—'}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#38bdf8', fontWeight: 600, borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN((r as unknown as Record<string,number>).store_cnt)}</td>
-                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
-                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
-                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
-                          <td style={{ padding: '5px 10px', textAlign: 'right', color: '#64748b', borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.to_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.lm_sl_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.mtd_sl_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.ttl_stk_q)}</td>
+                          <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--text-muted)', borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.to_q)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#f97316', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.sparky_pbs)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: r.sparky_req > 0 ? '#fb923c' : '#334155', fontWeight: r.sparky_req > 0 ? 700 : 400, borderBottom: '1px solid #131929', borderRight: '1px solid #0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.sparky_req)}</td>
                           <td style={{ padding: '5px 10px', textAlign: 'right', color: '#10b981', borderBottom: '1px solid #131929', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.grc_q)}</td>
@@ -1319,15 +1342,13 @@ export default function ReqDashboard() {
       {activeTab === 'size' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input placeholder="Filter Department…" value={sizeFilter.dept}
-              onChange={e => setSizeFilter(f => ({ ...f, dept: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+            <MultiSelect label="Department" options={filterMeta.departments} value={sizeFilter.dept} onChange={v => setSizeFilter(f => ({ ...f, dept: v }))} accentColor="#ec4899" />
             <input placeholder="Filter Article…" value={sizeFilter.article}
               onChange={e => setSizeFilter(f => ({ ...f, article: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 200 }} />
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 200 }} />
             <input placeholder="Filter Size (CAT4)…" value={sizeFilter.cat4}
               onChange={e => setSizeFilter(f => ({ ...f, cat4: e.target.value }))}
-              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: 12, width: 140 }} />
+              style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: 12, width: 140 }} />
             <MultiSelect label="Division" options={filterMeta.divisions} value={sizeFilter.division} onChange={v => setSizeFilter(f => ({ ...f, division: v }))} accentColor="#ec4899" />
             <MultiSelect label="Attribute1" options={filterMeta.attribute1s} value={sizeFilter.attribute1} onChange={v => setSizeFilter(f => ({ ...f, attribute1: v }))} accentColor="#ec4899" />
             <StoreSelect stores={allStores} value={sizeFilter.store_names} onChange={v => setSizeFilter(f => ({ ...f, store_names: v }))} accentColor="#ec4899" />
@@ -1335,10 +1356,10 @@ export default function ReqDashboard() {
               height: 32, padding: '0 16px', borderRadius: 8, cursor: 'pointer',
               background: '#ec4899', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600,
             }}>Search</button>
-            {sizeData && <span style={{ fontSize: 12, color: '#475569' }}>{sizeData.total_rows.toLocaleString()} rows</span>}
+            {sizeData && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sizeData.total_rows.toLocaleString()} rows</span>}
           </div>
 
-          {sizeLoading && <div style={{ color: '#475569', padding: 32, textAlign: 'center' }}>Loading Size data from Oracle…</div>}
+          {sizeLoading && <div style={{ color: 'var(--text-muted)', padding: 32, textAlign: 'center' }}>Loading Size data from Oracle…</div>}
           {sizeError && !sizeData && <div style={{ color: '#f87171', padding: 20 }}>{sizeError}</div>}
           {sizeError && sizeData && <div style={{ color: '#f59e0b', padding: '6px 12px', marginBottom: 8, background: '#422006', borderRadius: 8, fontSize: 12 }}>⚠ Refresh failed — showing cached data.</div>}
 
@@ -1347,11 +1368,11 @@ export default function ReqDashboard() {
             const rows = sizeData.rows as unknown as SzRow[]
             const depts = Array.from(new Set(rows.map(r => r.department)))
             return (
-              <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 10 }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#0a0f1e' }}>
-                      <th colSpan={4} style={{ padding: '4px 10px', color: '#475569', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
+                      <th colSpan={4} style={{ padding: '4px 10px', color: 'var(--text-muted)', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'left', borderRight: '1px solid #1e293b' }}>Article</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#0ea5e9', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Store Data</th>
                       <th colSpan={2} style={{ padding: '4px 10px', color: '#ec4899', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>Size Req</th>
                       <th colSpan={5} style={{ padding: '4px 10px', color: '#10b981', borderBottom: '1px solid #1e293b', fontSize: 10, textAlign: 'center', borderRight: '1px solid #1e293b' }}>DC Stock (WH)</th>
@@ -1388,7 +1409,7 @@ export default function ReqDashboard() {
                         rest: a.rest + n(r.rest_dc_q), ppo: a.ppo + n(r.ppo_q),
                       }), { lm:0,mtd:0,stk:0,adj:0,pbs:0,req:0,grc:0,msa:0,alloc:0,wms:0,rest:0,ppo:0 })
                       return [
-                        <tr key={`hdr-${dept}`} style={{ background: '#0f172a' }}>
+                        <tr key={`hdr-${dept}`} style={{ background: 'var(--content-bg)' }}>
                           <td colSpan={17} style={{ padding: '6px 10px', color: '#ec4899', fontWeight: 700, fontSize: 12, borderBottom: '1px solid #1e293b' }}>📐 {dept}</td>
                         </tr>,
                         ...deptRows.map((r, i) => (
@@ -1428,6 +1449,15 @@ export default function ReqDashboard() {
             )
           })()}
         </div>
+      )}
+      {numFilter.openCol && numFilter.anchor && (
+        <NumFilterDropdown
+          col={numFilter.openCol}
+          value={numFilter.numFilters[numFilter.openCol]}
+          onChange={v => numFilter.applyFilter(numFilter.openCol!, v)}
+          onClose={() => numFilter.setOpenCol(null)}
+          anchor={numFilter.anchor}
+        />
       )}
     </div>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 
 const PAGE = 100
 
@@ -72,7 +72,7 @@ export function DataGrid({
   }
 
   if (loading) return (
-    <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
       <div style={{ fontSize: 26, marginBottom: 8 }}>⏳</div>
       {loadingMessage}
     </div>
@@ -87,26 +87,26 @@ export function DataGrid({
       <div style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid #1e293b', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={rowFilter} onChange={e => { setRowFilter(e.target.value); setPage(0) }}
           placeholder="🔍 Filter rows…"
-          style={{ flex: 1, minWidth: 140, background: '#0f172a', border: '1px solid #334155', borderRadius: 5, color: '#e2e8f0', fontSize: 11, padding: '4px 9px', outline: 'none' }} />
+          style={{ flex: 1, minWidth: 140, background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-primary)', fontSize: 11, padding: '4px 9px', outline: 'none' }} />
         <input value={colFilter} onChange={e => setColFilter(e.target.value)}
           placeholder="Filter columns…"
-          style={{ width: 140, background: '#0f172a', border: '1px solid #334155', borderRadius: 5, color: '#e2e8f0', fontSize: 11, padding: '4px 9px', outline: 'none' }} />
+          style={{ width: 140, background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-primary)', fontSize: 11, padding: '4px 9px', outline: 'none' }} />
         {sortCol && (
-          <span style={{ fontSize: 10, color: accent, background: '#0f172a', border: `1px solid ${accent}44`, borderRadius: 4, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 10, color: accent, background: 'var(--content-bg)', border: `1px solid ${accent}44`, borderRadius: 4, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
             {sortCol} {sortDir === 'asc' ? '↑' : '↓'}
-            <span style={{ cursor: 'pointer', color: '#475569' }} onClick={() => { setSortCol(null); setSortDir('asc') }}>✕</span>
+            <span style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => { setSortCol(null); setSortDir('asc') }}>✕</span>
           </span>
         )}
-        <span style={{ fontSize: 11, color: '#475569' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
           {sorted.length.toLocaleString()} rows · {visCols.length} cols
           {totalPages > 1 && ` · page ${page + 1}/${totalPages}`}
         </span>
         {totalPages > 1 && (
           <div style={{ display: 'flex', gap: 4 }}>
             <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-              style={{ padding: '3px 9px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: page === 0 ? 'not-allowed' : 'pointer' }}>‹</button>
+              style={{ padding: '3px 9px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 11, cursor: page === 0 ? 'not-allowed' : 'pointer' }}>‹</button>
             <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-              style={{ padding: '3px 9px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}>›</button>
+              style={{ padding: '3px 9px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 11, cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}>›</button>
           </div>
         )}
       </div>
@@ -114,12 +114,12 @@ export function DataGrid({
       {/* Table */}
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
         {records.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: '#334155', fontSize: 12 }}>No data.</div>
+          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No data.</div>
         ) : (
           <table style={{ borderCollapse: 'collapse', tableLayout: hasWidths ? 'fixed' : 'auto', width: tableW ?? '100%', fontSize: 11, whiteSpace: 'nowrap' }}>
             {hasWidths && <colgroup>{visCols.map(c => <col key={c} style={{ width: colWidths[c] ?? 120 }} />)}</colgroup>}
             <thead>
-              <tr style={{ background: '#0f172a', position: 'sticky', top: 0, zIndex: 1 }}>
+              <tr style={{ background: 'var(--content-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
                 {visCols.map(c => {
                   const isSorted = sortCol === c
                   return (

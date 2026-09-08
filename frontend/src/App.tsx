@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
+import { ThemeProvider } from '@/context/ThemeContext'
+import { DisplayProvider } from '@/context/DisplayContext'
 import AppLayout from '@/layouts/AppLayout'
 import LoginPage from '@/pages/LoginPage'
 import Dashboard from '@/pages/Dashboard'
@@ -16,9 +18,13 @@ import Procedures from '@/pages/Procedures'
 import NSODashboard from '@/pages/NSODashboard'
 import SaleDashboard from '@/pages/SaleDashboard'
 import ReqDashboard from '@/pages/ReqDashboard'
+import DistributionModel from '@/pages/DistributionModel'
+import Simulation from '@/pages/Simulation'
 
 export default function App() {
   return (
+    <DisplayProvider>
+    <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -38,9 +44,13 @@ export default function App() {
             <Route path="nso" element={<NSODashboard />} />
             <Route path="sale" element={<SaleDashboard />} />
             <Route path="req" element={<ReqDashboard />} />
+            <Route path="distribution" element={<DistributionModel />} />
+            <Route path="simulation" element={<Navigate to="/calculation?tab=simulation" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
+    </DisplayProvider>
   )
 }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Settings — Phase 14
  *
  * Operational control panel: system health, cache management,
@@ -44,26 +44,26 @@ const S: Record<string, React.CSSProperties> = {
   page:    { display: 'flex', flexDirection: 'column', gap: 16 },
   header:  { display: 'flex', alignItems: 'baseline', gap: 12 },
   grid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 },
-  card:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, overflow: 'hidden' },
-  cardHead:{ padding: '10px 14px', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle:{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5, textTransform: 'uppercase' as const },
+  card:    { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10, overflow: 'hidden' },
+  cardHead:{ padding: '10px 14px', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitle:{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 0.5, textTransform: 'uppercase' as const },
   cardBody: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 },
   row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 },
-  label:   { color: '#64748b', fontSize: 11 },
-  val:     { color: '#e2e8f0', fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' as const },
+  label:   { color: 'var(--text-muted)', fontSize: 11 },
+  val:     { color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' as const },
   good:    { color: '#4ade80', fontSize: 12, fontWeight: 700 },
   warn:    { color: '#f59e0b', fontSize: 12, fontWeight: 700 },
   bad:     { color: '#f87171', fontSize: 12, fontWeight: 700 },
   btnBlue: { background: '#0ea5e9', border: 'none', borderRadius: 6, color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' },
   btnRed:  { background: 'transparent', border: '1px solid #f87171', borderRadius: 6, color: '#f87171', fontSize: 11, fontWeight: 600, padding: '5px 14px', cursor: 'pointer' },
-  btnSm:   { background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
+  btnSm:   { background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
   badge:   (ok: boolean): React.CSSProperties => ({
     display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
     background: ok ? '#14532d' : '#450a0a',
     color: ok ? '#4ade80' : '#f87171',
   }),
-  recBox:  { background: '#0f172a', borderRadius: 6, padding: '8px 12px', fontSize: 11, color: '#94a3b8', lineHeight: 1.6 },
-  divider: { height: 1, background: '#334155', margin: '4px 0' },
+  recBox:  { background: 'var(--content-bg)', borderRadius: 6, padding: '8px 12px', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 },
+  divider: { height: 1, background: 'var(--table-row-hover)', margin: '4px 0' },
 }
 
 function fmt(v: number | null | undefined, dec = 0) {
@@ -106,7 +106,7 @@ function ReadinessCard({ data }: { data: HealthReady | null }) {
         {data && <span style={S.badge(data.ready)}>{data.ready ? 'READY' : 'DEGRADED'}</span>}
       </div>
       <div style={S.cardBody}>
-        {!data && <span style={{ color: '#64748b', fontSize: 12 }}>Loading…</span>}
+        {!data && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>}
         {data && (
           <>
             <Kv label="Version">{data.version}</Kv>
@@ -122,6 +122,98 @@ function ReadinessCard({ data }: { data: HealthReady | null }) {
             ))}
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Browser localStorage Cache card ──────────────────────────────────────────
+
+const BROWSER_CACHE_KEYS: { key: string; label: string; desc: string }[] = [
+  { key: 'dashboard_summary_v1', label: 'Dashboard Summary',   desc: 'Store network & KPI snapshot' },
+  { key: 'dashboard_widgets',    label: 'Pinned Widgets',      desc: 'Dashboard widget pins' },
+  { key: 'app_viewMode',         label: 'View Mode',           desc: 'Mobile/desktop preference' },
+  { key: 'app_sidebarCollapsed', label: 'Sidebar State',       desc: 'Collapsed/expanded preference' },
+  { key: 'ck_ss27_token',        label: 'Auth Token',          desc: 'Login session token' },
+]
+
+function getBrowserCacheInfo() {
+  return BROWSER_CACHE_KEYS.map(({ key, label, desc }) => {
+    try {
+      const val = localStorage.getItem(key)
+      const bytes = val ? new Blob([val]).size : 0
+      return { key, label, desc, present: val !== null, bytes }
+    } catch {
+      return { key, label, desc, present: false, bytes: 0 }
+    }
+  })
+}
+
+function fmtBytes(b: number) {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1024 / 1024).toFixed(2)} MB`
+}
+
+function BrowserCacheCard() {
+  const [items, setItems] = useState(getBrowserCacheInfo)
+  const [msg, setMsg] = useState('')
+
+  function refresh() { setItems(getBrowserCacheInfo()) }
+
+  function clearOne(key: string) {
+    try { localStorage.removeItem(key) } catch {}
+    setMsg(`Cleared: ${key}`)
+    refresh()
+    setTimeout(() => setMsg(''), 2500)
+  }
+
+  function clearAll() {
+    BROWSER_CACHE_KEYS.forEach(({ key }) => {
+      if (key === 'ck_ss27_token') return // keep auth token
+      try { localStorage.removeItem(key) } catch {}
+    })
+    setMsg('All data caches cleared (auth token kept)')
+    refresh()
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const totalBytes = items.reduce((s, i) => s + i.bytes, 0)
+  const present = items.filter(i => i.present)
+
+  return (
+    <div style={S.card}>
+      <div style={S.cardHead}>
+        <span style={S.cardTitle}>🗄️ Browser Cache (localStorage)</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={refresh} style={{ background: 'none', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-muted)', fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>↻</button>
+          <button onClick={clearAll} style={{ background: '#7f1d1d', border: 'none', borderRadius: 5, color: '#fca5a5', fontSize: 10, padding: '3px 10px', cursor: 'pointer', fontWeight: 600 }}>
+            Clear Data Cache
+          </button>
+        </div>
+      </div>
+      <div style={S.cardBody}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
+          {present.length} entries · Total: <strong style={{ color: '#7dd3fc' }}>{fmtBytes(totalBytes)}</strong>
+        </div>
+        {items.map(({ key, label, desc, present, bytes }) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: present ? '#4ade80' : '#334155', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: present ? 'var(--text-primary)' : 'var(--text-muted)' }}>{label}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{desc}{present ? ` · ${fmtBytes(bytes)}` : ' · empty'}</div>
+            </div>
+            {present && key !== 'ck_ss27_token' && (
+              <button onClick={() => clearOne(key)} style={{ background: 'none', border: '1px solid #334155', borderRadius: 4, color: '#f87171', fontSize: 9, padding: '2px 7px', cursor: 'pointer' }}>
+                Clear
+              </button>
+            )}
+            {key === 'ck_ss27_token' && present && (
+              <span style={{ fontSize: 9, color: '#4ade80' }}>Active</span>
+            )}
+          </div>
+        ))}
+        {msg && <div style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>{msg}</div>}
       </div>
     </div>
   )
@@ -155,7 +247,7 @@ function CacheCard({
         </div>
       </div>
       <div style={S.cardBody}>
-        {!status && <span style={{ color: '#64748b', fontSize: 12 }}>Loading…</span>}
+        {!status && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>}
         {status && (
           <>
             <Kv label="Item master">
@@ -197,7 +289,7 @@ function OraclePoolCard({ status }: { status: SystemStatus | null }) {
         <span style={S.cardTitle}>Oracle Connection Pool</span>
       </div>
       <div style={S.cardBody}>
-        {!status && <span style={{ color: '#64748b', fontSize: 12 }}>Loading…</span>}
+        {!status && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>}
         {status && pool?.error && <span style={S.bad}>{pool.error}</span>}
         {status && !pool?.error && pool && (
           <>
@@ -214,7 +306,7 @@ function OraclePoolCard({ status }: { status: SystemStatus | null }) {
             {/* Usage bar */}
             {pool.open != null && pool.busy != null && (
               <div style={{ marginTop: 4 }}>
-                <div style={{ height: 6, background: '#0f172a', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: 6, background: 'var(--content-bg)', borderRadius: 3, overflow: 'hidden' }}>
                   <div style={{
                     height: '100%', borderRadius: 3, transition: 'width 0.3s',
                     width: pool.open > 0 ? `${(pool.busy / pool.open) * 100}%` : '0%',
@@ -238,10 +330,10 @@ function RunStoreCard({ status }: { status: SystemStatus | null }) {
     <div style={S.card}>
       <div style={S.cardHead}>
         <span style={S.cardTitle}>Run Store (In-Memory)</span>
-        <span style={{ fontSize: 10, color: '#475569' }}>max 20 runs</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>max 20 runs</span>
       </div>
       <div style={S.cardBody}>
-        {!status && <span style={{ color: '#64748b', fontSize: 12 }}>Loading…</span>}
+        {!status && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>}
         {status && rs && !rs.error && (
           <>
             <Kv label="Runs in memory">{fmt(rs.runs_in_memory)}</Kv>
@@ -267,13 +359,13 @@ function RecommendationsCard({ status }: { status: SystemStatus | null }) {
       <div style={S.cardHead}>
         <span style={S.cardTitle}>Recommendations</span>
         {status && (
-          <span style={{ fontSize: 10, color: '#475569' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
             checked in {fmt(status.status_query_ms, 0)} ms
           </span>
         )}
       </div>
       <div style={S.cardBody}>
-        {!status && <span style={{ color: '#64748b', fontSize: 12 }}>Loading…</span>}
+        {!status && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</span>}
         {recs.map((r, i) => (
           <div key={i} style={S.recBox}>{r}</div>
         ))}
@@ -373,14 +465,14 @@ export default function Settings() {
       {/* Header */}
       <div style={S.header}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>Settings & System</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Settings & System</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             Operational control panel — cache management, health checks, and system metrics
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           {lastRefresh && (
-            <span style={{ fontSize: 10, color: '#475569' }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
               Refreshed {lastRefresh.toLocaleTimeString()}
             </span>
           )}
@@ -393,7 +485,7 @@ export default function Settings() {
       {/* Action feedback */}
       {actionMsg && (
         <div style={{
-          background: '#0f172a', border: '1px solid #38bdf8', borderRadius: 6,
+          background: 'var(--content-bg)', border: '1px solid #38bdf8', borderRadius: 6,
           padding: '8px 14px', fontSize: 12, color: '#38bdf8',
         }}>
           {actionMsg}
@@ -411,6 +503,7 @@ export default function Settings() {
         />
         <OraclePoolCard status={status} />
         <RunStoreCard status={status} />
+        <BrowserCacheCard />
         <RecommendationsCard status={status} />
         <QuickLinksCard />
       </div>

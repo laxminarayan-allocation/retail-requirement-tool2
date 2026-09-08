@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard — Phase 9
  *
  * Live KPI aggregation from Oracle (cached), calculation history (SQLite),
@@ -7,6 +7,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import http from '@/api/http'
+import FilterableTable from '@/components/FilterableTable'
+import StaleBanner from '@/components/StaleBanner'
 
 // ── Pinned widgets (from MasterData VizPanel) ─────────────────────────────────
 
@@ -58,31 +60,31 @@ function PinnedTile({ w, onRemove }: { w: PinnedWidget; onRemove: () => void }) 
 
   return (
     <div style={{
-      background: '#0f172a', border: `1px solid ${w.color}30`, borderRadius: 10,
+      background: 'var(--content-bg)', border: `1px solid ${w.color}30`, borderRadius: 10,
       padding: '14px 16px', minWidth: 180, position: 'relative', flexShrink: 0,
     }}>
       <button onClick={onRemove} title="Unpin" style={{
         position: 'absolute', top: 8, right: 8, background: 'none', border: 'none',
-        color: '#334155', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+        color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, lineHeight: 1,
       }}>✕</button>
-      <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
         {w.label}
       </div>
-      {loading && <div style={{ color: '#334155', fontSize: 11 }}>Loading…</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Loading…</div>}
       {!loading && err && <div style={{ color: '#f87171', fontSize: 11 }}>{err}</div>}
       {!loading && !err && w.mode === 'card' && cardData && (
         <>
           <div style={{ fontSize: 26, fontWeight: 800, color: w.color, fontFamily: 'monospace', letterSpacing: '-.02em' }}>
             {fmtV(cardData.value, cardData.func)}
           </div>
-          <div style={{ fontSize: 10, color: '#334155', marginTop: 2 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
             {cardData.func}({cardData.field})
           </div>
         </>
       )}
       {!loading && !err && w.mode === 'pivot' && pivotData && (
         <>
-          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
             {pivotData.func}({pivotData.value_col}) by {pivotData.row_col}
           </div>
           {pivotData.rows.slice(0, 5).map((r, i) => {
@@ -90,7 +92,7 @@ function PinnedTile({ w, onRemove }: { w: PinnedWidget; onRemove: () => void }) 
             const vv = r[pivotData.value_col]
             return (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', borderBottom: '1px solid #1e293b' }}>
-                <span style={{ color: '#94a3b8' }}>{rv == null ? '—' : String(rv)}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{rv == null ? '—' : String(rv)}</span>
                 <span style={{ color: w.color, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
                   {vv == null ? '—' : typeof vv === 'number' ? vv.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : String(vv)}
                 </span>
@@ -98,7 +100,7 @@ function PinnedTile({ w, onRemove }: { w: PinnedWidget; onRemove: () => void }) 
             )
           })}
           {pivotData.total_groups > 5 && (
-            <div style={{ fontSize: 10, color: '#334155', marginTop: 4 }}>+{pivotData.total_groups - 5} more groups</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>+{pivotData.total_groups - 5} more groups</div>
           )}
         </>
       )}
@@ -109,16 +111,16 @@ function PinnedTile({ w, onRemove }: { w: PinnedWidget; onRemove: () => void }) 
 function DefaultStoreTile({ totalStores }: { totalStores: number }) {
   return (
     <div style={{
-      background: '#0f172a', border: '1px solid #38bdf830', borderRadius: 10,
+      background: 'var(--content-bg)', border: '1px solid #38bdf830', borderRadius: 10,
       padding: '14px 16px', minWidth: 180, flexShrink: 0,
     }}>
-      <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
         Store Master
       </div>
       <div style={{ fontSize: 26, fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace', letterSpacing: '-.02em' }}>
         {totalStores.toLocaleString('en-IN')}
       </div>
-      <div style={{ fontSize: 10, color: '#334155', marginTop: 2 }}>Active Stores</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Active Stores</div>
     </div>
   )
 }
@@ -131,6 +133,10 @@ interface OracleStats {
   total_items: number
   total_stores: number
   upcoming_stores: number
+  opening_2026: number
+  opening_60d: number
+  last_opened_name: string
+  last_opened_date: string
   total_all_stores: number
   active_nso: number
   nso_from_date: string | null
@@ -141,7 +147,13 @@ interface OracleStats {
   attributes: string[]
   items_by_attribute1: Record<string, number>
   store_grade_distribution: Record<string, number>
+  upcoming_grade_distribution: Record<string, number>
   store_zone_distribution: Record<string, number>
+  store_zone_upcoming: Record<string, number>
+  store_state_distribution: Record<string, number>
+  store_state_upcoming: Record<string, number>
+  store_tag_distribution: Record<string, number>
+  store_tag_upcoming: Record<string, number>
 }
 
 interface DivBreak { division: string; total_req: number; stores: number; rows: number }
@@ -204,26 +216,26 @@ const S: Record<string, React.CSSProperties> = {
   grid6: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 },
   grid3: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 },
   grid2: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 },
-  card: { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' },
-  cardHead: { padding: '10px 14px', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { fontSize: 12, fontWeight: 600, color: '#94a3b8', letterSpacing: 0.5, textTransform: 'uppercase' as const },
+  card: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' },
+  cardHead: { padding: '10px 14px', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitle: { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: 0.5, textTransform: 'uppercase' as const },
   cardBody: { padding: '14px' },
   // Hero KPI tile
   kpiTile: (accent: string): React.CSSProperties => ({
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
+    background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8,
     padding: '16px 18px', borderTop: `3px solid ${accent}`,
   }),
   kpiVal: { fontSize: 28, fontWeight: 800, color: '#f1f5f9', fontVariantNumeric: 'tabular-nums' as const, lineHeight: 1.1 },
-  kpiLabel: { fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase' as const, marginBottom: 4 },
-  kpiSub: { fontSize: 11, color: '#475569', marginTop: 4 },
+  kpiLabel: { fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.6, textTransform: 'uppercase' as const, marginBottom: 4 },
+  kpiSub: { fontSize: 11, color: 'var(--text-muted)', marginTop: 4 },
   // Small KPI (inside card)
   smKpi: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '7px 0', borderBottom: '1px solid #0f172a' },
-  smKpiLabel: { fontSize: 12, color: '#64748b' },
-  smKpiVal: { fontSize: 13, fontWeight: 600, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' as const },
+  smKpiLabel: { fontSize: 12, color: 'var(--text-muted)' },
+  smKpiVal: { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' as const },
   // Bar chart
   barRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11 },
-  barLabel: { width: 100, color: '#94a3b8', textAlign: 'right' as const, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
-  barTrack: { flex: 1, background: '#0f172a', borderRadius: 4, height: 14, overflow: 'hidden' },
+  barLabel: { width: 100, color: 'var(--text-secondary)', textAlign: 'right' as const, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+  barTrack: { flex: 1, background: 'var(--content-bg)', borderRadius: 4, height: 14, overflow: 'hidden' },
   barFill: (pct: number, color: string): React.CSSProperties => ({
     width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.4s',
   }),
@@ -243,8 +255,8 @@ const S: Record<string, React.CSSProperties> = {
     padding: '14px 16px', cursor: 'pointer', textAlign: 'left' as const, width: '100%',
     transition: 'background 0.15s',
   }),
-  actionTitle: { fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginBottom: 3 },
-  actionSub: { fontSize: 11, color: '#64748b' },
+  actionTitle: { fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3 },
+  actionSub: { fontSize: 11, color: 'var(--text-muted)' },
   // Grade pill
   grade: (g: string): React.CSSProperties => ({
     display: 'inline-block', padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700, marginRight: 4, marginBottom: 4,
@@ -303,7 +315,7 @@ function HBar({ label, value, max, color }: { label: string; value: number; max:
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: 0.8, textTransform: 'uppercase' as const, marginBottom: 4, marginTop: 4 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' as const, marginBottom: 4, marginTop: 4 }}>
       {children}
     </div>
   )
@@ -314,7 +326,11 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 // ── Allocation summary types ───────────────────────────────────────────────────
 
 interface AllocRow {
-  division: string
+  division?: string
+  section?: string
+  department?: string
+  store_code?: number | string
+  store_name?: string
   stores?: number
   articles?: number
   stk_qty?: number
@@ -324,6 +340,7 @@ interface AllocRow {
   mtd_sale_q?: number
   proj_qty?: number
   in_transit_q?: number
+  [key: string]: unknown
 }
 
 interface AllocSummary {
@@ -347,45 +364,360 @@ function YearSplitCard({ oracle }: { oracle: Record<string, Record<string, numbe
   const [tab, setTab] = useState<'cy' | 'fy'>('fy')
   const cy = oracle.store_cal_year_dist ?? {}
   const fy = oracle.store_fin_year_dist ?? {}
+  const cyUp = oracle.store_cal_year_upcoming ?? {}
+  const fyUp = oracle.store_fin_year_upcoming ?? {}
   if (!Object.keys(cy).length && !Object.keys(fy).length) return null
-  const dist = tab === 'cy' ? cy : fy
-  const entries = Object.entries(dist).sort(([a], [b]) => a.localeCompare(b))
-  const mx = Math.max(...entries.map(([, v]) => v), 1)
+  const activeDist = tab === 'cy' ? cy : fy
+  const upcomingDist = tab === 'cy' ? cyUp : fyUp
+  const allYears = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)])).sort()
+  const mx = Math.max(...allYears.map(yr => (activeDist[yr] ?? 0) + (upcomingDist[yr] ?? 0)), 1)
   const COLORS = ['#f59e0b', '#fb923c', '#34d399', '#38bdf8', '#818cf8', '#ec4899', '#a78bfa', '#10b981', '#06b6d4', '#84cc16']
   return (
-    <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Openings</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['fy', 'cy'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              fontSize: 9, padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: tab === t ? '#f59e0b22' : 'transparent',
-              border: `1px solid ${tab === t ? '#f59e0b' : '#334155'}`,
-              color: tab === t ? '#f59e0b' : '#475569',
-            }}>{t === 'cy' ? 'CY' : 'FY'}</button>
-          ))}
+    <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b', minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Openings</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['fy', 'cy'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                fontSize: 9, padding: '2px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                background: tab === t ? '#f59e0b22' : 'transparent',
+                border: `1px solid ${tab === t ? '#f59e0b' : '#334155'}`,
+                color: tab === t ? '#f59e0b' : '#475569',
+              }}>{t === 'cy' ? 'CY' : 'FY'}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, fontSize: 9 }}>
+          <span style={{ color: 'var(--text-secondary)' }}>● Active</span>
+          <span style={{ color: '#f59e0b' }}>● Upcoming</span>
         </div>
       </div>
-      {entries.map(([yr, cnt], i) => (
-        <div key={yr} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
-          <span style={{ width: 36, color: '#94a3b8', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{yr}</span>
-          <div style={{ flex: 1, height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ width: `${(cnt / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
+      {allYears.map((yr, i) => {
+        const a = activeDist[yr] ?? 0
+        const u = upcomingDist[yr] ?? 0
+        return (
+          <div key={yr} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
+            <span style={{ width: 36, color: 'var(--text-secondary)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{yr}</span>
+            <div style={{ flex: 1, height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+              <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
+              <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b', opacity: 0.6 }} />
+            </div>
+            <span style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'right', fontSize: 9 }}>
+              {a > 0 && <span style={{ color: 'var(--text-secondary)' }}>{a}</span>}
+              {u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
+            </span>
           </div>
-          <span style={{ color: '#64748b', width: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{cnt}</span>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Skeleton shimmer styles injected once ─────────────────────────────────────
+const SKEL_STYLE = `
+@keyframes sk-shimmer {
+  0%   { background-position: -600px 0 }
+  100% { background-position:  600px 0 }
+}
+.sk-box {
+  background: linear-gradient(90deg, #1e293b 25%, #263348 50%, #1e293b 75%);
+  background-size: 600px 100%;
+  animation: sk-shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
+`
+
+function SkBox({ w, h, style }: { w: number | string; h: number; style?: React.CSSProperties }) {
+  return <div className="sk-box" style={{ width: w, height: h, flexShrink: 0, borderRadius: 4, ...style }} />
+}
+
+function SkBarRows({ count, labelW }: { count: number; labelW: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+          <SkBox w={labelW} h={7} />
+          <SkBox w="100%" h={5} style={{ flex: 1 }} />
+          <SkBox w={22} h={7} />
         </div>
       ))}
+    </>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <>
+      <style>{SKEL_STYLE}</style>
+
+      {/* topbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #1e293b' }}>
+        <div>
+          <SkBox w={200} h={16} style={{ marginBottom: 8 }} />
+          <SkBox w={300} h={10} />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <SkBox w={70} h={28} style={{ borderRadius: 6 }} />
+          <SkBox w={70} h={28} style={{ borderRadius: 6 }} />
+        </div>
+      </div>
+
+      {/* Store Network */}
+      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
+          <SkBox w={110} h={10} />
+          <SkBox w={60} h={10} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '200px 125px 120px 165px 100px 130px', gap: 12 }}>
+
+          {/* Left card */}
+          <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
+            <SkBox w={80} h={9} style={{ marginBottom: 10 }} />
+            <SkBox w={60} h={28} style={{ marginBottom: 10 }} />
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <SkBox w={40} h={30} style={{ borderRadius: 6 }} />
+              <SkBox w={40} h={30} style={{ borderRadius: 6 }} />
+            </div>
+            <SkBox w="100%" h={9} style={{ marginBottom: 5 }} />
+            <SkBox w="80%" h={9} style={{ marginBottom: 5 }} />
+            <SkBox w="90%" h={9} />
+          </div>
+
+          {/* Zone Split */}
+          <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
+            <SkBox w={70} h={9} style={{ marginBottom: 10 }} />
+            <SkBarRows count={7} labelW={52} />
+          </div>
+
+          {/* FY Openings */}
+          <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
+            <SkBox w={80} h={9} style={{ marginBottom: 10 }} />
+            <SkBarRows count={10} labelW={28} />
+          </div>
+
+          {/* State Split */}
+          <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
+            <SkBox w={65} h={9} style={{ marginBottom: 10 }} />
+            <SkBarRows count={10} labelW={68} />
+          </div>
+
+          {/* Grade Split */}
+          <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
+            <SkBox w={70} h={9} style={{ marginBottom: 10 }} />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                <SkBox w={8} h={8} style={{ borderRadius: '50%' }} />
+                <SkBox w={18} h={8} />
+                <SkBox w="100%" h={4} style={{ flex: 1 }} />
+                <SkBox w={26} h={8} />
+              </div>
+            ))}
+          </div>
+
+          {/* Store Tag */}
+          <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
+            <SkBox w={60} h={9} style={{ marginBottom: 10 }} />
+            <SkBarRows count={6} labelW={52} />
+          </div>
+        </div>
+      </div>
+
+      {/* Allocation Summary */}
+      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
+          <SkBox w={160} h={11} />
+          <SkBox w={80} h={9} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <SkBox w={50} h={28} style={{ borderRadius: 6 }} />
+          <SkBox w={85} h={28} style={{ borderRadius: 6 }} />
+          <SkBox w={115} h={28} style={{ borderRadius: 6 }} />
+        </div>
+        <SkBox w={260} h={30} style={{ borderRadius: 6, marginBottom: 14 }} />
+        {/* table rows */}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 140px 1fr 1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+            {Array.from({ length: 7 }).map((_, j) => (
+              <SkBox key={j} w="100%" h={12} style={{ opacity: 1 - j * 0.04 }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+// ── Store Drill-Down Modal ────────────────────────────────────────────────────
+const STATE_LABELS: Record<string, string> = {
+  'UP': 'Uttar Pradesh', 'MP': 'Madhya Pradesh', 'CH': 'CHHATTISGARH',
+  'AR': 'Arunachal', 'AP': 'Andhra Pradesh', 'TN': 'Tamil Nadu',
+  'MH': 'Maharashtra', 'GJ': 'Gujarat', 'RJ': 'Rajasthan',
+  'WB': 'West Bengal', 'HR': 'Haryana', 'PB': 'Punjab',
+  'UK': 'Uttarakhand', 'HP': 'Himachal', 'GA': 'Goa',
+  'KA': 'Karnataka', 'KL': 'Kerala', 'TG': 'Telangana',
+  'JK': 'J&K', 'KASHMIR': 'KASHMIR', 'JAMMU': 'JAMMU',
+  'ODISHA': 'ODISHA', 'NEW DELHI': 'Delhi', 'JH': 'Jharkhand',
+  'ASSAM': 'Assam', 'GURGAON': 'Gurgaon', 'J&K': 'J&K',
+}
+
+interface DrillStore { code: string; name: string; status: string; grade: string; zone: string; state: string; area: number | null }
+interface DrillState { split: string; value: string }
+
+function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => void }) {
+  const [stores, setStores] = useState<DrillStore[]>([])
+  const [count, setCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const dragging = useRef(false)
+  const dragOffset = useRef({ x: 0, y: 0 })
+
+  function onHeaderMouseDown(e: React.MouseEvent) {
+    dragging.current = true
+    const rect = (e.currentTarget.closest('[data-modal]') as HTMLElement)?.getBoundingClientRect()
+    dragOffset.current = { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) }
+    e.preventDefault()
+  }
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!dragging.current) return
+      setPos({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
+    }
+    function onUp() { dragging.current = false }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  useEffect(() => {
+    setLoading(true); setErr('')
+    http.get('/dashboard/stores-by', { params: { split: drill.split, value: drill.value } })
+      .then(r => {
+        if (r.data.success) { setStores(r.data.data.stores ?? []); setCount(r.data.data.count ?? 0) }
+        else setErr(r.data.message || 'Error')
+      })
+      .catch(() => setErr('Failed to load stores'))
+      .finally(() => setLoading(false))
+  }, [drill.split, drill.value])
+
+  const filtered = stores.filter(s =>
+    !q || s.code.toLowerCase().includes(q.toLowerCase()) || s.name.toLowerCase().includes(q.toLowerCase())
+  )
+
+  const SPLIT_LABEL: Record<string, string> = { zone: 'Zone', state: 'State', grade: 'Grade', tag: 'Store Tag' }
+  const displayValue = drill.split === 'state' ? (STATE_LABELS[drill.value] ?? drill.value) : drill.value
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: pos ? 'transparent' : 'rgba(0,0,0,0.72)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      pointerEvents: pos ? 'none' : 'auto',
+    }} onClick={!pos ? onClose : undefined}>
+      <div data-modal style={{
+        background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 12,
+        width: 560, maxWidth: '95vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+        position: pos ? 'fixed' : 'relative',
+        left: pos ? pos.x : undefined, top: pos ? pos.y : undefined,
+        pointerEvents: 'auto',
+      }} onClick={e => e.stopPropagation()}>
+        {/* Header — drag handle */}
+        <div onMouseDown={onHeaderMouseDown} style={{ padding: '14px 18px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 10, cursor: 'grab', userSelect: 'none' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {SPLIT_LABEL[drill.split] ?? drill.split}: <span style={{ color: '#38bdf8' }}>{displayValue}</span>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+              {loading ? 'Loading…' : `${count} store${count !== 1 ? 's' : ''}`}
+            </div>
+          </div>
+          <input
+            value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Search code / name…"
+            style={{
+              background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 6,
+              color: 'var(--text-primary)', fontSize: 11, padding: '5px 9px', width: 160, outline: 'none',
+            }}
+          />
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px' }}>
+          {loading && <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: 24 }}>Loading stores…</div>}
+          {err && <div style={{ color: '#f87171', fontSize: 12, textAlign: 'center', padding: 24 }}>{err}</div>}
+          {!loading && !err && filtered.length === 0 && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: 24 }}>No stores found.</div>
+          )}
+          {!loading && !err && filtered.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  {['Code', 'Name', 'Status', 'Grade', 'Area (sqft)'].map(h => (
+                    <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((s, i) => (
+                  <tr key={s.code + i} style={{ borderBottom: '1px solid #1e293b22' }}>
+                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', color: '#38bdf8', fontWeight: 700, whiteSpace: 'nowrap' }}>{s.code}</td>
+                    <td style={{ padding: '5px 8px', color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.name}>{s.name || '—'}</td>
+                    <td style={{ padding: '5px 8px' }}>
+                      <span style={{
+                        fontSize: 9, padding: '2px 6px', borderRadius: 10, fontWeight: 700,
+                        background: s.status === 'ACTIVE' ? '#064e3b' : s.status === 'UPCOMING' ? '#1e3a5f' : '#1e293b',
+                        color: s.status === 'ACTIVE' ? '#34d399' : s.status === 'UPCOMING' ? '#60a5fa' : '#94a3b8',
+                      }}>{s.status || '—'}</span>
+                    </td>
+                    <td style={{ padding: '5px 8px', color: '#a78bfa', fontWeight: 700 }}>{s.grade || '—'}</td>
+                    <td style={{ padding: '5px 8px', color: 'var(--text-muted)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {s.area != null ? s.area.toLocaleString('en-IN') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [drillDown, setDrillDown] = useState<DrillState | null>(null)
+  const [dashTab, setDashTab] = useState<'store-network' | 'allocation'>('store-network')
+
+  // ── Layer 1: stale-while-revalidate ──────────────────────────────────────
+  // Load cached data from localStorage instantly so viewer sees data at 0ms.
+  // Fresh API response replaces it silently in the background.
+  const CACHE_KEY = 'dashboard_summary_v1'
+  const CACHE_TTL = 4 * 60 * 60 * 1000  // 4 hours — stale after this
+
+  function readCache(): DashboardData | null {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (!raw) return null
+      const { data: d, ts } = JSON.parse(raw)
+      if (Date.now() - ts > CACHE_TTL) return null  // expired
+      return d as DashboardData
+    } catch { return null }
+  }
+  function writeCache(d: DashboardData) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: d, ts: Date.now() })) } catch {}
+  }
+
+  const cached = readCache()
+  const [data, setData] = useState<DashboardData | null>(cached)
+  const [loading, setLoading] = useState(cached === null)  // skip spinner if cache hit
+  const [isStale, setIsStale] = useState(cached !== null)  // show "Updating…" badge if stale
   const [error, setError] = useState<string | null>(null)
-  const [lastFetch, setLastFetch] = useState<string>('')
+  const [lastFetch, setLastFetch] = useState<string>(cached ? 'cached' : '')
   const [pinned, setPinned] = useState<PinnedWidget[]>(getPinned)
   const [allocView, setAllocView] = useState<'all' | 'store' | 'mc'>('all')
   const [alloc, setAlloc] = useState<AllocSummary | null>(null)
@@ -412,15 +744,19 @@ export default function Dashboard() {
       const res = await http.get<{ success: boolean; data: DashboardData }>('/dashboard/summary', { timeout: 120_000 })
       if (res.data.success) {
         setData(res.data.data)
+        writeCache(res.data.data)
         setError(null)
+        setIsStale(false)
         setLastFetch(new Date().toLocaleTimeString('en-IN'))
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load dashboard')
+      // If cache hit, keep showing stale data — don't show error to viewer
+      if (!data) setError(e instanceof Error ? e.message : 'Failed to load dashboard')
     } finally {
       setLoading(false)
+      setIsStale(false)
     }
-  }, [])
+  }, [data])
 
   const loadAlloc = useCallback(async (view: 'all' | 'store' | 'mc' = 'all') => {
     setAllocLoading(true)
@@ -464,12 +800,7 @@ export default function Dashboard() {
   useEffect(() => { load(); loadAlloc('all'); loadDetail([], 0) }, [load, loadAlloc, loadDetail])
 
   if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, flexDirection: 'column', gap: 12 }}>
-        <div style={{ fontSize: 28, animation: 'spin 1s linear infinite' }}>⋯</div>
-        <div style={{ color: '#64748b', fontSize: 13 }}>Loading dashboard…</div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   if (error || !data) {
@@ -507,187 +838,347 @@ export default function Dashboard() {
 
   return (
     <div style={S.page}>
+      <StaleBanner />
+      {drillDown && <StoreListModal drill={drillDown} onClose={() => setDrillDown(null)} />}
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#f1f5f9' }}>CityKart Replenishment</div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-            Season: <strong style={{ color: '#38bdf8' }}>PREWINTER · AW26</strong>
-            &nbsp;·&nbsp;Oracle: {oracle.oracle_ok
+          <div style={{ fontSize: 28, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.5px' }}>CityKart Strongs</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+            Oracle: {oracle.oracle_ok
               ? <span style={{ color: '#4ade80' }}>✓ Connected ({oracle.oracle_cache_ms}ms cache)</span>
               : <span style={{ color: '#f87171' }}>✗ Unavailable</span>}
-            &nbsp;·&nbsp;Refreshed {lastFetch}
+            &nbsp;·&nbsp;{isStale ? 'Refreshing in background…' : `Refreshed ${lastFetch}`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {(data as DashboardData & { oracle?: { from_cache?: boolean } })?.oracle?.from_cache && (
-            <span style={{ fontSize: 10, color: '#475569', background: '#0f172a', border: '1px solid #1e293b', borderRadius: 4, padding: '2px 7px' }}>
+          {isStale && (
+            <span style={{ fontSize: 10, color: '#f59e0b', background: '#451a030a', border: '1px solid #78350f44', borderRadius: 4, padding: '2px 7px', animation: 'pulse 1.5s infinite' }}>
+              ↻ Updating…
+            </span>
+          )}
+          {!isStale && (data as DashboardData & { oracle?: { from_cache?: boolean } })?.oracle?.from_cache && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4, padding: '2px 7px' }}>
               ⚡ cached
             </span>
           )}
-          <button style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', fontSize: 11, padding: '5px 12px', cursor: 'pointer' }} onClick={() => { setLoading(true); load() }}>
+          <button style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-secondary)', fontSize: 11, padding: '5px 12px', cursor: 'pointer' }} onClick={() => { setLoading(true); load() }}>
             ↻ Refresh
           </button>
-          <button style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', fontSize: 11, padding: '5px 12px', cursor: 'pointer' }} title="Force re-fetch from Oracle (slow)" onClick={() => { setLoading(true); load(true) }}>
+          <button style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 6, color: 'var(--text-muted)', fontSize: 11, padding: '5px 12px', cursor: 'pointer' }} title="Force re-fetch from Oracle (slow)" onClick={() => { setLoading(true); load(true) }}>
             ↻ Oracle
           </button>
         </div>
       </div>
 
-      {/* ── Store Network section ── */}
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '14px 18px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
-          <span style={{ fontSize: 11, color: '#334155' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-          {/* Active */}
-          <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #38bdf8' }}>
-            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Active Stores</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_stores)}</div>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginBottom: 3 }}>
-                <span>{fmtNum(oracle.total_stores)} of {fmtNum(oracle.total_all_stores)}</span>
-                <span>{oracle.total_all_stores > 0 ? Math.round((oracle.total_stores / oracle.total_all_stores) * 100) : 0}%</span>
-              </div>
-              <div style={{ height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#38bdf8', borderRadius: 3, width: oracle.total_all_stores > 0 ? `${(oracle.total_stores / oracle.total_all_stores) * 100}%` : '0%', transition: 'width 0.5s' }} />
-              </div>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>{oracle.divisions} divisions · {oracle.departments} depts</div>
-          </div>
+      {/* ── Tab Bar ── */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--card-border)', marginBottom: 0 }}>
+        {([
+          { key: 'store-network', label: '🏪 Store Network' },
+          { key: 'allocation',    label: '📦 Allocation Report' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setDashTab(t.key)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '8px 18px', fontSize: 12, fontWeight: dashTab === t.key ? 700 : 400,
+            color: dashTab === t.key ? '#4ade80' : 'var(--text-muted)',
+            borderBottom: dashTab === t.key ? '2px solid #4ade80' : '2px solid transparent',
+            marginBottom: -1, transition: 'color 0.15s',
+          }}>{t.label}</button>
+        ))}
+      </div>
 
-          {/* Upcoming */}
-          <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b' }}>
-            <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>Upcoming Stores</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#f59e0b', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.upcoming_stores)}</div>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginBottom: 3 }}>
-                <span>of {fmtNum(oracle.total_all_stores)} total</span>
-                <span>{oracle.total_all_stores > 0 ? Math.round((oracle.upcoming_stores / oracle.total_all_stores) * 100) : 0}%</span>
+      {/* ── Store Network section ── */}
+      {dashTab === 'store-network' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
+        </div>
+        <div style={{ width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.3fr 0.8fr 1.1fr', gap: 10, width: '100%' }}>
+          {/* Combined Active + Upcoming + Total */}
+          <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '10px 12px', borderLeft: '3px solid #818cf8', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Total headline */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8 }}>Store Network</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_all_stores)}</div>
+            </div>
+            {/* Stacked bar */}
+            <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+              <div style={{ height: '100%', background: '#38bdf8', width: oracle.total_all_stores > 0 ? `${(oracle.total_stores / oracle.total_all_stores) * 100}%` : '0%' }} />
+              <div style={{ height: '100%', background: '#f59e0b', width: oracle.total_all_stores > 0 ? `${(oracle.upcoming_stores / oracle.total_all_stores) * 100}%` : '0%' }} />
+            </div>
+            {/* Active | Upcoming row */}
+            <div style={{ display: 'flex', gap: 0 }}>
+              {/* ACTIVE */}
+              <div style={{ flex: 3, paddingRight: 10 }}>
+                <div style={{ fontSize: 9, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Active</div>
+                <div style={{ fontSize: 30, fontWeight: 900, color: '#38bdf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_stores)}</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>TY Open</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#38bdf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{fmtNum(oracle.opening_2026 ?? 0)}</div>
+                  </div>
+                  <div style={{ width: 1, background: 'var(--card-bg)', alignSelf: 'stretch' }} />
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>60d</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#7dd3fc', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{fmtNum(oracle.opening_60d ?? 0)}</div>
+                  </div>
+                </div>
+                {oracle.last_opened_name && (
+                  <div style={{ marginTop: 5, padding: '3px 6px', background: '#0a1628', borderRadius: 3, borderLeft: '2px solid #1e3a5f' }}>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Last Open</div>
+                    <div style={{ fontSize: 11, color: '#7dd3fc', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{oracle.last_opened_name}</div>
+                    {oracle.last_opened_date && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{oracle.last_opened_date}</div>}
+                  </div>
+                )}
               </div>
-              <div style={{ height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#f59e0b', borderRadius: 3, width: oracle.total_all_stores > 0 ? `${(oracle.upcoming_stores / oracle.total_all_stores) * 100}%` : '0%', transition: 'width 0.5s' }} />
+              <div style={{ width: 1, background: 'var(--card-bg)' }} />
+              {/* UPCOMING */}
+              <div style={{ flex: 2, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.8 }}>Upcoming</div>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: '#f59e0b', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.upcoming_stores)}</div>
+                </div>
+                <div style={{ marginTop: 6, padding: '4px 6px', background: '#0a1628', borderRadius: 3, borderLeft: '2px solid #44300a' }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>NSO Active</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(oracle.active_nso ?? 0)}</div>
+                  {oracle.nso_from_date && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>from {oracle.nso_from_date}</div>}
+                </div>
               </div>
             </div>
-            <div style={{ marginTop: 8, fontSize: 10, color: '#334155' }}>Opening soon</div>
           </div>
 
           {/* Zone distribution mini */}
-          {Object.entries(oracle.store_zone_distribution).length > 0 && (
-            <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8' }}>
-              <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>Zone Split</div>
-              {Object.entries(oracle.store_zone_distribution).slice(0, 5).map(([zone, cnt], i) => {
-                const mx = Math.max(...Object.values(oracle.store_zone_distribution))
-                const COLORS = ['#818cf8', '#38bdf8', '#34d399', '#f59e0b', '#fb923c']
-                return (
-                  <div key={zone} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
-                    <span style={{ width: 60, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{zone}</span>
-                    <div style={{ flex: 1, height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ width: `${(cnt / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
-                    </div>
-                    <span style={{ color: '#64748b', width: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{cnt}</span>
+          {Object.keys(oracle.store_zone_distribution ?? {}).length > 0 && (() => {
+            const activeDist = oracle.store_zone_distribution ?? {}
+            const upcomingDist = oracle.store_zone_upcoming ?? {}
+            const allZones = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+              .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
+            const mx = Math.max(...allZones.map(z => (activeDist[z] ?? 0) + (upcomingDist[z] ?? 0)), 1)
+            return (
+              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Zone Split</div>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
+                    <span style={{ color: '#38bdf8' }}>● Active</span>
+                    <span style={{ color: '#f59e0b' }}>● Upcoming</span>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                </div>
+                {allZones.map(zone => {
+                  const a = activeDist[zone] ?? 0
+                  const u = upcomingDist[zone] ?? 0
+                  return (
+                    <div key={zone} onClick={() => setDrillDown({ split: 'zone', value: zone })} title={`Click to see all ${zone} stores`} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <span style={{ width: 56, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }}>{zone}</span>
+                      <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
+                        <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
+                      </div>
+                      <span style={{ fontSize: 9, flexShrink: 0, fontVariantNumeric: 'tabular-nums', minWidth: 28, textAlign: 'right' }}>
+                        <span style={{ color: '#38bdf8' }}>{a}</span>{u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Year-wise store opening card */}
           <YearSplitCard oracle={oracle as unknown as Record<string, Record<string, number>>} />
 
           {/* State distribution mini */}
-          {Object.entries((oracle as unknown as Record<string, Record<string, number>>).store_state_distribution ?? {}).length > 0 && (
-            <div style={{ background: '#0f172a', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #34d399' }}>
-              <div style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>State Split</div>
-              {Object.entries((oracle as unknown as Record<string, Record<string, number>>).store_state_distribution).slice(0, 8).map(([state, cnt], i) => {
-                const dist = (oracle as unknown as Record<string, Record<string, number>>).store_state_distribution
-                const mx = Math.max(...Object.values(dist))
-                const COLORS = ['#34d399', '#38bdf8', '#818cf8', '#f59e0b', '#fb923c', '#ec4899', '#a78bfa', '#10b981']
-                return (
-                  <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
-                    <span style={{ width: 72, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{state}</span>
-                    <div style={{ flex: 1, height: 4, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ width: `${(cnt / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
-                    </div>
-                    <span style={{ color: '#64748b', width: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{cnt}</span>
+          {Object.keys(oracle.store_state_distribution ?? {}).length > 0 && (() => {
+            const activeDist = oracle.store_state_distribution ?? {}
+            const upcomingDist = oracle.store_state_upcoming ?? {}
+            const allStates = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+              .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
+            const mx = Math.max(...allStates.map(s => (activeDist[s] ?? 0) + (upcomingDist[s] ?? 0)))
+            return (
+              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #34d399', minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>State Split</div>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
+                    <span style={{ color: '#38bdf8' }}>● Active</span>
+                    <span style={{ color: '#f59e0b' }}>● Upcoming</span>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+                </div>
+                {allStates.map(state => {
+                  const a = activeDist[state] ?? 0
+                  const u = upcomingDist[state] ?? 0
+                  const total = a + u
+                  return (
+                    <div key={state} onClick={() => setDrillDown({ split: 'state', value: state })} title={`Click to see all ${STATE_LABELS[state] ?? state} stores`} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <span style={{ width: 72, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }} title={STATE_LABELS[state] ?? state}>
+                        {STATE_LABELS[state] ?? state}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
+                        <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
+                      </div>
+                      <span style={{ color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
+                        <span style={{ color: '#38bdf8' }}>{a}</span>{u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
-      {/* ── Row 1: Top KPI tiles ── */}
-      <div style={S.grid6}>
-        <KpiTile
-          label="Active Stores"
-          value={fmtNum(oracle.total_stores)}
-          sub={`${oracle.divisions} divisions`}
-          accent="#38bdf8"
-        />
-        <KpiTile
-          label="Active-NSO"
-          value={fmtNum(oracle.active_nso)}
-          sub={oracle.nso_from_date ? `Since ${oracle.nso_from_date}` : 'Recent openings'}
-          accent="#fb923c"
-        />
-        <KpiTile
-          label="Upcoming Stores"
-          value={fmtNum(oracle.upcoming_stores)}
-          sub={oracle.upcoming_stores > 0 ? 'Opening soon' : 'None planned'}
-          accent="#f59e0b"
-        />
-        <KpiTile
-          label="Total Stores"
-          value={fmtNum(oracle.total_all_stores)}
-          sub="Active + Upcoming"
-          accent="#818cf8"
-        />
-        <KpiTile label="Total Items" value={fmtNum(oracle.total_items)} sub={`${oracle.articles.toLocaleString()} articles`} accent="#a78bfa" />
-        <KpiTile label="Last REQ Qty" value={lr.has_last_run ? fmtNum(lr.total_req) : '—'} sub={lr.has_last_run ? `Fill rate: ${pct(lr.fill_rate_achieved)}` : 'No runs yet'} accent="#4ade80" />
-      </div>
+          {/* ── Grade Split card ── */}
+          {(() => {
+            const activeGrade = Object.entries(oracle.store_grade_distribution).filter(([k]) => k !== '—' && k !== '-')
+            const upcomingGrade = Object.entries(oracle.upcoming_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
+            if (activeGrade.length === 0 && upcomingGrade.length === 0) return null
+            const GRADE_COLORS: Record<string, string> = {
+              'A+': '#818cf8', 'A': '#38bdf8', 'B+': '#34d399', 'B': '#4ade80',
+              'C': '#f59e0b', 'D': '#fb923c', 'E': '#f87171',
+            }
+            const GRADE_ORDER = ['A+', 'A', 'B+', 'B', 'C', 'D', 'E']
+            const allGrades = Array.from(new Set([...activeGrade.map(([k]) => k), ...upcomingGrade.map(([k]) => k)]))
+              .sort((a, b) => {
+                const ai = GRADE_ORDER.indexOf(a); const bi = GRADE_ORDER.indexOf(b)
+                if (ai === -1 && bi === -1) return a.localeCompare(b)
+                if (ai === -1) return 1
+                if (bi === -1) return -1
+                return ai - bi
+              })
+            const activeMap = Object.fromEntries(activeGrade)
+            const upcomingMap = Object.fromEntries(upcomingGrade)
+            const maxVal = Math.max(...allGrades.map(g => (activeMap[g] ?? 0) + (upcomingMap[g] ?? 0)), 1)
+            return (
+              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>Grade Split</div>
+                {/* Legend */}
+                <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 9, color: '#38bdf8' }}>● Active</span>
+                  <span style={{ fontSize: 9, color: '#f59e0b' }}>● Upcoming</span>
+                </div>
+                {allGrades.map(grade => {
+                  const aVal = activeMap[grade] ?? 0
+                  const uVal = upcomingMap[grade] ?? 0
+                  const color = GRADE_COLORS[grade] ?? '#64748b'
+                  return (
+                    <div key={grade} onClick={() => setDrillDown({ split: 'grade', value: grade })} title={`Click to see all Grade ${grade} stores`} style={{ marginBottom: 7, cursor: 'pointer', borderRadius: 4, padding: '2px 3px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ width: 22, fontWeight: 700, fontSize: 11, color, flexShrink: 0 }}>{grade}</span>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {/* Active bar */}
+                          <div style={{ height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ width: `${(aVal / maxVal) * 100}%`, height: '100%', background: '#38bdf8', borderRadius: 2 }} />
+                          </div>
+                          {/* Upcoming bar */}
+                          {uVal > 0 && (
+                            <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
+                              <div style={{ width: `${(uVal / maxVal) * 100}%`, height: '100%', background: '#f59e0b', borderRadius: 2, opacity: 0.85 }} />
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ minWidth: 30, textAlign: 'right', flexShrink: 0, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ color: '#38bdf8' }}>{aVal}</span>
+                          {uVal > 0 && <span style={{ color: '#f59e0b' }}> +{uVal}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
+          {/* ── Store Tag Split card ── */}
+          {Object.keys(oracle.store_tag_distribution ?? {}).length > 0 && (() => {
+            const activeDist = oracle.store_tag_distribution ?? {}
+            const upcomingDist = oracle.store_tag_upcoming ?? {}
+            const allTags = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+              .filter(t => t !== '-')
+              .sort((a, b) => {
+                const scA = a.match(/^0*(\d+)\s*-\s*Stores/); const scB = b.match(/^0*(\d+)\s*-\s*Stores/)
+                if (scA && scB) return parseInt(scA[1]) - parseInt(scB[1])
+                if (scA) return -1; if (scB) return 1
+                const fyA = a.match(/^FY(\d+)\s*-\s*Q(\d)/); const fyB = b.match(/^FY(\d+)\s*-\s*Q(\d)/)
+                if (fyA && fyB) return (parseInt(fyA[1]) * 10 + parseInt(fyA[2])) - (parseInt(fyB[1]) * 10 + parseInt(fyB[2]))
+                if (fyA) return 1; if (fyB) return -1
+                return a.localeCompare(b)
+              })
+            if (activeDist['-'] || upcomingDist['-']) allTags.push('-')
+            const mx = Math.max(...allTags.map(t => (activeDist[t] ?? 0) + (upcomingDist[t] ?? 0)), 1)
+            return (
+              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #a78bfa', minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Tag Split</div>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
+                    <span style={{ color: '#38bdf8' }}>● Active</span>
+                    <span style={{ color: '#f59e0b' }}>● Upcoming</span>
+                  </div>
+                </div>
+                {allTags.map(tag => {
+                  const a = activeDist[tag] ?? 0
+                  const u = upcomingDist[tag] ?? 0
+                  return (
+                    <div key={tag} onClick={() => setDrillDown({ split: 'tag', value: tag })} title={`Click to see all ${tag} stores`} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <span style={{ width: 56, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }}>{tag}</span>
+                      <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
+                        <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
+                      </div>
+                      <span style={{ fontSize: 9, flexShrink: 0, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {a > 0 && <span style={{ color: '#38bdf8' }}>{a}</span>}
+                        {u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </div>
+        </div>{/* scroll wrapper */}
+      </div>}
+
 
       {/* ── Allocation Summary section ── */}
-      {(() => {
+      {dashTab === 'allocation' && (() => {
         // Column definitions per view
-        const viewDefs: Record<'all' | 'store' | 'mc', { key: string; label: string; align: 'left' | 'right'; color?: string; bold?: boolean }[]> = {
+        const viewDefs: Record<'all' | 'store' | 'mc', import('@/components/FilterableTable').FTColumn[]> = {
           all: [
             { key: 'division',     label: 'Division',   align: 'left' },
             { key: 'stores',       label: 'Stores',     align: 'right', color: '#7dd3fc' },
             { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
-            { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: '#94a3b8' },
+            { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: 'var(--text-secondary)' },
             { key: 'dc_stk_q',     label: 'DC Stock',   align: 'right', color: '#67e8f9' },
             { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
             { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
-            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },
+            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: 'var(--text-secondary)' },
             { key: 'mtd_sale_q',   label: 'MTD Sale',   align: 'right', color: '#38bdf8' },
             { key: 'proj_qty',     label: 'Proj Qty',   align: 'right', color: '#a78bfa' },
           ],
           store: [
+            { key: 'loc',          label: 'Location',   align: 'left',  render: (v) => v === 'DC' ? <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 10 }}>DC</span> : <span style={{ color: '#38bdf8', fontWeight: 700, fontSize: 10 }}>STORE</span> },
             { key: 'store_code',   label: 'Code',       align: 'left' },
             { key: 'store_name',   label: 'Store Name', align: 'left' },
             { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
-            { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: '#94a3b8' },
+            { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: 'var(--text-secondary)' },
             { key: 'dc_stk_q',     label: 'DC Stock',   align: 'right', color: '#67e8f9' },
             { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
             { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
-            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },
+            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: 'var(--text-secondary)' },
             { key: 'mtd_sale_q',   label: 'MTD Sale',   align: 'right', color: '#38bdf8' },
             { key: 'proj_qty',     label: 'Proj Qty',   align: 'right', color: '#a78bfa' },
           ],
           mc: [
+            { key: 'loc', label: 'Location', align: 'left', render: (v) => v === 'DC' ? <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 10 }}>DC</span> : <span style={{ color: '#38bdf8', fontWeight: 700, fontSize: 10 }}>STORE</span> },
             { key: 'division',     label: 'Division',   align: 'left' },
             { key: 'section',      label: 'Section',    align: 'left' },
             { key: 'department',   label: 'Department', align: 'left' },
             { key: 'stores',       label: 'Stores',     align: 'right', color: '#7dd3fc' },
             { key: 'articles',     label: 'Articles',   align: 'right', color: '#7dd3fc' },
-            { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: '#94a3b8' },
+            { key: 'stk_qty',      label: 'Store Stock', align: 'right', color: 'var(--text-secondary)' },
             { key: 'dc_stk_q',     label: 'DC Stock',   align: 'right', color: '#67e8f9' },
             { key: 'alloc_qty',    label: 'Alloc Qty',  align: 'right', color: '#4ade80', bold: true },
             { key: 'in_transit_q', label: 'In-Transit', align: 'right', color: '#fb923c' },
-            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: '#94a3b8' },
+            { key: 'lm_sale_q',    label: 'LM Sale',    align: 'right', color: 'var(--text-secondary)' },
             { key: 'mtd_sale_q',   label: 'MTD Sale',   align: 'right', color: '#38bdf8' },
             { key: 'proj_qty',     label: 'Proj Qty',   align: 'right', color: '#a78bfa' },
           ],
@@ -699,13 +1190,6 @@ export default function Dashboard() {
           { key: 'store', label: 'Store Wise' },
           { key: 'mc',    label: 'Div · Section · Dept' },
         ]
-
-        function fmtCell(row: AllocRow, key: string) {
-          const v = (row as Record<string, unknown>)[key]
-          if (v == null || v === 0 && key !== 'alloc_qty') return <span style={{ color: '#334155' }}>—</span>
-          if (typeof v === 'number') return v.toLocaleString()
-          return String(v)
-        }
 
         // ── "All" tab: full detail view ──────────────────────────────────────
         const NUM_QTY_COLS = [
@@ -722,7 +1206,7 @@ export default function Dashboard() {
           return (
             <>
               {/* icode multi-select bar */}
-              <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e293b', background: '#0d1525' }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--card-border)', background: 'var(--content-bg)' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                   {/* Selected chips */}
                   {selectedIcodes.map(ic => (
@@ -732,7 +1216,7 @@ export default function Dashboard() {
                         const next = selectedIcodes.filter(x => x !== ic)
                         setSelectedIcodes(next)
                         loadDetail(next, 0)
-                      }} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}>✕</button>
+                      }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}>✕</button>
                     </span>
                   ))}
                   {/* Search input */}
@@ -746,10 +1230,10 @@ export default function Dashboard() {
                       }}
                       onFocus={() => { setShowSugg(true); searchIcodes(icodeQuery) }}
                       placeholder="Search icode / barcode…"
-                      style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 5, color: '#e2e8f0', fontSize: 11, padding: '4px 10px', outline: 'none', width: 200 }}
+                      style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-primary)', fontSize: 11, padding: '4px 10px', outline: 'none', width: 200 }}
                     />
                     {showSugg && icodeSuggestions.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1e293b', border: '1px solid #334155', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.6)', minWidth: 220, maxHeight: 260, overflowY: 'auto', marginTop: 2 }}>
+                      <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.6)', minWidth: 220, maxHeight: 260, overflowY: 'auto', marginTop: 2 }}>
                         {icodeSuggestions.map(bc => {
                           const selected = selectedIcodes.includes(bc)
                           return (
@@ -777,11 +1261,11 @@ export default function Dashboard() {
                   </div>
                   {selectedIcodes.length > 0 && (
                     <button onClick={() => { setSelectedIcodes([]); loadDetail([], 0) }}
-                      style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>
+                      style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>
                       Clear all
                     </button>
                   )}
-                  <span style={{ fontSize: 11, color: '#334155', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
                     {detail ? `${detail.total.toLocaleString()} rows · page ${detail.page + 1}/${detail.total_pages}` : ''}
                   </span>
                 </div>
@@ -789,17 +1273,17 @@ export default function Dashboard() {
 
               {/* Table */}
               {detailLoading ? (
-                <div style={{ padding: 24, textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading…</div>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
               ) : !detail?.available ? (
-                <div style={{ padding: 24, textAlign: 'center', color: '#475569', fontSize: 12 }}>Data not available.</div>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Data not available.</div>
               ) : (
                 <>
                   <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
                     <table style={{ borderCollapse: 'collapse', fontSize: 11, whiteSpace: 'nowrap' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                        <tr style={{ background: '#0f172a' }}>
+                        <tr style={{ background: 'var(--content-bg)' }}>
                           {detailCols.map(c => (
-                            <th key={c} style={{ padding: '6px 10px', fontWeight: 700, fontSize: 10, color: NUM_QTY_COLS.includes(c) ? '#7dd3fc' : '#64748b', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid #334155', textAlign: NUM_QTY_COLS.includes(c) ? 'right' : 'left' }}>
+                            <th key={c} style={{ padding: '6px 10px', fontWeight: 700, fontSize: 10, color: NUM_QTY_COLS.includes(c) ? '#7dd3fc' : '#64748b', textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: '1px solid var(--card-border)', textAlign: NUM_QTY_COLS.includes(c) ? 'right' : 'left' }}>
                               {c.replace(/_/g, ' ')}
                             </th>
                           ))}
@@ -824,12 +1308,12 @@ export default function Dashboard() {
                   </div>
                   {/* Pagination */}
                   {detail.total_pages > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid #1e293b', background: '#0d1525' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--card-border)', background: 'var(--content-bg)' }}>
                       <button disabled={detailPage === 0} onClick={() => { const p = detailPage - 1; loadDetail(selectedIcodes, p) }}
-                        style={{ padding: '3px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: detailPage === 0 ? 'not-allowed' : 'pointer' }}>‹ Prev</button>
-                      <span style={{ fontSize: 11, color: '#475569' }}>Page {detailPage + 1} / {detail.total_pages}</span>
+                        style={{ padding: '3px 10px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 11, cursor: detailPage === 0 ? 'not-allowed' : 'pointer' }}>‹ Prev</button>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Page {detailPage + 1} / {detail.total_pages}</span>
                       <button disabled={detailPage >= detail.total_pages - 1} onClick={() => { const p = detailPage + 1; loadDetail(selectedIcodes, p) }}
-                        style={{ padding: '3px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, color: '#64748b', fontSize: 11, cursor: detailPage >= detail.total_pages - 1 ? 'not-allowed' : 'pointer' }}>Next ›</button>
+                        style={{ padding: '3px 10px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, color: 'var(--text-muted)', fontSize: 11, cursor: detailPage >= detail.total_pages - 1 ? 'not-allowed' : 'pointer' }}>Next ›</button>
                     </div>
                   )}
                 </>
@@ -839,20 +1323,20 @@ export default function Dashboard() {
         })() : null
 
         return (
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #334155', background: '#0f172a', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--card-border)', background: 'var(--content-bg)', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={S.cardTitle}>Allocation Summary</span>
-                <span style={{ fontSize: 10, color: '#334155', fontFamily: 'monospace' }}>T_ALLOCATION_FOR_ALL_DIVISION</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>T_ALLOCATION_FOR_ALL_DIVISION</span>
                 {alloc?.total_rows != null && (
-                  <span style={{ fontSize: 10, color: '#334155', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 7px' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, padding: '1px 7px' }}>
                     {alloc.total_rows.toLocaleString()} rows
                   </span>
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ display: 'flex', border: '1px solid #334155', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', border: '1px solid var(--card-border)', borderRadius: 6, overflow: 'hidden' }}>
                   {TABS.map(t => (
                     <button key={t.key} onClick={() => {
                       setAllocView(t.key)
@@ -867,284 +1351,34 @@ export default function Dashboard() {
                   ))}
                 </div>
                 <button onClick={() => allocView === 'all' ? loadDetail(selectedIcodes, detailPage) : loadAlloc(allocView)}
-                  style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '4px 9px', cursor: 'pointer' }}>↻</button>
+                  style={{ background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 10, padding: '4px 9px', cursor: 'pointer' }}>↻</button>
               </div>
             </div>
 
             {/* All tab body */}
             {allocView === 'all' ? detailBody : (
               allocLoading ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Loading…</div>
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
               ) : !alloc?.available ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
               ) : (
-                <div style={{ overflowX: 'auto', maxHeight: 400, overflowY: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                      <tr style={{ background: '#0f172a' }}>
-                        {cols.map(h => (
-                          <th key={h.key} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: h.align, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>
-                            {h.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {alloc.rows.map((row, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04', borderBottom: '1px solid #1e293b' }}>
-                          {cols.map(col => (
-                            <td key={col.key} style={{ padding: '6px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: col.bold ? 700 : 400, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                              {fmtCell(row, col.key)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                    {alloc.totals && (
-                      <tfoot style={{ position: 'sticky', bottom: 0 }}>
-                        <tr style={{ background: '#0f1f2e', borderTop: '2px solid #334155' }}>
-                          {cols.map((col, ci) => (
-                            <td key={col.key} style={{ padding: '8px 12px', textAlign: col.align, color: col.color ?? '#e2e8f0', fontWeight: 800, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                              {ci === 0 ? 'TOTAL' : fmtCell(alloc.totals as AllocRow, col.key)}
-                            </td>
-                          ))}
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
+                <FilterableTable
+                  columns={cols}
+                  rows={alloc.rows as Record<string, unknown>[]}
+                  maxHeight={420}
+                  globalSearch
+                  footerRow={alloc.totals as Record<string, unknown> | null}
+                  fontSize={12}
+                />
               )
             )}
           </div>
         )
       })()}
 
-      {/* ── Row 2: Oracle data + Last run ── */}
-      <div style={S.grid2}>
 
-        {/* Oracle master data panel */}
-        <div style={S.card}>
-          <div style={S.cardHead}><span style={S.cardTitle}>Oracle Master Data</span>
-            <span style={{ fontSize: 10, color: oracle.oracle_ok ? '#4ade80' : '#f87171' }}>
-              {oracle.oracle_ok ? '● Live' : '● Offline'}
-            </span>
-          </div>
-          <div style={S.cardBody}>
-            <SmRow label="Active stores" value={fmtNum(oracle.total_stores)} valueColor="#4ade80" />
-            <SmRow label={`Active-NSO (since ${oracle.nso_from_date ?? '…'})`} value={fmtNum(oracle.active_nso)} valueColor="#fb923c" />
-            <SmRow label="Upcoming stores" value={fmtNum(oracle.upcoming_stores)} valueColor="#f59e0b" />
-            {Object.entries(oracle.store_status_distribution)
-              .filter(([k]) => k !== 'ACTIVE' && k !== 'UPCOMING')
-              .map(([k, v]) => <SmRow key={k} label={k.charAt(0) + k.slice(1).toLowerCase() + ' stores'} value={fmtNum(v)} />)
-            }
-            <SmRow label="Total stores (all)" value={fmtNum(oracle.total_all_stores)} valueColor="#818cf8" />
-            <SmRow label="Total items (all)" value={fmtNum(oracle.total_items)} />
-            <SmRow label="Unique articles" value={fmtNum(oracle.articles)} />
-            <SmRow label="Divisions" value={fmtNum(oracle.divisions)} />
-            <SmRow label="Departments" value={fmtNum(oracle.departments)} />
 
-            {attrEntries.length > 0 && (
-              <>
-                <SectionHeading>Items by Campaign (ATTRIBUTE1)</SectionHeading>
-                {attrEntries.slice(0, 8).map(([attr, cnt], i) => (
-                  <HBar key={attr} label={attr} value={cnt} max={maxAttr} color={DIV_COLORS[i % DIV_COLORS.length]} />
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Last run summary */}
-        <div style={S.card}>
-          <div style={S.cardHead}>
-            <span style={S.cardTitle}>Last Calculation Run</span>
-            {lr.has_last_run && (
-              <button style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '2px 9px', cursor: 'pointer' }}
-                onClick={() => navigate('/calculation')}>
-                Open →
-              </button>
-            )}
-          </div>
-          <div style={S.cardBody}>
-            {!lr.has_last_run ? (
-              <div style={{ color: '#64748b', fontSize: 12, padding: '16px 0' }}>No completed runs in memory. Run a calculation to see results here.</div>
-            ) : (
-              <>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                  {lr.label} &nbsp;·&nbsp; {fmtDate(lr.completed_at)}
-                </div>
-                <SmRow label="Total REQ Qty" value={fmtNum(lr.total_req)} valueColor="#4ade80" />
-                <SmRow label="Stores covered" value={fmtNum(lr.stores)} />
-                <SmRow label="Fill rate achieved" value={pct(lr.fill_rate_achieved)} valueColor="#38bdf8" />
-                <SmRow label="Total PBS" value={fmtNum(lr.total_pbs)} />
-                <SmRow label="Zero-REQ rows" value={fmtNum(lr.zero_req_rows)} />
-                <SmRow label="Capped rows" value={fmtNum(lr.capped_rows)} />
-                <SmRow label="Duration" value={lr.duration_s != null ? `${lr.duration_s}s` : '—'} />
-                <SmRow label="Factor set" value={lr.factor_set_name ?? '—'} />
-
-                {divBreak.length > 0 && (
-                  <>
-                    <SectionHeading>REQ by Division</SectionHeading>
-                    {divBreak.map((d, i) => (
-                      <HBar key={d.division} label={d.division} value={Math.round(d.total_req)} max={maxReq} color={DIV_COLORS[i % DIV_COLORS.length]} />
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Row 3: Store grades + Factor set + History stats ── */}
-      <div style={S.grid3}>
-
-        {/* Store grade distribution */}
-        <div style={S.card}>
-          <div style={S.cardHead}><span style={S.cardTitle}>Store Grade Distribution</span></div>
-          <div style={S.cardBody}>
-            {gradeEntries.length === 0 ? (
-              <div style={{ color: '#64748b', fontSize: 12 }}>No grade data available.</div>
-            ) : (
-              <>
-                <div style={{ marginBottom: 10 }}>
-                  {gradeEntries.map(([g, cnt]) => (
-                    <span key={g} style={S.grade(g)}>{g}: {cnt}</span>
-                  ))}
-                </div>
-                {gradeEntries.map(([g, cnt], i) => (
-                  <HBar key={g} label={g} value={cnt} max={maxGrade} color={DIV_COLORS[i % DIV_COLORS.length]} />
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Active factor set */}
-        <div style={S.card}>
-          <div style={S.cardHead}>
-            <span style={S.cardTitle}>Factor Set</span>
-            <button style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '2px 9px', cursor: 'pointer' }}
-              onClick={() => navigate('/factors')}>
-              Manage →
-            </button>
-          </div>
-          <div style={S.cardBody}>
-            {!fct.active_factor_set_name ? (
-              <div style={{ color: '#f87171', fontSize: 12 }}>No active factor set. Create one to run calculations.</div>
-            ) : (
-              <>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', marginBottom: 12 }}>
-                  ★ {fct.active_factor_set_name}
-                </div>
-                <SmRow label="Total factor sets" value={fmtNum(fct.total_factor_sets)} />
-                {fct.active_fill_rate != null && <SmRow label="Fill rate target" value={pct(fct.active_fill_rate)} valueColor="#38bdf8" />}
-                {fct.active_safety_days != null && <SmRow label="Safety days" value={`${fct.active_safety_days} days`} />}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* History stats */}
-        <div style={S.card}>
-          <div style={S.cardHead}>
-            <span style={S.cardTitle}>Run Statistics</span>
-            <button style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 10, padding: '2px 9px', cursor: 'pointer' }}
-              onClick={() => navigate('/history')}>
-              Full history →
-            </button>
-          </div>
-          <div style={S.cardBody}>
-            <SmRow label="Completed runs" value={fmtNum(hist.total_complete)} valueColor="#4ade80" />
-            <SmRow label="Failed runs" value={fmtNum(hist.total_error)} valueColor={hist.total_error > 0 ? '#f87171' : '#64748b'} />
-            <SmRow label="Avg duration" value={hist.avg_duration_s != null ? `${hist.avg_duration_s}s` : '—'} />
-            <SmRow label="Avg total REQ" value={hist.avg_total_req != null ? fmtNum(hist.avg_total_req) : '—'} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Row 4: Recent runs + System status + Quick actions ── */}
-      <div style={S.grid2}>
-
-        {/* Recent run list */}
-        <div style={S.card}>
-          <div style={S.cardHead}><span style={S.cardTitle}>Recent Runs</span></div>
-          <div style={{ padding: '0 14px' }}>
-            {hist.recent_runs.length === 0 ? (
-              <div style={{ padding: '16px 0', color: '#64748b', fontSize: 12 }}>No runs yet.</div>
-            ) : hist.recent_runs.map(r => (
-              <div key={r.run_id} style={S.runRow(r.status)}>
-                <div style={S.dot(r.status)} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, color: '#e2e8f0', fontSize: 12 }}>
-                    {r.label || r.run_id.slice(0, 12)}
-                  </div>
-                  <div style={{ fontSize: 10, color: '#475569' }}>
-                    {fmtDate(r.started_at)}
-                    {r.attribute1 && ` · ${r.attribute1}`}
-                    {r.duration_s && ` · ${r.duration_s}s`}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
-                  {r.status === 'complete' && (
-                    <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtNum(r.total_req)}
-                    </div>
-                  )}
-                  {(r.exception_errors > 0 || r.exception_warnings > 0) && (
-                    <div style={{ fontSize: 10, color: r.exception_errors > 0 ? '#f87171' : '#fbbf24' }}>
-                      {r.exception_errors > 0 ? `${r.exception_errors}E ` : ''}{r.exception_warnings > 0 ? `${r.exception_warnings}W` : ''}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right column: System status + Quick actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* System status */}
-          <div style={S.card}>
-            <div style={S.cardHead}><span style={S.cardTitle}>System Status</span></div>
-            <div style={S.cardBody}>
-              {phasesDone.map(p => (
-                <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid #0f172a', fontSize: 12 }}>
-                  <span style={{ color: p.ok ? '#4ade80' : '#f87171', fontSize: 14 }}>{p.ok ? '✔' : '✖'}</span>
-                  <span style={{ color: p.ok ? '#94a3b8' : '#64748b' }}>{p.label}</span>
-                </div>
-              ))}
-              <div style={{ fontSize: 10, color: '#334155', marginTop: 8 }}>
-                Summary computed in {data.summary_ms}ms
-              </div>
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div style={S.card}>
-            <div style={S.cardHead}><span style={S.cardTitle}>Quick Actions</span></div>
-            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button style={S.actionBtn('#4ade80')} onClick={() => navigate('/calculation')}>
-                <div style={S.actionTitle}>▶ New Calculation</div>
-                <div style={S.actionSub}>Run replenishment for PREWINTER campaign</div>
-              </button>
-              <button style={S.actionBtn('#f59e0b')} onClick={() => navigate('/factors')}>
-                <div style={S.actionTitle}>⚙ Manage Factors</div>
-                <div style={S.actionSub}>{fct.active_factor_set_name ? `Active: ${fct.active_factor_set_name}` : 'No active factor set'}</div>
-              </button>
-              <button style={S.actionBtn('#818cf8')} onClick={() => navigate('/master-data')}>
-                <div style={S.actionTitle}>🗄 Master Data Explorer</div>
-                <div style={S.actionSub}>{oracle.total_stores} stores · {oracle.total_items.toLocaleString()} items</div>
-              </button>
-              <button style={S.actionBtn('#38bdf8')} onClick={() => navigate('/history')}>
-                <div style={S.actionTitle}>🕑 Calculation History</div>
-                <div style={S.actionSub}>{hist.total_complete} completed · {hist.total_error} failed</div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
+
   )
 }

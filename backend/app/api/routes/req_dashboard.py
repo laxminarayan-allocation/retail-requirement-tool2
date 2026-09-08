@@ -161,7 +161,7 @@ def _fetch_sparky_to_parquet() -> None:
 
 @router.get("/sparky_pivot")
 def get_sparky_pivot(
-    department: Optional[str] = Query(None),
+    department: List[str] = Query(default=[]),
     article: Optional[str] = Query(None),
     cat4: Optional[str] = Query(None),
 ):
@@ -193,7 +193,7 @@ def get_sparky_pivot(
         raise HTTPException(status_code=404, detail="No Sparky data cached yet")
 
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     if cat4:
@@ -325,7 +325,7 @@ def get_size_pivot(
         raise HTTPException(status_code=404, detail="No Size data found")
 
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     if cat4:
@@ -399,8 +399,8 @@ _MRP_PARQUET_OBJ   = "V_MRP_PIVOT"
 
 @router.get("/mrp_pivot")
 def get_mrp_pivot(
-    department:   Optional[str] = Query(None),
-    display_type: Optional[str] = Query(None),
+    department:   List[str]     = Query(default=[]),
+    display_type: List[str]     = Query(default=[]),
     article:      Optional[str] = Query(None),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
@@ -441,9 +441,9 @@ def get_mrp_pivot(
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="No MRP data found")
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if display_type:
-        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+        df = df[df["display_type"].isin(display_type)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     if division:
@@ -469,7 +469,11 @@ WITH T_ART_BASE AS (
         SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
-    FROM CK_A2166.V_ART_REQ_APPS
+    FROM (
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_ART_REQ_APPS
+        UNION ALL
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_ART_REQ_GM
+    ) SRC
     {sw} {sw_extra}
     GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME
 ),
@@ -509,13 +513,13 @@ ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME
 """
 
 _ART_PARQUET_OWNER = "CK_A2166"
-_ART_PARQUET_OBJ   = "V_ART_PIVOT"
+_ART_PARQUET_OBJ   = "V_ART_PIVOT_V2"
 
 
 @router.get("/art_pivot")
 def get_art_pivot(
-    department:   Optional[str] = Query(None),
-    display_type: Optional[str] = Query(None),
+    department:   List[str]     = Query(default=[]),
+    display_type: List[str]     = Query(default=[]),
     article:      Optional[str] = Query(None),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
@@ -556,9 +560,9 @@ def get_art_pivot(
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="No Article Req data found")
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if display_type:
-        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+        df = df[df["display_type"].isin(display_type)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     if division:
@@ -584,7 +588,11 @@ WITH T_MC_BASE AS (
         SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
         SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
         SUM(PBS) PBS, SUM(REQ) REQ
-    FROM CK_A2166.V_MC_REQ_APPS_2
+    FROM (
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_MC_REQ_APPS_2
+        UNION ALL
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_MC_REQ_GM
+    ) SRC
     {sw} {sw_extra}
     GROUP BY DEPARTMENT, DISPLAY_TYPE
 ),
@@ -624,13 +632,13 @@ ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE
 """
 
 _MC_PARQUET_OWNER = "CK_A2166"
-_MC_PARQUET_OBJ   = "V_MC_PIVOT"
+_MC_PARQUET_OBJ   = "V_MC_PIVOT_V2"
 
 
 @router.get("/mc_pivot")
 def get_mc_pivot(
-    department:   Optional[str] = Query(None),
-    display_type: Optional[str] = Query(None),
+    department:   List[str]     = Query(default=[]),
+    display_type: List[str]     = Query(default=[]),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
@@ -670,9 +678,9 @@ def get_mc_pivot(
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="No MC Req data found")
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if display_type:
-        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+        df = df[df["display_type"].isin(display_type)]
     if division:
         df = df[df["division"].isin(division)]
     if attribute1:
@@ -687,13 +695,13 @@ def get_mc_pivot(
 # ── Filter meta (DIVISION + ATTRIBUTE1 options) ────────────────────────────────
 
 _FILTER_META_SQL = """
-SELECT DISTINCT DIVISION, ATTRIBUTE1
+SELECT DISTINCT DIVISION, ATTRIBUTE1, DEPARTMENT
 FROM SSRK.ITEM_MV
 WHERE DIVISION IS NOT NULL
-ORDER BY DIVISION, ATTRIBUTE1
+ORDER BY DIVISION, ATTRIBUTE1, DEPARTMENT
 """
 _FILTER_META_PARQUET_OWNER = "SSRK"
-_FILTER_META_PARQUET_OBJ   = "ITEM_MV_FILTER_META"
+_FILTER_META_PARQUET_OBJ   = "ITEM_MV_FILTER_META_V2"
 
 
 @router.get("/filter_meta")
@@ -717,10 +725,20 @@ def get_filter_meta():
             logger.exception("Filter meta fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
-        return {"success": True, "data": {"divisions": [], "attribute1s": []}}
+        return {"success": True, "data": {"divisions": [], "attribute1s": [], "departments": [], "display_types": []}}
     divisions   = sorted(df["division"].dropna().unique().tolist())
     attribute1s = sorted(df["attribute1"].dropna().unique().tolist())
-    return {"success": True, "data": {"divisions": divisions, "attribute1s": attribute1s}}
+    departments = sorted(df["department"].dropna().unique().tolist()) if "department" in df.columns else []
+    # derive display_types from MRP parquet cache (fast, no extra Oracle query)
+    display_types: list = []
+    try:
+        if has_output(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ):
+            mrp_df = read_cache(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ)
+            if mrp_df is not None and "display_type" in mrp_df.columns:
+                display_types = sorted(mrp_df["display_type"].dropna().unique().tolist())
+    except Exception:
+        pass
+    return {"success": True, "data": {"divisions": divisions, "attribute1s": attribute1s, "departments": departments, "display_types": display_types}}
 
 
 # ── Store names list ───────────────────────────────────────────────────────────
@@ -812,12 +830,50 @@ ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP
 
 _BARCODE_PARQUET_OWNER = "CK_A2166"
 _BARCODE_PARQUET_OBJ   = "V_BARCODE_PIVOT"
+_OPTION_PARQUET_OWNER  = "CK_A2166"
+_OPTION_PARQUET_OBJ    = "V_OPTION_PIVOT"
+_LIST_PARQUET_OWNER    = "CK_A2166"
+_LIST_PARQUET_OBJ      = "V_LIST_PIVOT"
+
+# In-memory cache for pivot DataFrames (avoids re-reading parquet on every request)
+_pivot_mem_cache: dict = {}
+
+
+def _get_pivot_df(owner: str, obj: str):
+    """Return cached DataFrame or read from parquet (caches result in memory)."""
+    import pandas as pd
+    key = f"{owner}__{obj}"
+    if key in _pivot_mem_cache:
+        return _pivot_mem_cache[key]
+    if has_output(owner, obj):
+        df = read_cache(owner, obj)
+        _pivot_mem_cache[key] = df
+        return df
+    return None
+
+
+def warm_req_pivots():
+    """Pre-load barcode/option/list pivot parquets into memory. Call from startup warmup."""
+    pairs = [
+        (_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ),
+        (_OPTION_PARQUET_OWNER,  _OPTION_PARQUET_OBJ),
+        (_LIST_PARQUET_OWNER,    _LIST_PARQUET_OBJ),
+    ]
+    loaded = []
+    for owner, obj in pairs:
+        try:
+            df = _get_pivot_df(owner, obj)
+            if df is not None:
+                loaded.append(f"{obj}({len(df)}rows)")
+        except Exception as exc:
+            logger.warning("Warmup: failed to load %s__%s: %s", owner, obj, exc)
+    return loaded
 
 
 @router.get("/barcode_pivot")
 def get_barcode_pivot(
-    department:   Optional[str] = Query(None),
-    display_type: Optional[str] = Query(None),
+    department:   List[str]     = Query(default=[]),
+    display_type: List[str]     = Query(default=[]),
     article:      Optional[str] = Query(None),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
@@ -838,29 +894,30 @@ def get_barcode_pivot(
         except Exception as exc:
             logger.exception("Barcode pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
-    elif has_output(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ):
-        df = read_cache(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ)
     else:
-        try:
-            from app.db.oracle import get_pool
-            from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_barcode_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
-            _wc(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ, df)
-        except Exception as exc:
-            logger.exception("Barcode pivot live fetch error")
-            raise HTTPException(status_code=500, detail=str(exc))
+        df = _get_pivot_df(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ)
+        if df is None:
+            try:
+                from app.db.oracle import get_pool
+                from app.core.parquet_cache import write_cache as _wc
+                pool = get_pool()
+                with pool.acquire() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(_build_barcode_sql(""))
+                        cols = [c[0].lower() for c in cur.description]
+                        rows = cur.fetchall()
+                df = pd.DataFrame(rows, columns=cols)
+                _wc(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ, df)
+                _pivot_mem_cache[f"{_BARCODE_PARQUET_OWNER}__{_BARCODE_PARQUET_OBJ}"] = df
+            except Exception as exc:
+                logger.exception("Barcode pivot live fetch error")
+                raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="No Barcode Req data found")
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if display_type:
-        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+        df = df[df["display_type"].isin(display_type)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     if division:
@@ -907,8 +964,8 @@ _OPTION_PARQUET_OBJ   = "V_OPTION_PIVOT"
 
 @router.get("/option_pivot")
 def get_option_pivot(
-    department:   Optional[str] = Query(None),
-    display_type: Optional[str] = Query(None),
+    department:   List[str]     = Query(default=[]),
+    display_type: List[str]     = Query(default=[]),
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
@@ -928,29 +985,30 @@ def get_option_pivot(
         except Exception as exc:
             logger.exception("Option pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
-    elif has_output(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ):
-        df = read_cache(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ)
     else:
-        try:
-            from app.db.oracle import get_pool
-            from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_option_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
-            _wc(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ, df)
-        except Exception as exc:
-            logger.exception("Option pivot live fetch error")
-            raise HTTPException(status_code=500, detail=str(exc))
+        df = _get_pivot_df(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ)
+        if df is None:
+            try:
+                from app.db.oracle import get_pool
+                from app.core.parquet_cache import write_cache as _wc
+                pool = get_pool()
+                with pool.acquire() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(_build_option_sql(""))
+                        cols = [c[0].lower() for c in cur.description]
+                        rows = cur.fetchall()
+                df = pd.DataFrame(rows, columns=cols)
+                _wc(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ, df)
+                _pivot_mem_cache[f"{_OPTION_PARQUET_OWNER}__{_OPTION_PARQUET_OBJ}"] = df
+            except Exception as exc:
+                logger.exception("Option pivot live fetch error")
+                raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="No Option Req data found")
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if display_type:
-        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+        df = df[df["display_type"].isin(display_type)]
     if division:
         df = df[df["division"].isin(division)]
     if attribute1:
@@ -990,8 +1048,8 @@ _LIST_PARQUET_OBJ   = "V_LIST_PIVOT"
 
 @router.get("/list_pivot")
 def get_list_pivot(
-    department:   Optional[str] = Query(None),
-    display_type: Optional[str] = Query(None),
+    department:   List[str]     = Query(default=[]),
+    display_type: List[str]     = Query(default=[]),
     article:      Optional[str] = Query(None),
     store_names:  List[str]     = Query(default=[]),
 ):
@@ -1010,29 +1068,30 @@ def get_list_pivot(
         except Exception as exc:
             logger.exception("List pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
-    elif has_output(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ):
-        df = read_cache(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ)
     else:
-        try:
-            from app.db.oracle import get_pool
-            from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_list_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
-            _wc(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ, df)
-        except Exception as exc:
-            logger.exception("List pivot live fetch error")
-            raise HTTPException(status_code=500, detail=str(exc))
+        df = _get_pivot_df(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ)
+        if df is None:
+            try:
+                from app.db.oracle import get_pool
+                from app.core.parquet_cache import write_cache as _wc
+                pool = get_pool()
+                with pool.acquire() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(_build_list_sql(""))
+                        cols = [c[0].lower() for c in cur.description]
+                        rows = cur.fetchall()
+                df = pd.DataFrame(rows, columns=cols)
+                _wc(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ, df)
+                _pivot_mem_cache[f"{_LIST_PARQUET_OWNER}__{_LIST_PARQUET_OBJ}"] = df
+            except Exception as exc:
+                logger.exception("List pivot live fetch error")
+                raise HTTPException(status_code=500, detail=str(exc))
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="No List Req data found")
     if department:
-        df = df[df["department"].str.contains(department, case=False, na=False)]
+        df = df[df["department"].isin(department)]
     if display_type:
-        df = df[df["display_type"].str.contains(display_type, case=False, na=False)]
+        df = df[df["display_type"].isin(display_type)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
     return {"success": True, "data": {

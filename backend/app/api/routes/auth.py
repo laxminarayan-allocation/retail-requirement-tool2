@@ -6,22 +6,71 @@ Admin email (ADMIN_EMAIL) automatically receives the admin role on signup.
 import logging
 import random
 import string
+import time
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from typing import Optional, Dict
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_token
 from app.models.response_models import APIResponse
 from app.repositories.user_repository import (
     create_user, get_user_by_email, get_user_by_id, update_last_login,
-    set_user_role, set_user_active,
+    set_user_role, set_user_active, set_session_limits,
     create_role_request, get_pending_request_for_user, list_role_requests, review_role_request,
     log_action, list_logs, list_users, ROLE_LEVEL,
+    get_user_page_access, set_user_page_access, delete_user_page_access,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+# ── In-memory session store ────────────────────────────────────────────────────
+# {session_id: {user_id, device_type, ts}}
+_active_sessions: Dict[str, dict] = {}
+_SESSION_TTL = 300  # 5 minutes; heartbeat every 60s from frontend
+
+def _purge_expired():
+    now = time.time()
+    expired = [sid for sid, s in _active_sessions.items() if now - s["ts"] > _SESSION_TTL]
+    for sid in expired:
+        del _active_sessions[sid]
+
+
+def _parse_ua(ua: str) -> dict:
+    """Extract browser name and OS from raw User-Agent string."""
+    ua = ua.lower()
+    # Browser detection (order matters — Edge/OPR before Chrome)
+    if "edg/" in ua or "edge/" in ua:
+        browser = "Edge"
+    elif "opr/" in ua or "opera" in ua:
+        browser = "Opera"
+    elif "chrome/" in ua and "chromium" not in ua:
+        browser = "Chrome"
+    elif "firefox/" in ua:
+        browser = "Firefox"
+    elif "safari/" in ua and "chrome" not in ua:
+        browser = "Safari"
+    elif "msie" in ua or "trident/" in ua:
+        browser = "IE"
+    else:
+        browser = "Browser"
+    # OS / Device
+    if "iphone" in ua:
+        os_name = "iPhone"
+    elif "ipad" in ua:
+        os_name = "iPad"
+    elif "android" in ua:
+        os_name = "Android"
+    elif "windows nt" in ua:
+        os_name = "Windows"
+    elif "macintosh" in ua or "mac os x" in ua:
+        os_name = "macOS"
+    elif "linux" in ua:
+        os_name = "Linux"
+    else:
+        os_name = "Unknown OS"
+    return {"browser": browser, "os": os_name}
 
 
 # ── Request models ─────────────────────────────────────────────────────────────
@@ -231,14 +280,94 @@ async def signin(body: SigninRequest, request: Request):
     if not user["is_active"]:
         return APIResponse.fail(message="This account has been deactivated. Contact your admin.")
 
+    # ── Session limit check ──────────────────────────────────────────────────
+    ua = request.headers.get("user-agent", "").lower()
+    device_type = "mobile" if any(k in ua for k in ("mobile", "android", "iphone", "ipad")) else "desktop"
+    _purge_expired()
+
+    max_allowed = user.get(f"max_{device_type}_sessions", 1) or 1
+    action = user.get("session_limit_action", "block") or "block"
+    user_dev_sessions = {
+        sid: s for sid, s in _active_sessions.items()
+        if s["user_id"] == user["id"] and s["device_type"] == device_type
+    }
+    if len(user_dev_sessions) >= max_allowed:
+        if action == "kick":
+            # Remove oldest session(s) to make room
+            sorted_sids = sorted(user_dev_sessions, key=lambda sid: user_dev_sessions[sid]["ts"])
+            for sid in sorted_sids[:len(user_dev_sessions) - max_allowed + 1]:
+                del _active_sessions[sid]
+        else:
+            dev_label = "desktop" if device_type == "desktop" else "mobile"
+            conflict_sessions = [
+                {
+                    "ip": s.get("ip", ""),
+                    "device_name": s.get("device_name", ""),
+                    "browser": s.get("ua_info", {}).get("browser", ""),
+                    "os": s.get("ua_info", {}).get("os", ""),
+                    "since": int(s.get("ts", 0)),
+                }
+                for s in user_dev_sessions.values()
+            ]
+            return APIResponse.fail(
+                message=f"Login limit reached: max {max_allowed} {dev_label} session(s) allowed. "
+                        f"Please logout from another {dev_label} first.",
+                data={"conflict_sessions": conflict_sessions, "user_id": user["id"], "device_type": device_type}
+            )
+    # ── Proceed with login ───────────────────────────────────────────────────
     update_last_login(user["id"])
     token = create_token(user["id"], user["email"], user["full_name"], user["role"])
     log_action(user["id"], user["email"], "signin", ip=_client_ip(request))
     logger.info("User signin: %s role=%s", user["email"], user["role"])
 
+    session_id = f"{user['id']}_{int(time.time() * 1000)}_{random.randint(1000,9999)}"
+    _active_sessions[session_id] = {
+        "user_id": user["id"], "device_type": device_type,
+        "ts": time.time(), "ip": _client_ip(request),
+        "ua_info": _parse_ua(ua),
+    }
+
     return APIResponse.ok(
-        data={"token": token, "user": _safe_user(user)},
+        data={"token": token, "user": _safe_user(user), "session_id": session_id},
         message="Signed in successfully.",
+    )
+
+
+@router.post("/force-login", response_model=APIResponse)
+async def force_login(request: Request):
+    """Kick all existing sessions for this user+device_type and create a new session."""
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+    if not email or not password:
+        return APIResponse.fail(message="Email and password required.")
+    user = get_user_by_email(email)
+    if not user or not user.get("is_active"):
+        return APIResponse.fail(message="Invalid credentials.")
+    if not verify_password(password, user.get("password_hash", "")):
+        return APIResponse.fail(message="Invalid credentials.")
+    ua = request.headers.get("user-agent", "").lower()
+    device_type = "mobile" if any(k in ua for k in ("mobile", "android", "iphone", "ipad")) else "desktop"
+    _purge_expired()
+    # Kick all existing sessions for this user+device
+    to_remove = [sid for sid, s in _active_sessions.items()
+                 if s["user_id"] == user["id"] and s["device_type"] == device_type]
+    for sid in to_remove:
+        del _active_sessions[sid]
+    update_last_login(user["id"])
+    token = create_token(user["id"], user["email"], user["full_name"], user["role"])
+    log_action(user["id"], user["email"], "force_login", ip=_client_ip(request),
+               details=f"kicked {len(to_remove)} session(s)")
+    session_id = f"{user['id']}_{int(time.time() * 1000)}_{random.randint(1000,9999)}"
+    _active_sessions[session_id] = {
+        "user_id": user["id"], "device_type": device_type,
+        "ts": time.time(), "ip": _client_ip(request),
+        "ua_info": _parse_ua(ua),
+        "device_name": body.get("device_name", ""),
+    }
+    return APIResponse.ok(
+        data={"token": token, "user": _safe_user(user), "session_id": session_id},
+        message=f"Logged in (kicked {len(to_remove)} existing session(s)).",
     )
 
 
@@ -286,7 +415,58 @@ async def signout(request: Request):
     user = getattr(request.state, "user", None)
     if user:
         log_action(user["sub"], user["email"], "signout", ip=_client_ip(request))
+        # Remove all sessions for this user
+        to_remove = [sid for sid, s in _active_sessions.items() if s["user_id"] == user["sub"]]
+        for sid in to_remove:
+            del _active_sessions[sid]
     return APIResponse.ok(message="Signed out.")
+
+
+@router.post("/session/heartbeat", response_model=APIResponse)
+async def session_heartbeat(request: Request):
+    """Frontend calls this every 60s to keep session alive. Body: {session_id, device_type}"""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return APIResponse.fail(message="Not authenticated.")
+    body = await request.json()
+    session_id = body.get("session_id", "")
+    device_type = body.get("device_type", "desktop")
+    _purge_expired()
+    if session_id:
+        raw_ua = request.headers.get("user-agent", "").lower()
+        device_name = body.get("device_name", "")
+        existing = _active_sessions.get(session_id, {})
+        _active_sessions[session_id] = {
+            "user_id": user["sub"], "device_type": device_type,
+            "ts": time.time(), "ip": _client_ip(request),
+            "ua_info": _parse_ua(raw_ua),
+            "device_name": device_name or existing.get("device_name", ""),
+        }
+    return APIResponse.ok(message="ok")
+
+
+@router.get("/active-sessions", response_model=APIResponse)
+async def active_sessions(request: Request):
+    """Returns count + detail of active sessions for current user."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return APIResponse.fail(message="Not authenticated.")
+    _purge_expired()
+    user_sessions = [s for s in _active_sessions.values() if s["user_id"] == user["sub"]]
+    desktop = sum(1 for s in user_sessions if s["device_type"] == "desktop")
+    mobile = sum(1 for s in user_sessions if s["device_type"] == "mobile")
+    sessions_detail = [
+        {
+            "device_type": s["device_type"],
+            "ip": s.get("ip", "—"),
+            "last_seen": int(s["ts"]),
+            "browser": s.get("ua_info", {}).get("browser", ""),
+            "os": s.get("ua_info", {}).get("os", ""),
+            "device_name": s.get("device_name", ""),
+        }
+        for s in sorted(user_sessions, key=lambda x: x["ts"], reverse=True)
+    ]
+    return APIResponse.ok(data={"desktop": desktop, "mobile": mobile, "sessions": sessions_detail})
 
 
 # ── Role requests (any authenticated user) ────────────────────────────────────
@@ -403,6 +583,36 @@ async def admin_set_role(user_id: str, body: SetRoleBody, request: Request):
     return APIResponse.ok(message=f"Role updated to '{body.role}'.")
 
 
+@router.patch("/users/{user_id}/session-limits", response_model=APIResponse)
+async def admin_set_session_limits(user_id: str, request: Request):
+    """Admin sets max desktop/mobile sessions and action for a user."""
+    if not _is_admin(request):
+        return APIResponse.fail(message="Admin access required.")
+    body = await request.json()
+    max_desktop = int(body.get("max_desktop_sessions", 1))
+    max_mobile  = int(body.get("max_mobile_sessions", 1))
+    action      = body.get("session_limit_action", "block")
+    if action not in ("block", "kick"):
+        action = "block"
+    set_session_limits(user_id, max_desktop, max_mobile, action)
+    # Optionally kick excess sessions immediately
+    _purge_expired()
+    excess = [
+        sid for sid, s in list(_active_sessions.items())
+        if s["user_id"] == user_id
+    ]
+    # re-count after limit set
+    for dt in ("desktop", "mobile"):
+        limit = max_desktop if dt == "desktop" else max_mobile
+        dt_sessions = sorted(
+            [sid for sid in excess if _active_sessions.get(sid, {}).get("device_type") == dt],
+            key=lambda sid: _active_sessions[sid]["ts"]
+        )
+        for sid in dt_sessions[:max(0, len(dt_sessions) - limit)]:
+            _active_sessions.pop(sid, None)
+    return APIResponse.ok(message="Session limits updated.")
+
+
 @router.patch("/users/{user_id}/active", response_model=APIResponse)
 async def admin_set_active(user_id: str, request: Request, is_active: bool = True):
     if not _is_admin(request):
@@ -435,3 +645,41 @@ async def admin_get_logs(
         return APIResponse.fail(message="Admin access required.")
     rows, total = list_logs(user_email=user_email, action=action, limit=limit, offset=offset)
     return APIResponse.ok(data={"logs": rows, "total": total, "offset": offset, "limit": limit})
+
+
+# ── Page access endpoints ──────────────────────────────────────────────────────
+
+class PageAccessBody(BaseModel):
+    page_path: str
+    allowed: Optional[bool] = None  # None = remove override (revert to role-based)
+
+
+@router.get("/my-page-access", response_model=APIResponse)
+async def my_page_access(request: Request):
+    """Returns the calling user's explicit page access overrides."""
+    token_user = getattr(request.state, "user", None)
+    if not token_user:
+        return APIResponse.fail(message="Not authenticated.")
+    access = get_user_page_access(token_user["sub"])
+    return APIResponse.ok(data={"page_access": access})
+
+
+@router.get("/users/{user_id}/page-access", response_model=APIResponse)
+async def admin_get_page_access(user_id: str, request: Request):
+    if not _is_admin(request):
+        return APIResponse.fail(message="Admin access required.")
+    access = get_user_page_access(user_id)
+    return APIResponse.ok(data={"page_access": access})
+
+
+@router.post("/users/{user_id}/page-access", response_model=APIResponse)
+async def admin_set_page_access(user_id: str, body: PageAccessBody, request: Request):
+    if not _is_admin(request):
+        return APIResponse.fail(message="Admin access required.")
+    token_user = getattr(request.state, "user", None)
+    admin_email = token_user["email"] if token_user else "admin"
+    if body.allowed is None:
+        delete_user_page_access(user_id, body.page_path)
+    else:
+        set_user_page_access(user_id, body.page_path, body.allowed, admin_email)
+    return APIResponse.ok(data={"updated": True})

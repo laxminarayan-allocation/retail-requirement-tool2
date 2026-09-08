@@ -1,9 +1,10 @@
-/**
- * NSO Dashboard — New Store Opening performance tracker.
- * Two views: Store View (Excel-style store summary) and Article Detail.
- */
-import { useEffect, useRef, useState, useCallback } from 'react'
+﻿// NSO Dashboard — New Store Opening performance tracker.
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import http from '@/api/http'
+import NumFilterDropdown, { NumFilterIcon, useNumFilter } from '@/components/NumFilterDropdown'
+import { useAuth, hasRole } from '@/context/AuthContext'
+import StaleBanner from '@/components/StaleBanner'
 
 async function apiFetch<T>(url: string, params?: Record<string, string>): Promise<T> {
   const res = await http.get<{ success: boolean; data: T; message: string | null }>(url, { params })
@@ -88,7 +89,7 @@ interface StoreRow {
 interface StoreSummaryData { stores: StoreRow[]; count: number; elapsed_ms: number }
 
 // ── Store Summary Component ────────────────────────────────────────────────────
-const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 'pct' | 'date' | 'qty' }[] = [
+const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 'pct' | 'date' | 'qty' | 'psf' }[] = [
   { key: 'tentetive_date', label: 'TENT DATE',    type: 'date' },
   { key: 'store_area',     label: 'AREA',         type: 'qty'  },
   { key: 'store_f_name',   label: 'STORE NAME',   type: 'text' },
@@ -99,7 +100,10 @@ const STORE_COLS: { key: string; label: string; type: 'text' | 'num' | 'lakh' | 
   { key: 'ttl_stk_v',      label: 'TTL STK(L)',   type: 'lakh' },
   { key: 'in_transit_v',   label: 'IN-TRANSIT(L)',type: 'lakh' },
   { key: 'to_v',           label: 'TO VAL(L)',    type: 'lakh' },
+  { key: 'lm_sl_val',       label: 'LM SALE(L)',   type: 'lakh' },
+  { key: 'lm_psf',          label: 'LM PSF(₹)',    type: 'psf'  },
   { key: 'mtd_sl_v',       label: 'MTD SALE(L)',  type: 'lakh' },
+  { key: 'mtd_psf',         label: 'MTD PSF(₹)',   type: 'psf'  },
   { key: 'ach_lm_pct',     label: 'ACH LM%',     type: 'pct'  },
   { key: 'ach_pct',        label: 'ACH%',         type: 'pct'  },
   { key: 'fill_rate',      label: 'FILL RATE%',   type: 'pct'  },
@@ -114,6 +118,12 @@ function fmtLakh(v: unknown): string {
   const n = Number(v)
   if (isNaN(n) || v == null) return '—'
   return n.toFixed(2)  // values already normalized to Lakhs by backend
+}
+function calcPsf(row: StoreRow, saleKey: 'lm_sl_val' | 'mtd_sl_v' = 'lm_sl_val'): string {
+  const sale = Number(row[saleKey])    // Lakhs
+  const area = Number(row.store_area)  // sq ft
+  if (isNaN(sale) || isNaN(area) || area <= 0) return '—'
+  return Math.round((sale * 1_00_000) / area).toLocaleString('en-IN')
 }
 function fmtQty(v: unknown): string {
   const n = Number(v)
@@ -255,11 +265,11 @@ function MobileKPIStrip({ items }: { items: { label: string; val: string; color:
     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 12px', scrollbarWidth: 'none' }}>
       {items.map(k => (
         <div key={k.label} style={{
-          flexShrink: 0, background: '#1e293b', borderRadius: 10, padding: '8px 14px',
-          border: '1px solid #334155', textAlign: 'center', minWidth: 90,
+          flexShrink: 0, background: 'var(--card-bg)', borderRadius: 10, padding: '8px 14px',
+          border: '1px solid var(--card-border)', textAlign: 'center', minWidth: 90,
         }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: k.color, lineHeight: 1 }}>{k.val}</div>
-          <div style={{ fontSize: 9, color: '#64748b', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.5 }}>{k.label}</div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.5 }}>{k.label}</div>
         </div>
       ))}
     </div>
@@ -273,15 +283,20 @@ function MobileStoreCard({ row, str }: { row: StoreRow; str?: number }) {
   const borderColor = isActive ? '#16a34a' : '#3b82f6'
   const statusColor = isActive ? '#4ade80' : '#7dd3fc'
   const statusBg = isActive ? '#14532d' : '#1e3a5f'
+  const _d = new Date()
+  const _mtdDays = _d.getDate() === 1
+    ? new Date(_d.getFullYear(), _d.getMonth(), 0).getDate()
+    : _d.getDate() - 1 || 1
+  const effOperDays = row.opert_days != null ? Math.min(row.opert_days, _mtdDays) : null
   return (
     <div style={{
-      background: '#1e293b', border: `1px solid ${borderColor}22`,
+      background: 'var(--card-bg)', border: `1px solid ${borderColor}22`,
       borderLeft: `3px solid ${borderColor}`, borderRadius: 10, padding: '12px 14px',
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       {/* Top row: name + status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e8f0', lineHeight: 1.3 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.3 }}>
           {row.store_f_name || row.store_name}
         </div>
         <span style={{
@@ -291,10 +306,10 @@ function MobileStoreCard({ row, str }: { row: StoreRow; str?: number }) {
         }}>{row.store_status}</span>
       </div>
       {/* Opening date + code */}
-      <div style={{ fontSize: 10, color: '#64748b', display: 'flex', gap: 10 }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 10 }}>
         <span>📅 {fmtDate(row.opening_date || row.tentetive_date)}</span>
         <span>🏪 {row.store_name}</span>
-        {row.opert_days != null && <span>⏱ {row.opert_days}d</span>}
+        {effOperDays != null && <span>⏱ {effOperDays}d</span>}
       </div>
       {/* Metrics grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
@@ -303,14 +318,14 @@ function MobileStoreCard({ row, str }: { row: StoreRow; str?: number }) {
           { label: 'PBS Val', val: fmtLakh(row.pbs_v) + ' L', color: '#facc15' },
           { label: 'Stk Val', val: fmtLakh(row.ttl_stk_v) + ' L', color: '#7dd3fc' },
           { label: 'In-Transit', val: fmtLakh(row.in_transit_v) + ' L', color: '#fb923c' },
-          { label: 'Oper Days', val: row.opert_days != null ? String(row.opert_days) + 'd' : '—', color: '#94a3b8' },
+          { label: 'Oper Days', val: effOperDays != null ? String(effOperDays) + 'd' : '—', color: 'var(--text-secondary)' },
           { label: 'Ach%', val: row.ach_pct != null ? Number(row.ach_pct).toFixed(1) + '%' : '—', color: pctColor(row.ach_pct != null ? Number(row.ach_pct) : null) },
           { label: 'Fill%', val: row.fill_rate != null ? Number(row.fill_rate).toFixed(1) + '%' : '—', color: pctColor(row.fill_rate != null ? Number(row.fill_rate) : null) },
           { label: 'STR', val: str != null ? str.toFixed(1) + 'd' : '—', color: '#c084fc' },
         ].map(m => (
-          <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '5px 8px' }}>
+          <div key={m.label} style={{ background: 'var(--content-bg)', borderRadius: 6, padding: '5px 8px' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}</div>
-            <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>{m.label}</div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>{m.label}</div>
           </div>
         ))}
       </div>
@@ -328,15 +343,15 @@ function MobileFilterDrawer({ open, onClose, children, activeCount }: {
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000 }} />
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001,
-        background: '#1e293b', borderTop: '1px solid #334155',
+        background: 'var(--card-bg)', borderTop: '1px solid var(--card-border)',
         borderRadius: '16px 16px 0 0', padding: '0 0 24px',
         maxHeight: '80vh', overflowY: 'auto',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #334155' }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--card-border)' }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
             Filters {activeCount > 0 && <span style={{ background: '#1d4ed8', color: '#fff', fontSize: 10, padding: '2px 7px', borderRadius: 10, marginLeft: 6 }}>{activeCount}</span>}
           </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>✕</button>
         </div>
         <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {children}
@@ -356,7 +371,7 @@ function MobileMultiSelect({ label, options, selected, onChange }: {
   }, [selected, onChange])
   return (
     <div>
-      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
       <button onClick={() => setOpen(o => !o)} style={{
         width: '100%', textAlign: 'left', background: selected.length > 0 ? '#1e3a5f' : '#0f172a',
         border: `1px solid ${selected.length > 0 ? '#3b82f6' : '#334155'}`, borderRadius: 8,
@@ -367,12 +382,12 @@ function MobileMultiSelect({ label, options, selected, onChange }: {
         <span>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
+        <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
           {selected.length > 0 && (
             <div onClick={() => onChange([])} style={{ padding: '8px 12px', fontSize: 12, color: '#f87171', cursor: 'pointer' }}>✕ Clear all</div>
           )}
           {options.map(v => (
-            <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: '#94a3b8', borderTop: '1px solid #1e293b' }}>
+            <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)', borderTop: '1px solid #1e293b' }}>
               <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} style={{ accentColor: '#3b82f6', width: 16, height: 16 }} />
               {v}
             </label>
@@ -396,6 +411,7 @@ function StoreSummary({
   const [error, setError] = useState<string | null>(null)
   const [sortCol, setSortCol] = useState<string>('mtd_sl_v')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const storeNumFilter = useNumFilter()
 
   function load(src?: 'nso' | 'all') {
     setLoading(true); setError(null)
@@ -433,6 +449,7 @@ function StoreSummary({
       STORE_COLS.map(c => {
         const v = r[c.key]
         if (c.type === 'lakh') return Number(v).toFixed(2)  // already in Lakhs
+        if (c.type === 'psf')  return calcPsf(r as StoreRow, c.key === 'mtd_psf' ? 'mtd_sl_v' : 'lm_sl_val')
         if (c.type === 'pct')  return v == null ? '' : Number(v).toFixed(2)
         if (c.type === 'qty')  return v == null ? '' : String(Math.round(Number(v)))
         if (c.type === 'date') return fmtDate(v)
@@ -448,13 +465,22 @@ function StoreSummary({
 
   const stores = data?.stores ?? []
 
+  function getPsfVal(row: StoreRow, key: string): number {
+    const saleKey = key === 'mtd_psf' ? 'mtd_sl_v' : 'lm_sl_val'
+    const sale = Number(row[saleKey]), area = Number(row.store_area)
+    if (isNaN(sale) || isNaN(area) || area <= 0) return -1
+    return (sale * 1_00_000) / area
+  }
+
   function sortRows(rows: StoreRow[]) {
     return [...rows].sort((a, b) => {
+      const isPsf = sortCol === 'lm_psf' || sortCol === 'mtd_psf'
+      const an = isPsf ? getPsfVal(a, sortCol) : Number(a[sortCol])
+      const bn = isPsf ? getPsfVal(b, sortCol) : Number(b[sortCol])
       const av = a[sortCol], bv = b[sortCol]
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      const an = Number(av), bn = Number(bv)
+      if (!isPsf && av == null && bv == null) return 0
+      if (!isPsf && av == null) return 1
+      if (!isPsf && bv == null) return -1
       const cmp = !isNaN(an) && !isNaN(bn) ? an - bn : String(av).localeCompare(String(bv))
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -467,8 +493,8 @@ function StoreSummary({
 
   const storeMatch = (r: StoreRow) =>
     selStores.length === 0 || selStores.includes(r.store_f_name ?? '') || selStores.includes(r.store_name)
-  const active   = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE' && storeMatch(r)))
-  const upcoming = sortRows(stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING') && storeMatch(r)))
+  const active   = sortRows(storeNumFilter.applyToRows(stores.filter(r => String(r.store_status ?? '').toUpperCase() === 'ACTIVE' && storeMatch(r)) as Record<string, unknown>[]) as unknown as StoreRow[])
+  const upcoming = sortRows(storeNumFilter.applyToRows(stores.filter(r => String(r.store_status ?? '').toUpperCase().includes('UPCOMING') && storeMatch(r)) as Record<string, unknown>[]) as unknown as StoreRow[])
 
   function StoreTable({ rows, title }: { rows: StoreRow[]; title: string }) {
     const color = title.startsWith('Active') ? C.green : '#7dd3fc'
@@ -496,6 +522,11 @@ function StoreSummary({
                 )
               }
               if (col.type === 'lakh') return <td key={col.key} style={S.tdNum}>{fmtLakh(v)}</td>
+              if (col.type === 'psf')  return <td key={col.key} style={S.tdNum}>{calcPsf(row, col.key === 'mtd_psf' ? 'mtd_sl_v' : 'lm_sl_val')}</td>
+              if (col.key === 'opert_days') {
+                const effDays = Math.min(Number(v) || 0, mtdDays)
+                return <td key={col.key} style={S.tdNum}>{effDays}</td>
+              }
               if (col.type === 'qty')  return <td key={col.key} style={S.tdNum}>{fmtQty(v)}</td>
               if (col.type === 'date') return <td key={col.key} style={{ ...S.td, color: C.text2 }}>{fmtDate(v)}</td>
               if (col.key === 'store_name') return <td key={col.key} style={{ ...S.td, fontWeight: 700, color: C.blue }}>{String(v ?? '—')}</td>
@@ -514,9 +545,12 @@ function StoreSummary({
   const totalStk = stores.reduce((s, r) => s + (Number(r.ttl_stk_v) || 0), 0)
   // STR = total_stk_v / portfolio_daily_rate
   // Per-store MTD days = min(opert_days, days elapsed in month)
-  // e.g. SDH opened Aug 15 → 8 days; old store → 22 days
-  const mtdDays = new Date().getDate() - 1 || 1
-  const totalStkV = stores.reduce((s, r) => s + (Number(r.stk_v) || 0), 0)
+  // On day 1 of month, MTD data is previous month's — use prev month's day count
+  const _today = new Date()
+  const mtdDays = _today.getDate() === 1
+    ? new Date(_today.getFullYear(), _today.getMonth(), 0).getDate()  // last day of prev month
+    : _today.getDate() - 1 || 1
+  const totalStkV = stores.reduce((s, r) => s + (Number(r.ttl_stk_v) || 0), 0)
   const portfolioDailyRate = stores.reduce((s, r) => {
     const storeMtdDays = Math.min(Number(r.opert_days) || 0, mtdDays)
     const mtd = Number(r.mtd_sl_v) || 0
@@ -591,7 +625,7 @@ function StoreSummary({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 80 }}>
           {/* Sort selector row */}
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const, alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: '#64748b', flexShrink: 0 }}>Sort:</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Sort:</span>
             {[
               { key: 'mtd_sl_v',  label: 'MTD Sale' },
               { key: 'ach_pct',   label: 'Ach%' },
@@ -622,7 +656,7 @@ function StoreSummary({
               {active.map((row, i) => {
                 const storeMtdDays = Math.min(Number(row.opert_days) || 0, mtdDays)
                 const dailyRate = storeMtdDays > 0 ? (Number(row.mtd_sl_v) || 0) / storeMtdDays : 0
-                const str = dailyRate > 0 ? (Number(row.stk_v) || 0) / dailyRate : undefined
+                const str = dailyRate > 0 ? (Number(row.ttl_stk_v) || 0) / dailyRate : undefined
                 return <MobileStoreCard key={row.store_name + i} row={row} str={str} />
               })}
             </>
@@ -647,20 +681,24 @@ function StoreSummary({
             <table style={{ ...S.tbl, minWidth: 1600 }}>
               <thead>
                 <tr>
-                  {STORE_COLS.map(col => (
-                    <th key={col.key}
-                      onClick={() => handleSort(col.key)}
-                      style={{
-                        ...(col.type === 'text' || col.type === 'date' ? S.th : S.thNum),
-                        cursor: 'pointer', userSelect: 'none',
-                        background: sortCol === col.key ? '#1e3a5f' : C.bg,
-                        color: sortCol === col.key ? '#7dd3fc' : undefined,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
-                    </th>
-                  ))}
+                  {STORE_COLS.map(col => {
+                    const isNumCol = col.type !== 'text' && col.type !== 'date'
+                    return (
+                      <th key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        style={{
+                          ...(isNumCol ? S.thNum : S.th),
+                          cursor: 'pointer', userSelect: 'none',
+                          background: sortCol === col.key ? '#1e3a5f' : storeNumFilter.numFilters[col.key] ? '#1a2e1a' : C.bg,
+                          color: sortCol === col.key ? '#7dd3fc' : undefined,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                        {isNumCol && <NumFilterIcon col={col.key} active={!!storeNumFilter.numFilters[col.key]} onOpen={storeNumFilter.openFilter} />}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -676,6 +714,11 @@ function StoreSummary({
             {stores.length} stores · {data.elapsed_ms} ms · V_NSO article aggregation · MTD sale = NSO-plan articles only
           </div>
         </div>
+      )}
+      {storeNumFilter.openCol && storeNumFilter.anchor && (
+        <NumFilterDropdown col={storeNumFilter.openCol} value={storeNumFilter.numFilters[storeNumFilter.openCol]}
+          onChange={val => storeNumFilter.applyFilter(storeNumFilter.openCol!, val)}
+          onClose={() => storeNumFilter.setOpenCol(null)} anchor={storeNumFilter.anchor} />
       )}
     </div>
   )
@@ -722,15 +765,6 @@ const S: Record<string, React.CSSProperties> = {
   badge: { display: 'inline-block', borderRadius: 4, fontSize: 10, fontWeight: 700, padding: '1px 7px' },
 }
 
-function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 768)
-  useEffect(() => {
-    const fn = () => setM(window.innerWidth < 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
-  }, [])
-  return m
-}
 
 // ── Derived KPIs ───────────────────────────────────────────────────────────────
 function deriveKPIs(rows: Record<string, unknown>[]) {
@@ -761,6 +795,8 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function NSODashboard() {
+  const { user } = useAuth()
+  const isViewer = !hasRole(user, 'planner')
   const isMobile = useIsMobile()
 
   const [filters, setFilters] = useState<NSOFilters>({
@@ -777,12 +813,16 @@ export default function NSODashboard() {
   const [search, setSearch]         = useState('')
 
   const [tab, setTab]           = useState<'store' | 'article'>('store')
+  // viewers are locked to store tab
+  const effectiveTab = isViewer ? 'store' : tab
   const [source, setSource]     = useState<'nso' | 'all'>('nso')
   const [data, setData]         = useState<NSOData | null>(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [artSortCol, setArtSortCol] = useState('')
   const [artSortDir, setArtSortDir] = useState<'asc' | 'desc'>('asc')
+  // Numeric filters — article view
+  const artNumFilter = useNumFilter()
 
   function toggleSource() { setSource(s => s === 'nso' ? 'all' : 'nso'); setSelStores([]); setStoreOptions([]) }
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
@@ -813,11 +853,11 @@ export default function NSODashboard() {
   const PAGE_SIZE = 100
 
   // Load article data only when user switches to article tab (lazy)
-  useEffect(() => { if (tab === 'article') load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (effectiveTab === 'article') load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-reload when any server-side filter or source changes (only if data already loaded)
   useEffect(() => {
-    if (data && tab === 'article') load()
+    if (data && effectiveTab === 'article') load()
   }, [selCampaigns, selDivisions, selStatuses, selClusters, selRegions, selTags, source]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered rows (client-side text search)
@@ -831,8 +871,10 @@ export default function NSODashboard() {
     ? storeFiltered.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
     : storeFiltered
 
+  const numFiltered = artNumFilter.applyToRows(filtered)
+
   const visible = artSortCol
-    ? [...filtered].sort((a, b) => {
+    ? [...numFiltered].sort((a, b) => {
         const av = a[artSortCol], bv = b[artSortCol]
         if (av == null && bv == null) return 0
         if (av == null) return 1; if (bv == null) return -1
@@ -840,7 +882,7 @@ export default function NSODashboard() {
         const cmp = !isNaN(an) && !isNaN(bn) ? an - bn : String(av).localeCompare(String(bv))
         return artSortDir === 'asc' ? cmp : -cmp
       })
-    : filtered
+    : numFiltered
 
   function handleArtSort(c: string) {
     if (artSortCol === c) setArtSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -876,17 +918,31 @@ export default function NSODashboard() {
 
   const activeFilterCount = selStatuses.length + selClusters.length + selRegions.length + selTags.length + selDivisions.length + selCampaigns.length + selStores.length
 
+  const [invalidating, setInvalidating] = useState(false)
+  const [invalidateMsg, setInvalidateMsg] = useState('')
+  async function handleInvalidate() {
+    if (!confirm('NSO parquet cache clear hoga — next load Oracle se fresh data lega. Continue?')) return
+    setInvalidating(true)
+    try {
+      const res = await http.post<{ success: boolean; message: string }>('/system/cache/invalidate')
+      setInvalidateMsg(res.data.message ?? 'Cache cleared')
+    } catch { setInvalidateMsg('Error clearing cache') }
+    setInvalidating(false)
+    setTimeout(() => setInvalidateMsg(''), 4000)
+  }
+
   // ── Mobile layout ──────────────────────────────────────────────────────────
   if (isMobile) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 0 }}>
 
         {/* Mobile header */}
-        <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '10px 14px' }}>
+        <div style={{ background: 'var(--card-bg)', borderBottom: '1px solid var(--card-border)', padding: '10px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0' }}>NSO Dashboard</div>
-              <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>New Store Opening Tracker</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>NSO Dashboard</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>New Store Opening Tracker</div>
+              {invalidateMsg && <div style={{ fontSize: 9, color: '#4ade80', marginTop: 2 }}>{invalidateMsg}</div>}
             </div>
             {/* NSO/All pill */}
             <div onClick={toggleSource} style={{
@@ -901,11 +957,11 @@ export default function NSODashboard() {
           </div>
           {/* Tab + Filter row */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {(['store', 'article'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
+            {(['store', ...(!isViewer ? ['article'] : [])] as const).map(t => (
+              <button key={t} onClick={() => setTab(t as 'store' | 'article')} style={{
                 flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                background: tab === t ? '#0ea5e9' : '#0f172a',
-                color: tab === t ? '#fff' : '#64748b',
+                background: effectiveTab === t ? '#0ea5e9' : '#0f172a',
+                color: effectiveTab === t ? '#fff' : '#64748b',
               }}>
                 {t === 'store' ? '📊 Store' : '📋 Articles'}
               </button>
@@ -918,7 +974,7 @@ export default function NSODashboard() {
             }}>
               ⚙ {activeFilterCount > 0 ? activeFilterCount : ''} Filters
             </button>
-            {tab === 'article' && (
+            {effectiveTab === 'article' && (
               <button onClick={() => load()} disabled={loading} style={{
                 padding: '8px 14px', borderRadius: 8, border: 'none',
                 background: '#0ea5e9', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
@@ -948,7 +1004,7 @@ export default function NSODashboard() {
             </div>
           )}
           {/* Search (article tab) */}
-          {tab === 'article' && data && (
+          {effectiveTab === 'article' && data && (
             <input
               ref={searchRef}
               placeholder="Search store or article…"
@@ -974,14 +1030,14 @@ export default function NSODashboard() {
           }}>Apply Filters</button>
           {activeFilterCount > 0 && (
             <button onClick={() => { setSelStatuses([]); setSelClusters([]); setSelRegions([]); setSelTags([]); setSelDivisions([]); setSelCampaigns([]); setSelStores([]) }} style={{
-              width: '100%', padding: '10px', borderRadius: 10, border: '1px solid #334155',
+              width: '100%', padding: '10px', borderRadius: 10, border: '1px solid var(--card-border)',
               background: 'transparent', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}>Clear All Filters</button>
           )}
         </MobileFilterDrawer>
 
         {/* Store View */}
-        {tab === 'store' && (
+        {effectiveTab === 'store' && (
           <div style={{ padding: '10px 12px', paddingBottom: 20 }}>
             <StoreSummary
               selStatus={selStatuses.join(',')} selCluster={selClusters.join(',')}
@@ -993,7 +1049,7 @@ export default function NSODashboard() {
         )}
 
         {/* Article View mobile */}
-        {tab === 'article' && (
+        {effectiveTab === 'article' && (
           <div style={{ padding: '10px 12px', paddingBottom: 20 }}>
             {/* KPI strip */}
             {kpis && (
@@ -1007,7 +1063,7 @@ export default function NSODashboard() {
               ]} />
             )}
             {!data && !loading && !error && (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#475569', fontSize: 14 }}>
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 14 }}>
                 Tap ⚡ to load article data
               </div>
             )}
@@ -1015,7 +1071,7 @@ export default function NSODashboard() {
             {error && <div style={{ background: '#450a0a', border: '1px solid #f87171', borderRadius: 10, padding: 14, color: '#f87171', fontSize: 13 }}>{error}</div>}
             {data && !loading && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                <div style={{ fontSize: 10, color: '#64748b', paddingLeft: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', paddingLeft: 2 }}>
                   {visible.length.toLocaleString()} rows · ⚡ Parquet
                 </div>
                 {paged.map((row, i) => {
@@ -1027,12 +1083,12 @@ export default function NSODashboard() {
                   const isActive = status.toUpperCase() === 'ACTIVE'
                   return (
                     <div key={i} style={{
-                      background: '#1e293b', border: `1px solid ${isActive ? '#16a34a33' : '#3b82f633'}`,
+                      background: 'var(--card-bg)', border: `1px solid ${isActive ? '#16a34a33' : '#3b82f633'}`,
                       borderLeft: `3px solid ${isActive ? '#16a34a' : '#3b82f6'}`,
                       borderRadius: 10, padding: '10px 12px',
                     }}>
-                      <div style={{ fontWeight: 700, fontSize: 12, color: '#e2e8f0', marginBottom: 4 }}>{String(artName || '—')}</div>
-                      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', marginBottom: 4 }}>{String(artName || '—')}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
                         <span>🏪 {String(storeName)}</span>
                         {div && <span>📁 {String(div)}</span>}
                         {camp && <span>🏷 {String(camp)}</span>}
@@ -1046,9 +1102,9 @@ export default function NSODashboard() {
                           { label: 'Stk V(L)', val: fmtLakh(row['ttl_stk_v'] ?? row['stk_v']) },
                           { label: 'TO V(L)', val: fmtLakh(row['to_v']) },
                         ].map(m => (
-                          <div key={m.label} style={{ background: '#0f172a', borderRadius: 5, padding: '4px 6px' }}>
+                          <div key={m.label} style={{ background: 'var(--content-bg)', borderRadius: 5, padding: '4px 6px' }}>
                             <div style={{ fontSize: 11, color: '#7dd3fc', fontWeight: 600 }}>{m.val}</div>
-                            <div style={{ fontSize: 9, color: '#475569' }}>{m.label}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{m.label}</div>
                           </div>
                         ))}
                       </div>
@@ -1058,7 +1114,7 @@ export default function NSODashboard() {
                 {totalPages > 1 && (
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center', padding: '12px 0', alignItems: 'center' }}>
                     <button style={{ ...S.btnSm, padding: '6px 14px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
-                    <span style={{ fontSize: 12, color: '#64748b' }}>{page}/{totalPages}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page}/{totalPages}</span>
                     <button style={{ ...S.btnSm, padding: '6px 14px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next ›</button>
                   </div>
                 )}
@@ -1073,6 +1129,7 @@ export default function NSODashboard() {
   // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
     <div style={{ ...S.page, height: 'calc(100vh - 100px)' }}>
+      <StaleBanner />
 
       {/* ── Header + filters ── */}
       <div style={S.card}>
@@ -1083,16 +1140,25 @@ export default function NSODashboard() {
               <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>
                 New Store Opening — performance tracker · data from Master Data parquet
               </div>
+              {invalidateMsg && <div style={{ fontSize: 10, color: '#4ade80', marginTop: 4 }}>{invalidateMsg}</div>}
             </div>
+            <button onClick={handleInvalidate} disabled={invalidating} style={{
+              background: invalidating ? '#1e293b' : '#7f1d1d',
+              border: '1px solid #991b1b', borderRadius: 6,
+              color: invalidating ? '#64748b' : '#fca5a5',
+              fontSize: 10, fontWeight: 600, padding: '5px 12px', cursor: invalidating ? 'not-allowed' : 'pointer',
+            }}>
+              {invalidating ? '⋯ Clearing…' : '🗑 Clear Cache'}
+            </button>
           </div>
           <div style={S.filterRow}>
             {/* Tab switcher */}
-            {(['store', 'article'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
+            {(['store', ...(!isViewer ? ['article'] : [])] as const).map(t => (
+              <button key={t} onClick={() => setTab(t as 'store' | 'article')} style={{
                 ...S.btnSm,
-                background: tab === t ? C.blue : 'transparent',
-                color: tab === t ? '#fff' : C.text2,
-                fontWeight: tab === t ? 700 : 400,
+                background: effectiveTab === t ? C.blue : 'transparent',
+                color: effectiveTab === t ? '#fff' : C.text2,
+                fontWeight: effectiveTab === t ? 700 : 400,
               }}>
                 {t === 'store' ? '📊 Store View' : '📋 Article Detail'}
               </button>
@@ -1121,7 +1187,7 @@ export default function NSODashboard() {
             <MultiSelect label="Divisions" options={filters.division}   selected={selDivisions} onChange={setSelDivisions} />
             <MultiSelect label="Campaigns" options={filters.attribute1} selected={selCampaigns} onChange={setSelCampaigns} />
             <SearchableMultiSelect label="Stores" options={storeOptions} selected={selStores} onChange={setSelStores} />
-            {tab === 'article' && (
+            {effectiveTab === 'article' && (
               <>
                 <button style={S.btn} onClick={() => load()} disabled={loading}>
                   {loading ? '⋯ Loading…' : '⚡ Load'}
@@ -1134,7 +1200,7 @@ export default function NSODashboard() {
       </div>
 
       {/* ── Store View Tab ── */}
-      {tab === 'store' && (
+      {effectiveTab === 'store' && (
         <StoreSummary
           selStatus={selStatuses.join(',')} selCluster={selClusters.join(',')}
           selRegion={selRegions.join(',')} selTag={selTags.join(',')}
@@ -1144,7 +1210,7 @@ export default function NSODashboard() {
       )}
 
       {/* ── Article Detail Tab ── */}
-      {tab === 'article' && (
+      {effectiveTab === 'article' && (
         <>
           {/* KPI strip */}
           {kpis && (
@@ -1204,19 +1270,26 @@ export default function NSODashboard() {
                 <table style={S.tbl}>
                   <thead>
                     <tr>
-                      {cols.map(c => (
-                        <th key={c}
-                          onClick={() => handleArtSort(c)}
-                          style={{
-                            ...(isPct(c) || isNum(c) ? S.thNum : S.th),
-                            cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
-                            background: artSortCol === c ? '#1e3a5f' : C.bg,
-                            color: artSortCol === c ? '#7dd3fc' : undefined,
-                          }}
-                        >
-                          {c.replace(/_/g, ' ')}{artSortCol === c ? (artSortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
-                        </th>
-                      ))}
+                      {cols.map(c => {
+                        const numActive = !!artNumFilter.numFilters[c]
+                        const canNumFilter = isNum(c) || isPct(c)
+                        return (
+                          <th key={c}
+                            onClick={() => handleArtSort(c)}
+                            style={{
+                              ...(isPct(c) || isNum(c) ? S.thNum : S.th),
+                              cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
+                              background: artSortCol === c ? '#1e3a5f' : numActive ? '#1a2e1a' : C.bg,
+                              color: artSortCol === c ? '#7dd3fc' : undefined,
+                            }}
+                          >
+                            {c.replace(/_/g, ' ')}{artSortCol === c ? (artSortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                            {canNumFilter && (
+                              <NumFilterIcon col={c} active={!!artNumFilter.numFilters[c]} onOpen={artNumFilter.openFilter} />
+                            )}
+                          </th>
+                        )
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -1270,6 +1343,12 @@ export default function NSODashboard() {
             </div>
           )}
         </>
+      )}
+      {/* Article view numeric filter dropdown */}
+      {artNumFilter.openCol && artNumFilter.anchor && (
+        <NumFilterDropdown col={artNumFilter.openCol} value={artNumFilter.numFilters[artNumFilter.openCol]}
+          onChange={val => artNumFilter.applyFilter(artNumFilter.openCol!, val)}
+          onClose={() => artNumFilter.setOpenCol(null)} anchor={artNumFilter.anchor} />
       )}
     </div>
   )

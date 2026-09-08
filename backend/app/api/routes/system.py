@@ -190,6 +190,12 @@ def _do_warmup():
     except Exception as exc:
         err = str(exc)
         logger.error("Cache warmup failed: %s", exc)
+    try:
+        from app.api.routes.req_dashboard import warm_req_pivots
+        loaded = warm_req_pivots()
+        logger.info("Req pivot warmup: %s in %.1fs", ", ".join(loaded) or "none", time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("Req pivot warmup failed (non-fatal): %s", exc)
     finally:
         dur = round(time.perf_counter() - t0, 2)
         with _warmup_lock:

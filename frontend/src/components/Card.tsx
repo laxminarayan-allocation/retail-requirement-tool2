@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+﻿import type { CSSProperties, ReactNode } from 'react'
 
 interface CardProps {
   title?: string
@@ -10,8 +10,8 @@ export function Card({ title, children, style }: CardProps) {
   return (
     <div
       style={{
-        background: '#1e293b',
-        border: '1px solid #334155',
+        background: 'var(--card-bg)',
+        border: '1px solid var(--card-border)',
         borderRadius: 8,
         padding: 20,
         ...style,
@@ -22,7 +22,7 @@ export function Card({ title, children, style }: CardProps) {
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: '#64748b',
+            color: 'var(--text-muted)',
             textTransform: 'uppercase',
             letterSpacing: 0.8,
             marginBottom: 14,

@@ -5,6 +5,7 @@ The store master rarely changes during a session so it is cached after the
 first fetch.  Call invalidate_cache() to force a refresh.
 """
 import logging
+import threading
 from typing import Optional
 
 import pandas as pd
@@ -15,6 +16,7 @@ from app.repositories.base_repository import fetch_df, load_sql
 logger = logging.getLogger(__name__)
 
 _CACHE: Optional[pd.DataFrame] = None
+_CACHE_LOCK = threading.Lock()
 
 
 class StoreRepository:
@@ -34,10 +36,14 @@ class StoreRepository:
             logger.debug("StoreRepository: returning cached store master (%d rows)", len(_CACHE))
             df = _CACHE
         else:
-            sql = load_sql("store_base.sql")
-            with get_connection() as conn:
-                df = fetch_df(conn, sql, label="store_master")
-            _CACHE = df
+            with _CACHE_LOCK:
+                if _CACHE is not None:
+                    df = _CACHE
+                else:
+                    sql = load_sql("store_base.sql")
+                    with get_connection() as conn:
+                        df = fetch_df(conn, sql, label="store_master")
+                    _CACHE = df
 
         if active_only:
             return df[df["store_status"] == "ACTIVE"].reset_index(drop=True)

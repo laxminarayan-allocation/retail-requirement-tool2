@@ -173,18 +173,46 @@ def run_calculation(record: RunRecord, on_update: Callable[[RunRecord], None]) -
     stk_df   = _results["stock"]
     sl_df    = _results["sales"]
 
-    # ── Step 7: Filter to scope ───────────────────────────────────────────────
+    # ── Step 7: Filter to scope (supports multi-scope OR logic) ─────────────
+    import pandas as _pd
     grid = mdq_df.copy()
     before = len(grid)
-    if req.attribute1:
-        grid = grid[grid["attribute1"] == req.attribute1]
-    if req.division:
-        grid = grid[grid["division"] == req.division]
-    if req.department:
-        grid = grid[grid["department"] == req.department]
+
+    # Build effective scope list
+    effective_scopes = list(req.scopes) if req.scopes else []
+    if not effective_scopes:
+        # Fall back to legacy single-scope fields
+        if req.attribute1 or req.division or req.department:
+            from app.models.calculation_models import ScopeRow
+            effective_scopes = [ScopeRow(
+                attribute1=req.attribute1,
+                division=req.division,
+                department=req.department,
+            )]
+
+    if effective_scopes:
+        masks = []
+        for sc in effective_scopes:
+            m = _pd.Series(True, index=grid.index)
+            if sc.attribute1:
+                m &= grid["attribute1"] == sc.attribute1
+            if sc.division:
+                m &= grid["division"] == sc.division
+            if sc.department:
+                m &= grid["department"] == sc.department
+            masks.append(m)
+        combined = masks[0]
+        for m in masks[1:]:
+            combined |= m
+        grid = grid[combined]
+
     after = len(grid)
+    scope_desc = "; ".join(
+        f"div={s.division or '*'} attr={s.attribute1 or '*'} dept={s.department or '*'}"
+        for s in (effective_scopes or [])
+    ) or "all"
     _step(record, 7, "Apply scope filter", "ok", rows=after,
-          message=f"filtered {before} → {after} rows (attr={req.attribute1} div={req.division} dept={req.department})",
+          message=f"filtered {before} → {after} rows ({scope_desc})",
           on_update=on_update)
 
     if grid.empty:

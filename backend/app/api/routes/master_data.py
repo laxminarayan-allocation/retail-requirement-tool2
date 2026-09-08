@@ -483,7 +483,7 @@ async def list_custom_tables(request: Request = None):
     from app.db.sqlite import get_sqlite
     with get_sqlite() as db:
         rows = db.execute(
-            "SELECT id, schema_owner, object_name, label, added_by, added_at FROM custom_master_tables ORDER BY added_at DESC"
+            "SELECT id, schema_owner, object_name, label, added_by, added_at, description FROM custom_master_tables ORDER BY added_at DESC"
         ).fetchall()
     return APIResponse.ok(data={"tables": [dict(r) for r in rows]})
 
@@ -508,6 +508,23 @@ async def add_custom_table(body: _AddCustom, request: Request = None):
         if "UNIQUE" in str(exc).upper():
             return APIResponse.fail(message="This table is already in Master Data.")
         return APIResponse.fail(message=str(exc))
+
+
+class _DescBody(_BM):
+    description: str = ""
+
+
+@router.patch("/custom/{table_id}/description", response_model=APIResponse)
+async def update_custom_description(table_id: str, body: _DescBody):
+    """Save or clear the user-editable description for a custom master table."""
+    from app.db.sqlite import get_sqlite
+    desc = body.description.strip() or None
+    with get_sqlite() as db:
+        row = db.execute("SELECT id FROM custom_master_tables WHERE id=?", (table_id,)).fetchone()
+        if not row:
+            return APIResponse.fail(message="Table not found.")
+        db.execute("UPDATE custom_master_tables SET description=? WHERE id=?", (desc, table_id))
+    return APIResponse.ok(data={"description": desc}, message="Description saved.")
 
 
 @router.delete("/custom/{table_id}", response_model=APIResponse)

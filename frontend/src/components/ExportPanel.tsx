@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ExportPanel — Phase 11
  *
  * Sheet-selection drawer for the enhanced Excel export.
@@ -24,12 +24,12 @@ const SHEETS: Sheet[] = [
 
 const S: Record<string, React.CSSProperties> = {
   btn: { background: '#0ea5e9', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 700, padding: '5px 14px', cursor: 'pointer' },
-  btnSm: { background: 'transparent', border: '1px solid #334155', borderRadius: 5, color: '#94a3b8', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
-  panel: { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '14px 16px', marginTop: 6, minWidth: 320 },
+  btnSm: { background: 'transparent', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 11, padding: '3px 10px', cursor: 'pointer' },
+  panel: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 16px', marginTop: 6, minWidth: 320 },
   row: { display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, cursor: 'pointer' },
-  label: { fontSize: 12, fontWeight: 600, color: '#e2e8f0' },
-  desc: { fontSize: 10, color: '#64748b', marginTop: 1 },
-  footer: { display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid #334155', alignItems: 'center' },
+  label: { fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' },
+  desc: { fontSize: 10, color: 'var(--text-muted)', marginTop: 1 },
+  footer: { display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--card-border)', alignItems: 'center' },
 }
 
 interface Props {
@@ -79,12 +79,12 @@ export default function ExportPanel({ runId, runLabel, inline = false }: Props) 
         <button style={S.btnSm} onClick={() => setOpen(false)}>✕</button>
       )}
       <div style={S.panel}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 10 }}>
           Excel Export — Select Sheets
         </div>
 
         {runLabel && (
-          <div style={{ fontSize: 11, color: '#475569', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Run: {runLabel}
           </div>
         )}

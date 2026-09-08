@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback, Fragment } from 'react'
 import axios from 'axios'
 import { DataGrid } from '@/components/DataGrid'
 
@@ -10,7 +10,8 @@ type RoleRequest = {
 type User = {
   id: string; email: string; full_name: string; role: string;
   is_active: number; created_at: string; last_login_at: string;
-  temp_admin_expires_at: string | null
+  temp_admin_expires_at: string | null;
+  max_desktop_sessions?: number; max_mobile_sessions?: number; session_limit_action?: string
 }
 type Log = {
   id: string; user_email: string; action: string;
@@ -42,10 +43,10 @@ function fmtExpiry(iso: string): string {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page: { fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#e2e8f0', maxWidth: 900 },
+  page: { fontFamily: "'Segoe UI', system-ui, sans-serif", color: 'var(--text-primary)', maxWidth: 900 },
   h1: { fontSize: 20, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4, color: '#f1f5f9' },
-  sub: { fontSize: 12, color: '#64748b', marginBottom: 28 },
-  tabs: { display: 'flex', gap: 2, borderBottom: '1px solid #334155', marginBottom: 24 },
+  sub: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 28 },
+  tabs: { display: 'flex', gap: 2, borderBottom: '1px solid var(--card-border)', marginBottom: 24 },
   tab: (a: boolean): React.CSSProperties => ({
     padding: '8px 16px', fontSize: 13, fontWeight: a ? 600 : 400,
     color: a ? '#38bdf8' : '#64748b', background: 'none', border: 'none',
@@ -54,7 +55,7 @@ const S: Record<string, React.CSSProperties> = {
   }),
   table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 12 },
   th: {
-    textAlign: 'left' as const, padding: '8px 12px', color: '#475569',
+    textAlign: 'left' as const, padding: '8px 12px', color: 'var(--text-muted)',
     fontWeight: 600, letterSpacing: '.06em', fontSize: 10, textTransform: 'uppercase' as const,
     borderBottom: '1px solid #1e293b',
   },
@@ -81,19 +82,78 @@ const S: Record<string, React.CSSProperties> = {
     marginRight: 6,
   }),
   select: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 4,
-    color: '#e2e8f0', fontSize: 11, padding: '3px 6px',
+    background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4,
+    color: 'var(--text-primary)', fontSize: 11, padding: '3px 6px',
   },
-  empty: { padding: '32px 0', textAlign: 'center' as const, color: '#334155', fontSize: 13 },
+  empty: { padding: '32px 0', textAlign: 'center' as const, color: 'var(--text-muted)', fontSize: 13 },
   pendingDot: {
     display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
     background: '#fcd34d', marginRight: 6,
   },
-  sectionHead: { fontSize: 13, fontWeight: 700, color: '#94a3b8', marginBottom: 12, marginTop: 0 },
+  sectionHead: { fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12, marginTop: 0 },
+}
+
+function SessionLimitCell({ user, onSave }: { user: User; onSave: (md: number, mm: number, act: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [desktop, setDesktop] = useState(user.max_desktop_sessions ?? 1)
+  const [mobile, setMobile] = useState(user.max_mobile_sessions ?? 1)
+  const [action, setAction] = useState(user.session_limit_action ?? 'block')
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    try { await onSave(desktop, mobile, action); setOpen(false) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#94a3b8', cursor: 'pointer', whiteSpace: 'nowrap' }}
+      >
+        🖥️{user.max_desktop_sessions ?? 1} 📱{user.max_mobile_sessions ?? 1}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 400, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: 12, width: 220, boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>Session Limits</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: '#64748b', width: 70 }}>🖥️ Desktop</span>
+            <button onClick={() => setDesktop(d => Math.max(0, d - 1))} style={{ padding: '1px 7px', background: '#0f172a', border: '1px solid #334155', color: '#94a3b8', borderRadius: 3, cursor: 'pointer' }}>−</button>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', minWidth: 20, textAlign: 'center' }}>{desktop}</span>
+            <button onClick={() => setDesktop(d => d + 1)} style={{ padding: '1px 7px', background: '#0f172a', border: '1px solid #334155', color: '#94a3b8', borderRadius: 3, cursor: 'pointer' }}>+</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <span style={{ fontSize: 11, color: '#64748b', width: 70 }}>📱 Mobile</span>
+            <button onClick={() => setMobile(m => Math.max(0, m - 1))} style={{ padding: '1px 7px', background: '#0f172a', border: '1px solid #334155', color: '#94a3b8', borderRadius: 3, cursor: 'pointer' }}>−</button>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', minWidth: 20, textAlign: 'center' }}>{mobile}</span>
+            <button onClick={() => setMobile(m => m + 1)} style={{ padding: '1px 7px', background: '#0f172a', border: '1px solid #334155', color: '#94a3b8', borderRadius: 3, cursor: 'pointer' }}>+</button>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>When limit exceeded:</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => setAction('block')} style={{ flex: 1, fontSize: 10, padding: '4px', borderRadius: 4, border: `1px solid ${action === 'block' ? '#f59e0b' : '#334155'}`, background: action === 'block' ? '#78350f' : '#0f172a', color: action === 'block' ? '#fcd34d' : '#64748b', cursor: 'pointer', fontWeight: action === 'block' ? 700 : 400 }}>
+                🚫 Block login
+              </button>
+              <button onClick={() => setAction('kick')} style={{ flex: 1, fontSize: 10, padding: '4px', borderRadius: 4, border: `1px solid ${action === 'kick' ? '#ef4444' : '#334155'}`, background: action === 'kick' ? '#7f1d1d' : '#0f172a', color: action === 'kick' ? '#fca5a5' : '#64748b', cursor: 'pointer', fontWeight: action === 'kick' ? 700 : 400 }}>
+                ⚡ Kick oldest
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button onClick={save} disabled={saving} style={{ flex: 1, fontSize: 11, padding: '5px', background: '#0ea5e9', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => setOpen(false)} style={{ fontSize: 11, padding: '5px 8px', background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#64748b', cursor: 'pointer' }}>✕</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats'>('requests')
+  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access'>('requests')
   const [requests, setRequests] = useState<RoleRequest[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [logs, setLogs] = useState<Log[]>([])
@@ -110,6 +170,26 @@ export default function AdminPanel() {
   const [tempDaysPicker, setTempDaysPicker] = useState<{ userId: string; days: number } | null>(null)
   // Temp admin duration picker for approving a role request
   const [approveWithDays, setApproveWithDays] = useState<{ reqId: string; days: number } | null>(null)
+  // Per-user page access
+  const [expandedPageUser, setExpandedPageUser] = useState<string | null>(null)
+  const [userPageAccess, setUserPageAccess] = useState<Record<string, Record<string, boolean>>>({})
+  const [pageAccessSaving, setPageAccessSaving] = useState(false)
+
+  const ALL_PAGES = [
+    { path: '/', label: 'Dashboard', minRole: 'viewer' },
+    { path: '/results', label: 'Results', minRole: 'viewer' },
+    { path: '/history', label: 'History', minRole: 'viewer' },
+    { path: '/nso', label: 'NSO Dashboard', minRole: 'viewer' },
+    { path: '/sale', label: 'Sale Dashboard', minRole: 'viewer' },
+    { path: '/manual', label: 'User Manual', minRole: 'viewer' },
+    { path: '/database', label: 'Database Explorer', minRole: 'planner' },
+    { path: '/master-data', label: 'Master Data', minRole: 'planner' },
+    { path: '/factors', label: 'Calc Factors', minRole: 'planner' },
+    { path: '/calculation', label: 'Calculation', minRole: 'planner' },
+    { path: '/req', label: 'Requirements', minRole: 'planner' },
+    { path: '/distribution', label: 'Distribution', minRole: 'planner' },
+    { path: '/settings', label: 'Settings', minRole: 'planner' },
+  ] as const
 
   useEffect(() => {
     axios.get('/api/assistant/status').then(r => {
@@ -197,6 +277,39 @@ export default function AdminPanel() {
     await loadUsers()
   }
 
+  async function saveSessionLimits(userId: string, maxDesktop: number, maxMobile: number, action: string) {
+    await axios.patch(`/api/auth/users/${userId}/session-limits`, {
+      max_desktop_sessions: maxDesktop,
+      max_mobile_sessions: maxMobile,
+      session_limit_action: action,
+    })
+    await loadUsers()
+  }
+
+  async function loadUserPageAccess(userId: string) {
+    const res = await axios.get(`/api/auth/users/${userId}/page-access`)
+    setUserPageAccess(prev => ({ ...prev, [userId]: res.data.data?.page_access ?? {} }))
+  }
+
+  async function toggleExpandPageAccess(userId: string) {
+    if (expandedPageUser === userId) {
+      setExpandedPageUser(null)
+    } else {
+      setExpandedPageUser(userId)
+      if (!userPageAccess[userId]) await loadUserPageAccess(userId)
+    }
+  }
+
+  async function setPageAccess(userId: string, pagePath: string, allowed: boolean | null) {
+    setPageAccessSaving(true)
+    try {
+      await axios.post(`/api/auth/users/${userId}/page-access`, { page_path: pagePath, allowed })
+      await loadUserPageAccess(userId)
+    } finally {
+      setPageAccessSaving(false)
+    }
+  }
+
   return (
     <div style={S.page}>
       <h1 style={S.h1}>Admin Panel</h1>
@@ -237,6 +350,7 @@ export default function AdminPanel() {
             </span>
           )}
         </button>
+        <button style={S.tab(tab === 'access')} onClick={() => setTab('access')}>🛡️ Access Matrix</button>
       </div>
 
       {/* ── Role Requests ── */}
@@ -261,26 +375,26 @@ export default function AdminPanel() {
                   {requests.filter(r => r.status === 'pending').map(r => (
                     <tr key={r.id}>
                       <td style={S.td}>
-                        <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{r.user_name}</div>
-                        <div style={{ color: '#64748b', fontSize: 11 }}>{r.user_email}</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{r.user_name}</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.user_email}</div>
                       </td>
                       <td style={S.td}>
-                        {r.from_role && <><span style={S.badge(r.from_role)}>{ROLE_LABEL[r.from_role] || r.from_role}</span><span style={{ color: '#475569', margin: '0 4px' }}>→</span></>}
+                        {r.from_role && <><span style={S.badge(r.from_role)}>{ROLE_LABEL[r.from_role] || r.from_role}</span><span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>→</span></>}
                         <span style={S.badge(r.requested_role)}>{ROLE_LABEL[r.requested_role] || r.requested_role}</span>
                         {r.requested_role === 'temp_admin' && r.temp_days && (
                           <span style={{ fontSize: 10, color: '#a78bfa', marginLeft: 4 }}>({fmtTempLabel(r.temp_days)})</span>
                         )}
                       </td>
-                      <td style={S.td}><span style={{ color: '#94a3b8' }}>{r.reason || '—'}</span></td>
-                      <td style={S.td}><span style={{ color: '#64748b' }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</span></td>
+                      <td style={S.td}><span style={{ color: 'var(--text-secondary)' }}>{r.reason || '—'}</span></td>
+                      <td style={S.td}><span style={{ color: 'var(--text-muted)' }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</span></td>
                       <td style={S.td}>
                         {r.requested_role === 'temp_admin' && approveWithDays?.reqId === r.id ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                              <span style={{ fontSize: 9, color: '#64748b' }}>Duration:</span>
+                              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Duration:</span>
                               {TEMP_OPTS.map(o => (
                                 <button key={o.h} onClick={() => setApproveWithDays(a => a ? { ...a, days: o.h } : null)}
-                                  style={{ fontSize: 9, padding: '2px 5px', background: approveWithDays.days === o.h ? '#7c3aed' : '#1e293b', color: approveWithDays.days === o.h ? '#fff' : '#64748b', border: '1px solid #334155', borderRadius: 3, cursor: 'pointer' }}>
+                                  style={{ fontSize: 9, padding: '2px 5px', background: approveWithDays.days === o.h ? '#7c3aed' : '#1e293b', color: approveWithDays.days === o.h ? '#fff' : '#64748b', border: '1px solid var(--card-border)', borderRadius: 3, cursor: 'pointer' }}>
                                   {o.l}
                                 </button>
                               ))}
@@ -329,13 +443,13 @@ export default function AdminPanel() {
                   {requests.map(r => (
                     <tr key={r.id}>
                       <td style={S.td}>
-                        <div style={{ color: '#cbd5e1' }}>{r.user_name}</div>
-                        <div style={{ color: '#64748b', fontSize: 11 }}>{r.user_email}</div>
+                        <div style={{ color: 'var(--text-secondary)' }}>{r.user_name}</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.user_email}</div>
                       </td>
                       <td style={S.td}><span style={S.badge(r.requested_role)}>{r.requested_role}</span></td>
                       <td style={S.td}><span style={S.statusBadge(r.status)}>{r.status}</span></td>
-                      <td style={S.td}><span style={{ color: '#64748b' }}>{r.reviewed_by || '—'}</span></td>
-                      <td style={S.td}><span style={{ color: '#64748b' }}>{(r.reviewed_at || r.created_at)?.slice(0, 16).replace('T', ' ')}</span></td>
+                      <td style={S.td}><span style={{ color: 'var(--text-muted)' }}>{r.reviewed_by || '—'}</span></td>
+                      <td style={S.td}><span style={{ color: 'var(--text-muted)' }}>{(r.reviewed_at || r.created_at)?.slice(0, 16).replace('T', ' ')}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -358,83 +472,171 @@ export default function AdminPanel() {
                   <th style={S.th}>Status</th>
                   <th style={S.th}>Last login</th>
                   <th style={S.th}>Change role</th>
-                  <th style={S.th}>Access</th>
+                  <th style={S.th}>Active</th>
+                  <th style={S.th}>Sessions</th>
+                  <th style={S.th}>Page Access</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td style={S.td}>
-                      <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{u.full_name}</div>
-                      <div style={{ color: '#64748b', fontSize: 11 }}>{u.email}</div>
-                    </td>
-                    <td style={S.td}>
-                      <span style={S.badge(u.role)}>{ROLE_LABEL[u.role] || u.role}</span>
-                      {u.role === 'temp_admin' && u.temp_admin_expires_at && (
-                        <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 2 }}>
-                          Until {fmtExpiry(u.temp_admin_expires_at)}
-                        </div>
+                {users.map(u => {
+                  const pa = userPageAccess[u.id] ?? null
+                  const isExpanded = expandedPageUser === u.id
+                  const overrideCount = pa ? Object.keys(pa).length : 0
+                  return (
+                    <Fragment key={u.id}>
+                      <tr>
+                        <td style={S.td}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{u.full_name}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{u.email}</div>
+                        </td>
+                        <td style={S.td}>
+                          <span style={S.badge(u.role)}>{ROLE_LABEL[u.role] || u.role}</span>
+                          {u.role === 'temp_admin' && u.temp_admin_expires_at && (
+                            <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 2 }}>
+                              Until {fmtExpiry(u.temp_admin_expires_at)}
+                            </div>
+                          )}
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: u.is_active ? '#34d399' : '#f87171', fontSize: 11 }}>
+                            {u.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            {u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : 'Never'}
+                          </span>
+                        </td>
+                        <td style={S.td}>
+                          {tempDaysPicker?.userId === u.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Duration:</span>
+                                {TEMP_OPTS.map(o => (
+                                  <button key={o.h} onClick={() => setTempDaysPicker(p => p ? { ...p, days: o.h } : null)}
+                                    style={{ fontSize: 9, padding: '2px 5px', background: tempDaysPicker.days === o.h ? '#7c3aed' : '#1e293b', color: tempDaysPicker.days === o.h ? '#fff' : '#64748b', border: '1px solid var(--card-border)', borderRadius: 3, cursor: 'pointer' }}>
+                                    {o.l}
+                                  </button>
+                                ))}
+                              </div>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button style={S.btnSm('approve')} onClick={() => changeUserRole(u.id, 'temp_admin', tempDaysPicker.days)}>
+                                  Set {fmtTempLabel(tempDaysPicker.days)}
+                                </button>
+                                <button style={S.btnSm('neutral')} onClick={() => setTempDaysPicker(null)}>✕</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <select
+                              style={S.select}
+                              value={u.role}
+                              onChange={e => {
+                                if (e.target.value === 'temp_admin') {
+                                  setTempDaysPicker({ userId: u.id, days: 24 })
+                                } else {
+                                  changeUserRole(u.id, e.target.value)
+                                }
+                              }}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="viewer">Viewer</option>
+                              <option value="planner">Planner</option>
+                              <option value="temp_admin">Temp Admin</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          )}
+                        </td>
+                        <td style={S.td}>
+                          <button
+                            style={S.btnSm(u.is_active ? 'deny' : 'approve')}
+                            onClick={() => toggleUserActive(u.id, !u.is_active)}
+                          >
+                            {u.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </td>
+                        <td style={S.td}>
+                          <SessionLimitCell
+                            user={u}
+                            onSave={(md, mm, act) => saveSessionLimits(u.id, md, mm, act)}
+                          />
+                        </td>
+                        <td style={S.td}>
+                          <button
+                            style={{ ...S.btnSm('neutral'), background: isExpanded ? '#1e3a5f' : '#1e293b', color: isExpanded ? '#38bdf8' : '#94a3b8', border: '1px solid ' + (isExpanded ? '#38bdf8' : '#334155') }}
+                            onClick={() => toggleExpandPageAccess(u.id)}
+                          >
+                            {isExpanded ? '▲ Pages' : '▼ Pages'}
+                            {overrideCount > 0 && (
+                              <span style={{ marginLeft: 5, background: '#6366f1', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 8 }}>
+                                {overrideCount}
+                              </span>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={8} style={{ padding: '0 0 4px 0', background: '#070f1a' }}>
+                            <div style={{ padding: '12px 16px', borderTop: '1px solid #1e293b' }}>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600 }}>
+                                Page Access for <span style={{ color: 'var(--text-secondary)' }}>{u.full_name}</span>
+                                <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
+                                  (no override = role-based default)
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {ALL_PAGES.map(page => {
+                                  const override = pa?.[page.path]
+                                  const isAllowed = override === true
+                                  const isDenied = override === false
+                                  const isDefault = override === undefined
+                                  return (
+                                    <div key={page.path} style={{
+                                      background: isDenied ? 'rgba(248,113,113,.08)' : isAllowed ? 'rgba(52,211,153,.08)' : '#0f172a',
+                                      border: '1px solid ' + (isDenied ? '#991b1b' : isAllowed ? '#065f46' : '#1e293b'),
+                                      borderRadius: 6, padding: '6px 10px', minWidth: 160,
+                                    }}>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: isDenied ? '#f87171' : isAllowed ? '#34d399' : '#94a3b8', marginBottom: 5 }}>
+                                        {page.label}
+                                        <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--text-muted)' }}>[{page.minRole}]</span>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <button
+                                          disabled={pageAccessSaving}
+                                          onClick={() => setPageAccess(u.id, page.path, isAllowed ? null : true)}
+                                          style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: 'none', cursor: 'pointer', opacity: pageAccessSaving ? 0.5 : 1, background: isAllowed ? '#065f46' : '#1e293b', color: isAllowed ? '#34d399' : '#475569', fontWeight: isAllowed ? 700 : 400 }}
+                                        >
+                                          ✓ Allow
+                                        </button>
+                                        <button
+                                          disabled={pageAccessSaving}
+                                          onClick={() => setPageAccess(u.id, page.path, isDenied ? null : false)}
+                                          style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: 'none', cursor: 'pointer', opacity: pageAccessSaving ? 0.5 : 1, background: isDenied ? '#7f1d1d' : '#1e293b', color: isDenied ? '#f87171' : '#475569', fontWeight: isDenied ? 700 : 400 }}
+                                        >
+                                          ✕ Deny
+                                        </button>
+                                        {!isDefault && (
+                                          <button
+                                            disabled={pageAccessSaving}
+                                            onClick={() => setPageAccess(u.id, page.path, null)}
+                                            style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: 'none', cursor: 'pointer', opacity: pageAccessSaving ? 0.5 : 1, background: 'var(--card-bg)', color: 'var(--text-muted)' }}
+                                            title="Remove override — revert to role-based"
+                                          >
+                                            ↺ Default
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td style={S.td}>
-                      <span style={{ color: u.is_active ? '#34d399' : '#f87171', fontSize: 11 }}>
-                        {u.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={S.td}>
-                      <span style={{ color: '#64748b' }}>
-                        {u.last_login_at ? u.last_login_at.slice(0, 16).replace('T', ' ') : 'Never'}
-                      </span>
-                    </td>
-                    <td style={S.td}>
-                      {tempDaysPicker?.userId === u.id ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                            <span style={{ fontSize: 9, color: '#64748b' }}>Duration:</span>
-                            {TEMP_OPTS.map(o => (
-                              <button key={o.h} onClick={() => setTempDaysPicker(p => p ? { ...p, days: o.h } : null)}
-                                style={{ fontSize: 9, padding: '2px 5px', background: tempDaysPicker.days === o.h ? '#7c3aed' : '#1e293b', color: tempDaysPicker.days === o.h ? '#fff' : '#64748b', border: '1px solid #334155', borderRadius: 3, cursor: 'pointer' }}>
-                                {o.l}
-                              </button>
-                            ))}
-                          </div>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button style={S.btnSm('approve')} onClick={() => changeUserRole(u.id, 'temp_admin', tempDaysPicker.days)}>
-                              Set {fmtTempLabel(tempDaysPicker.days)}
-                            </button>
-                            <button style={S.btnSm('neutral')} onClick={() => setTempDaysPicker(null)}>✕</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <select
-                          style={S.select}
-                          value={u.role}
-                          onChange={e => {
-                            if (e.target.value === 'temp_admin') {
-                              setTempDaysPicker({ userId: u.id, days: 24 })
-                            } else {
-                              changeUserRole(u.id, e.target.value)
-                            }
-                          }}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="viewer">Viewer</option>
-                          <option value="planner">Planner</option>
-                          <option value="temp_admin">Temp Admin</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      )}
-                    </td>
-                    <td style={S.td}>
-                      <button
-                        style={S.btnSm(u.is_active ? 'deny' : 'approve')}
-                        onClick={() => toggleUserActive(u.id, !u.is_active)}
-                      >
-                        {u.is_active ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           )
@@ -451,7 +653,7 @@ export default function AdminPanel() {
               </p>
               {aiChats.map(c => (
                 <div key={c.id} style={{
-                  background: '#0f172a', border: '1px solid #1e293b',
+                  background: 'var(--content-bg)', border: '1px solid var(--card-border)',
                   borderRadius: 8, overflow: 'hidden',
                 }}>
                   {/* Header row */}
@@ -464,24 +666,24 @@ export default function AdminPanel() {
                     onClick={() => setExpandedChat(expandedChat === c.id ? null : c.id)}
                   >
                     <span style={S.badge(c.user_role)}>{c.user_role}</span>
-                    <span style={{ fontWeight: 600, color: '#cbd5e1', fontSize: 12 }}>{c.user_name}</span>
-                    <span style={{ color: '#475569', fontSize: 11 }}>{c.user_email}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: 12 }}>{c.user_name}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{c.user_email}</span>
                     <span style={{ marginLeft: 'auto', color: '#38bdf8', fontSize: 12, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       Q: {c.question}
                     </span>
-                    <span style={{ color: '#334155', fontSize: 11, flexShrink: 0 }}>{c.created_at?.slice(0, 16).replace('T', ' ')}</span>
-                    <span style={{ color: '#475569', fontSize: 12 }}>{expandedChat === c.id ? '▲' : '▼'}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{c.created_at?.slice(0, 16).replace('T', ' ')}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{expandedChat === c.id ? '▲' : '▼'}</span>
                   </div>
                   {/* Expanded Q&A */}
                   {expandedChat === c.id && (
                     <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ background: '#1e293b', borderRadius: 6, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: '.06em', marginBottom: 4 }}>USER ASKED</div>
+                      <div style={{ background: 'var(--card-bg)', borderRadius: 6, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '.06em', marginBottom: 4 }}>USER ASKED</div>
                         <div style={{ fontSize: 12.5, color: '#e0f2fe', lineHeight: 1.6 }}>{c.question}</div>
                       </div>
                       <div style={{ background: '#0c1628', borderRadius: 6, padding: '10px 12px', border: '1px solid #1e3a5f' }}>
-                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: '.06em', marginBottom: 4 }}>ASSISTANT REPLIED</div>
-                        <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{c.answer}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '.06em', marginBottom: 4 }}>ASSISTANT REPLIED</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{c.answer}</div>
                       </div>
 
                       {/* Notify user section */}
@@ -490,9 +692,9 @@ export default function AdminPanel() {
                           ✓ Notification sent to {c.user_name}
                         </div>
                       ) : notifyingChat === c.id ? (
-                        <div style={{ background: '#0f172a', borderRadius: 6, padding: '10px 12px', border: '1px solid #334155' }}>
-                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-                            Send notification to <strong style={{ color: '#94a3b8' }}>{c.user_name}</strong>:
+                        <div style={{ background: 'var(--content-bg)', borderRadius: 6, padding: '10px 12px', border: '1px solid var(--card-border)' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                            Send notification to <strong style={{ color: 'var(--text-secondary)' }}>{c.user_name}</strong>:
                           </div>
                           <textarea
                             rows={3}
@@ -500,8 +702,8 @@ export default function AdminPanel() {
                             onChange={e => setNotifMsg(e.target.value)}
                             placeholder="e.g. We've addressed your question — the fill rate feature has been updated..."
                             style={{
-                              width: '100%', background: '#1e293b', border: '1px solid #334155',
-                              borderRadius: 6, color: '#e2e8f0', fontSize: 12, padding: '8px 10px',
+                              width: '100%', background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+                              borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, padding: '8px 10px',
                               resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                             }}
                           />
@@ -519,7 +721,7 @@ export default function AdminPanel() {
                             </button>
                             <button
                               onClick={() => { setNotifyingChat(null); setNotifMsg('') }}
-                              style={{ background: 'none', border: '1px solid #334155', borderRadius: 5, color: '#64748b', fontSize: 11, padding: '6px 12px', cursor: 'pointer' }}
+                              style={{ background: 'none', border: '1px solid var(--card-border)', borderRadius: 5, color: 'var(--text-muted)', fontSize: 11, padding: '6px 12px', cursor: 'pointer' }}
                             >
                               Cancel
                             </button>
@@ -551,7 +753,7 @@ export default function AdminPanel() {
         logs.length === 0
           ? <div style={S.empty}>{loading ? 'Loading…' : 'No activity yet.'}</div>
           : (
-            <div style={{ height: 520, border: '1px solid #1e293b', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ height: 520, border: '1px solid var(--card-border)', borderRadius: 8, overflow: 'hidden' }}>
               <DataGrid
                 records={logs.map(l => ({ user: l.user_email, action: l.action, details: l.details || '', ip: l.ip_address || '', time: l.created_at?.slice(0, 16).replace('T', ' ') || '' }))}
                 columns={['user', 'action', 'details', 'ip', 'time']}
@@ -560,6 +762,311 @@ export default function AdminPanel() {
             </div>
           )
       )}
+
+      {/* ── Access Matrix ── */}
+      {tab === 'access' && <AccessMatrix />}
+    </div>
+  )
+}
+
+// ── Role-Permission Matrix ──────────────────────────────────────────────────
+type RoleKey = 'viewer' | 'planner' | 'temp_admin' | 'admin'
+type ViewDef = { name: string; minRole: RoleKey }
+type PageDef = { icon: string; name: string; path: string; minRole: RoleKey; views: ViewDef[]; adminOnly?: true }
+type GroupDef = { group: string }
+
+const MATRIX_PAGES: (PageDef | GroupDef)[] = [
+  { group: 'Dashboards' },
+  { icon: '📊', name: 'Dashboard',         path: '/',            minRole: 'viewer',  views: [
+    { name: 'Store Network',           minRole: 'viewer' },
+    { name: 'Allocation Summary',      minRole: 'viewer' },
+    { name: 'All · Store · Div-Dept',  minRole: 'viewer' },
+  ]},
+  { icon: '🏪', name: 'NSO Dashboard',     path: '/nso',         minRole: 'viewer',  views: [
+    { name: 'Store View',              minRole: 'viewer' },
+    { name: 'Article Detail',          minRole: 'planner' },
+  ]},
+  { icon: '📊', name: 'Sale Dashboard',    path: '/sale',        minRole: 'viewer',  views: [
+    { name: 'Store Summary',           minRole: 'viewer' },
+    { name: 'Daily Trend',             minRole: 'viewer' },
+  ]},
+  { group: 'Planning & Results' },
+  { icon: '📝', name: 'Requirements',      path: '/req',         minRole: 'planner', views: [
+    { name: 'Views',    minRole: 'planner' },
+    { name: 'Sparky',   minRole: 'planner' },
+    { name: 'Size',     minRole: 'planner' },
+    { name: 'MRP',      minRole: 'planner' },
+    { name: 'Article',  minRole: 'planner' },
+    { name: 'MC',       minRole: 'planner' },
+    { name: 'Barcode',  minRole: 'planner' },
+    { name: 'Option',   minRole: 'planner' },
+    { name: 'List',     minRole: 'planner' },
+  ]},
+  { icon: '📋', name: 'Results',           path: '/results',     minRole: 'viewer',  views: [
+    { name: 'Grid',      minRole: 'viewer' },
+    { name: 'Aggregate', minRole: 'viewer' },
+  ]},
+  { icon: '🔀', name: 'Distribution',      path: '/distribution', minRole: 'planner', views: [
+    { name: 'Build Base',     minRole: 'planner' },
+    { name: 'Run Loop',       minRole: 'planner' },
+    { name: 'Download Excel', minRole: 'planner' },
+  ]},
+  { icon: '🕑', name: 'History',           path: '/history',     minRole: 'viewer',  views: [
+    { name: 'Run history', minRole: 'viewer' },
+  ]},
+  { group: 'Data & Config' },
+  { icon: '🗄️', name: 'Database Explorer', path: '/database',    minRole: 'planner', views: [{ name: 'Table browser',     minRole: 'planner' }] },
+  { icon: '📂', name: 'Master Data',       path: '/master-data', minRole: 'planner', views: [{ name: 'Master data tables', minRole: 'planner' }] },
+  { icon: '⚙️', name: 'Calc Factors',      path: '/factors',     minRole: 'planner', views: [{ name: 'Factor config',     minRole: 'planner' }] },
+  { icon: '▶️', name: 'Calculation',       path: '/calculation', minRole: 'planner', views: [{ name: 'Run calculation',   minRole: 'planner' }] },
+  { icon: '🔧', name: 'Settings',          path: '/settings',    minRole: 'planner', views: [{ name: 'User settings',     minRole: 'planner' }] },
+  { group: 'General' },
+  { icon: '📖', name: 'User Manual',       path: '/manual',      minRole: 'viewer',  views: [{ name: 'Documentation',     minRole: 'viewer' }] },
+  { group: 'Admin Only' },
+  { icon: '🛡️', name: 'Admin Panel',       path: '/admin',       minRole: 'admin',   adminOnly: true, views: [
+    { name: 'Role Requests',  minRole: 'admin' },
+    { name: 'Users',          minRole: 'admin' },
+    { name: 'Activity Logs',  minRole: 'admin' },
+    { name: 'AI Chats',       minRole: 'admin' },
+    { name: 'Access Matrix',  minRole: 'admin' },
+  ]},
+]
+
+const ROLE_LEVEL_MAP: Record<RoleKey, number> = { viewer: 1, planner: 2, temp_admin: 3, admin: 4 }
+const ROLES_DISPLAY: { key: RoleKey; label: string; color: string; pillBg: string; pillBorder: string }[] = [
+  { key: 'viewer',     label: 'Viewer',     color: 'var(--text-secondary)', pillBg: '#1c2535', pillBorder: '#334155' },
+  { key: 'planner',    label: 'Planner',    color: '#34d399', pillBg: '#052e16', pillBorder: '#166534' },
+  { key: 'temp_admin', label: 'Temp Admin', color: '#c084fc', pillBg: '#2d1b4e', pillBorder: '#6b21a8' },
+  { key: 'admin',      label: 'Admin',      color: '#818cf8', pillBg: '#1e1b4b', pillBorder: '#3730a3' },
+]
+
+function hasAccess(minRole: RoleKey, role: RoleKey): boolean {
+  return ROLE_LEVEL_MAP[role] >= ROLE_LEVEL_MAP[minRole]
+}
+
+// Build initial access state: { "path::viewName": Set<RoleKey> }
+const LS_KEY = 'ck_access_matrix_v1'
+
+function buildInitialAccess(): Record<string, Set<RoleKey>> {
+  const acc: Record<string, Set<RoleKey>> = {}
+  for (const p of MATRIX_PAGES) {
+    if ('group' in p) continue
+    for (const v of p.views) {
+      const key = `${p.path}::${v.name}`
+      const allowed = new Set<RoleKey>()
+      for (const r of ROLES_DISPLAY) {
+        if (p.adminOnly ? r.key === 'admin' : hasAccess(v.minRole, r.key)) {
+          allowed.add(r.key)
+        }
+      }
+      acc[key] = allowed
+    }
+  }
+  return acc
+}
+
+function loadAccess(): Record<string, Set<RoleKey>> {
+  const defaults = buildInitialAccess()
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (!raw) return defaults
+    const parsed: Record<string, string[]> = JSON.parse(raw)
+    const result: Record<string, Set<RoleKey>> = { ...defaults }
+    for (const key of Object.keys(defaults)) {
+      if (parsed[key]) result[key] = new Set(parsed[key] as RoleKey[])
+    }
+    // add any new sections not in saved data (keeps defaults for new pages)
+    return result
+  } catch { return defaults }
+}
+
+function saveAccess(access: Record<string, Set<RoleKey>>) {
+  try {
+    const serializable: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(access)) serializable[k] = Array.from(v)
+    localStorage.setItem(LS_KEY, JSON.stringify(serializable))
+  } catch { /* storage full or blocked */ }
+}
+
+const CHECK_SVG = (
+  <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" strokeWidth={2.5} width={12} height={12}>
+    <polyline points="2,6 5,9 10,3" />
+  </svg>
+)
+
+function AccessMatrix() {
+  const [access, setAccess] = useState<Record<string, Set<RoleKey>>>(() => loadAccess())
+  const [saved, setSaved] = useState(false)
+
+  function toggle(sectionKey: string, role: RoleKey) {
+    setAccess(prev => {
+      const next = { ...prev }
+      const set = new Set(prev[sectionKey] || [])
+      if (set.has(role)) set.delete(role)
+      else set.add(role)
+      next[sectionKey] = set
+      saveAccess(next)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1800)
+      return next
+    })
+  }
+
+  function handleReset() {
+    const def = buildInitialAccess()
+    setAccess(def)
+    saveAccess(def)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
+  }
+
+  const MS = {
+    wrap:    { overflowX: 'auto' as const, border: '1px solid var(--card-border)', borderRadius: 8, background: 'var(--content-bg)' },
+    table:   { width: '100%', borderCollapse: 'collapse' as const, minWidth: 560, fontSize: 12 },
+    thead:   { background: '#0a0f1e', position: 'sticky' as const, top: 0, zIndex: 2 },
+    thName:  { padding: '10px 12px', color: 'var(--text-muted)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em', textAlign: 'left' as const, borderBottom: '1px solid #1e293b', width: 160 },
+    thView:  { padding: '10px 12px', color: 'var(--text-muted)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.08em', textAlign: 'left' as const, borderBottom: '1px solid #1e293b', width: 160, borderLeft: '1px solid #1e2d3d' },
+    thRole:  { padding: '10px 14px', textAlign: 'center' as const, borderBottom: '1px solid #1e293b', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const },
+    group:   { background: '#0a0f1e', color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', padding: '7px 12px', borderBottom: '1px solid #1e2d3d' },
+    pageTd:  { padding: '0 12px', borderBottom: '1px solid transparent', verticalAlign: 'top' as const, paddingTop: 10 },
+    viewTd:  { padding: '7px 12px', borderBottom: '1px solid #1e2d3d', verticalAlign: 'middle' as const, borderLeft: '1px solid #1e2d3d' },
+    cell:    { textAlign: 'center' as const, padding: '7px 10px', borderBottom: '1px solid #1e2d3d', verticalAlign: 'middle' as const },
+    lastCell:{ textAlign: 'center' as const, padding: '7px 10px', borderBottom: '2px solid #1e3a5f', verticalAlign: 'middle' as const },
+  }
+
+  // flatten to rows: [{type:'group',...} | {type:'page', page, firstView, totalViews} | {type:'view', page, view, isLast}]
+  type RowGroup = { type: 'group'; label: string }
+  type RowPage  = { type: 'page';  page: PageDef; rowspan: number }
+  type RowView  = { type: 'view';  page: PageDef; view: ViewDef; isLast: boolean }
+  type Row = RowGroup | RowPage | RowView
+
+  const rows: Row[] = []
+  for (const p of MATRIX_PAGES) {
+    if ('group' in p) { rows.push({ type: 'group', label: p.group }); continue }
+    rows.push({ type: 'page', page: p, rowspan: p.views.length })
+    for (let vi = 0; vi < p.views.length; vi++) {
+      rows.push({ type: 'view', page: p, view: p.views[vi], isLast: vi === p.views.length - 1 })
+    }
+  }
+
+  // summary: sections per role
+  const sectionCounts = ROLES_DISPLAY.map(r => {
+    let count = 0
+    for (const key of Object.keys(access)) {
+      if (access[key].has(r.key)) count++
+    }
+    return count
+  })
+
+  let pageRowCursor: string | null = null
+
+  return (
+    <div>
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const }}>
+        <span style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4, padding: '3px 8px', color: '#38bdf8', fontSize: 10, fontWeight: 700 }}>ADMIN ONLY</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Click toggles to change section access. Saved in browser automatically.</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {saved && (
+            <span style={{ fontSize: 11, color: '#34d399', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} width={11} height={11}><polyline points="2,6 5,9 10,3" /></svg>
+              Saved
+            </span>
+          )}
+          <button onClick={handleReset} style={{
+            fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '1px solid var(--card-border)',
+            background: 'var(--content-bg)', color: 'var(--text-muted)', cursor: 'pointer',
+          }}>Reset to defaults</button>
+        </div>
+      </div>
+      <div style={MS.wrap}>
+        <table style={MS.table}>
+          <thead style={MS.thead}>
+            <tr>
+              <th style={MS.thName}>Page</th>
+              <th style={MS.thView}>Section / View</th>
+              {ROLES_DISPLAY.map(r => (
+                <th key={r.key} style={{ ...MS.thRole, color: r.color }}>
+                  <span style={{ background: r.pillBg, border: `1px solid ${r.pillBorder}`, borderRadius: 4, padding: '3px 8px', display: 'inline-block', fontFamily: 'monospace' }}>
+                    {r.label}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => {
+              if (row.type === 'group') {
+                pageRowCursor = null
+                return <tr key={ri}><td colSpan={6} style={MS.group}>{row.label}</td></tr>
+              }
+              if (row.type === 'page') {
+                pageRowCursor = row.page.path
+                return null // page cell is rendered inline in 'view' rows via rowspan
+              }
+              // view row
+              const { page, view, isLast } = row
+              const sKey = `${page.path}::${view.name}`
+              const isFirstView = pageRowCursor === page.path && rows[ri - 1]?.type === 'page'
+              const cellStyle = isLast ? MS.lastCell : MS.cell
+              return (
+                <tr key={sKey} style={{ background: isLast ? 'transparent' : '#ffffff02' }}>
+                  {isFirstView && (
+                    <td rowSpan={page.views.length} style={MS.pageTd}>
+                      <div>
+                        <span style={{ marginRight: 6 }}>{page.icon}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{page.name}</span>
+                      </div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{page.path}</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>{page.views.length} section{page.views.length > 1 ? 's' : ''}</div>
+                    </td>
+                  )}
+                  <td style={{ ...MS.viewTd, borderBottom: isLast ? '2px solid #1e3a5f' : '1px solid #1e2d3d' }}>
+                    <span style={{
+                      fontSize: 10, background: '#0a0f1e', border: '1px solid #1e3a5f',
+                      borderRadius: 3, padding: '2px 8px', color: '#7dd3fc',
+                      fontFamily: 'monospace', whiteSpace: 'nowrap' as const,
+                    }}>{view.name}</span>
+                  </td>
+                  {ROLES_DISPLAY.map(r => {
+                    const on = access[sKey]?.has(r.key) ?? false
+                    const locked = r.key === 'admin' || page.adminOnly
+                    return (
+                      <td key={r.key} style={{ ...cellStyle, background: on && locked ? '#0f1f38' : 'transparent' }}>
+                        <button
+                          onClick={() => !locked && toggle(sKey, r.key)}
+                          title={locked ? `${r.label} — locked` : on ? `Remove ${r.label} access` : `Grant ${r.label} access`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 24, height: 24, borderRadius: 5, border: 'none',
+                            cursor: locked ? 'not-allowed' : 'pointer',
+                            background: on ? (locked ? '#1e3a5f' : r.pillBg) : '#1e293b',
+                            borderWidth: 1.5, borderStyle: 'solid',
+                            borderColor: on ? r.color : '#334155',
+                            color: on ? r.color : '#334155',
+                            opacity: locked && !on ? 0.4 : 1,
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {on ? CHECK_SVG : <span style={{ fontSize: 10, lineHeight: 1 }}>—</span>}
+                        </button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+        {ROLES_DISPLAY.map((r, i) => (
+          <div key={r.key} style={{ background: 'var(--content-bg)', border: `1px solid ${r.pillBorder}`, borderRadius: 8, padding: '10px 16px', minWidth: 110 }}>
+            <div style={{ fontSize: 10, color: r.color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontFamily: 'monospace' }}>{r.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: r.color, fontVariantNumeric: 'tabular-nums' }}>{sectionCounts[i]}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>sections</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

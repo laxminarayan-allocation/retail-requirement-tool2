@@ -1,4 +1,4 @@
-const palette: Record<string, { bg: string; color: string }> = {
+﻿const palette: Record<string, { bg: string; color: string }> = {
   ok: { bg: '#14532d', color: '#4ade80' },
   connected: { bg: '#14532d', color: '#4ade80' },
   error: { bg: '#7f1d1d', color: '#fca5a5' },
@@ -7,7 +7,7 @@ const palette: Record<string, { bg: string; color: string }> = {
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const s = palette[status] ?? { bg: '#334155', color: '#94a3b8' }
+  const s = palette[status] ?? { bg: '#334155', color: 'var(--text-secondary)' }
   return (
     <span
       style={{

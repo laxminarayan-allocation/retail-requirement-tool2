@@ -1,17 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import axios from 'axios'
+import NumFilterDropdown, { NumFilterIcon, useNumFilter } from '@/components/NumFilterDropdown'
+import StaleBanner from '@/components/StaleBanner'
 
 const PAGE_SIZE = 20
 
-function useIsMobile() {
-  const [m, setM] = useState(window.innerWidth < 768)
-  useEffect(() => {
-    const h = () => setM(window.innerWidth < 768)
-    window.addEventListener('resize', h)
-    return () => window.removeEventListener('resize', h)
-  }, [])
-  return m
-}
 
 function fmt(v: unknown, dec = 0) {
   if (v === null || v === undefined || v === '') return '—'
@@ -69,12 +63,12 @@ function MultiSelectDropdown({
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 9999,
-          background: '#1e293b', border: '1px solid #2a3a55', borderRadius: 8,
+          background: 'var(--card-bg)', border: '1px solid #2a3a55', borderRadius: 8,
           minWidth: 180, maxHeight: 300, overflowY: 'auto',
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         }}>
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid #1a2540', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#1e293b' }}>
-            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #1a2540', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--card-bg)' }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               {selected.length > 0 ? `${selected.length} selected` : `All ${label}`}
             </span>
             {selected.length > 0 && (
@@ -118,6 +112,7 @@ interface CacheStatus { ready: boolean; fetching: boolean; error: string; rows_t
 
 export default function SaleDashboard() {
   const isMobile = useIsMobile()
+  const numFilter = useNumFilter()
   const [rows, setRows]             = useState<Row[]>([])
   const [allRows, setAllRows]       = useState<Row[]>([])
   const [cacheInfo, setCacheInfo]   = useState<CacheStatus | null>(null)
@@ -140,6 +135,19 @@ export default function SaleDashboard() {
   const [customLY, setCustomLY]         = useState(false)
   const [filters, setFilters]       = useState<Record<string, string[]>>({})
   const [pollRef, setPollRef]       = useState<ReturnType<typeof setInterval> | null>(null)
+  const [invalidating, setInvalidating] = useState(false)
+  const [invalidateMsg, setInvalidateMsg] = useState('')
+
+  async function handleInvalidate() {
+    if (!confirm('Sale parquet cache clear hoga — next load Oracle se fresh data lega. Continue?')) return
+    setInvalidating(true)
+    try {
+      const res = await axios.post<{ success: boolean; message: string }>('/api/system/cache/invalidate')
+      setInvalidateMsg(res.data.message ?? 'Cache cleared')
+    } catch { setInvalidateMsg('Error clearing cache') }
+    setInvalidating(false)
+    setTimeout(() => setInvalidateMsg(''), 4000)
+  }
 
   const stopPolling = useCallback(() => {
     if (pollRef) { clearInterval(pollRef); setPollRef(null) }
@@ -226,11 +234,12 @@ export default function SaleDashboard() {
     else { setSortCol(col); setSortDir('desc') }
   }
 
-  function Th({ col, label }: { col: string; label: string }) {
+  function Th({ col, label, isNum }: { col: string; label: string; isNum?: boolean }) {
     const active = sortCol === col
     return (
       <th onClick={() => toggleSort(col)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
         {label} {active ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+        {isNum && <NumFilterIcon col={col} active={!!numFilter.numFilters[col]} onOpen={numFilter.openFilter} />}
       </th>
     )
   }
@@ -241,8 +250,9 @@ export default function SaleDashboard() {
   const achvPct  = tgtTotal > 0 ? (tyTotal / tgtTotal * 100) : null
   const grwthPct = lyTotal > 0 ? ((tyTotal - lyTotal) / lyTotal * 100) : null
 
-  const paged = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const totalPages = Math.ceil(rows.length / PAGE_SIZE)
+  const numFiltered = numFilter.applyToRows(rows)
+  const paged = numFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const totalPages = Math.ceil(numFiltered.length / PAGE_SIZE)
 
   function exportCsv() {
     if (!rows.length) return
@@ -308,15 +318,15 @@ export default function SaleDashboard() {
 
   // ── Mobile layout ───────────────────────────────────────────────────────────
   if (isMobile) return (
-    <div style={{ display: 'flex', flexDirection: 'column', background: '#0f172a', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--content-bg)', minHeight: '100vh' }}>
       <style>{sharedStyle}</style>
 
       {/* Mobile header */}
-      <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '10px 14px' }}>
+      <div style={{ background: 'var(--card-bg)', borderBottom: '1px solid var(--card-border)', padding: '10px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0' }}>Sale Dashboard</div>
-            <div style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>Store-wise TY vs LY</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>Sale Dashboard</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>Store-wise TY vs LY</div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="sd-btn" onClick={loadData} disabled={loading || fetching} style={{ padding: '6px 12px' }}>
@@ -335,7 +345,7 @@ export default function SaleDashboard() {
         <input
           type="text" placeholder="Search store…" value={storeSearch}
           onChange={e => setStoreSearch(e.target.value)}
-          style={{ width: '100%', boxSizing: 'border-box' as const, background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none' }}
+          style={{ width: '100%', boxSizing: 'border-box' as const, background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
         />
         {/* Active filter chips */}
         {activeFilterCount > 0 && (
@@ -360,10 +370,10 @@ export default function SaleDashboard() {
           { label: 'Achv%', val: achvPct !== null ? achvPct.toFixed(1) + '%' : '—', sub: '', color: achvColor(achvPct) },
           { label: 'Growth', val: grwthPct !== null ? (grwthPct > 0 ? '+' : '') + grwthPct.toFixed(1) + '%' : '—', sub: '', color: grwthPct !== null && grwthPct >= 0 ? '#22c55e' : '#ef4444' },
         ].map(k => (
-          <div key={k.label} style={{ flexShrink: 0, background: '#1e293b', borderRadius: 10, padding: '8px 14px', border: '1px solid #334155', textAlign: 'center', minWidth: 90 }}>
+          <div key={k.label} style={{ flexShrink: 0, background: 'var(--card-bg)', borderRadius: 10, padding: '8px 14px', border: '1px solid var(--card-border)', textAlign: 'center', minWidth: 90 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: k.color, lineHeight: 1 }}>{k.val}</div>
-            {k.sub && <div style={{ fontSize: 9, color: '#475569', marginTop: 2 }}>{k.sub}</div>}
-            <div style={{ fontSize: 9, color: '#64748b', marginTop: 3, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{k.label}</div>
+            {k.sub && <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{k.sub}</div>}
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{k.label}</div>
           </div>
         ))}
       </div>
@@ -380,9 +390,9 @@ export default function SaleDashboard() {
 
       {/* Store cards */}
       <div style={{ padding: '0 12px 80px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {loading && !fetching && <div style={{ textAlign: 'center', padding: 40, color: '#475569' }}>Loading…</div>}
+        {loading && !fetching && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>}
         {!loading && paged.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: '#475569', fontSize: 14 }}>
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>
             {allRows.length === 0 ? 'No data — tap ⟳ to refresh' : 'No stores match filters'}
           </div>
         )}
@@ -392,30 +402,30 @@ export default function SaleDashboard() {
           const achvC = achvColor(tyAchv)
           return (
             <div key={i} style={{
-              background: '#1e293b', borderRadius: 10, padding: '12px 14px',
+              background: 'var(--card-bg)', borderRadius: 10, padding: '12px 14px',
               border: `1px solid #334155`, borderLeft: `3px solid ${achvC}`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#e2e8f0', flex: 1 }}>{String(r.STORE_NAME || '—')}</div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', flex: 1 }}>{String(r.STORE_NAME || '—')}</div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
                   {!!r.DIVISION     && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#1e3a5f', color: '#7dd3fc' }}>{String(r.DIVISION)}</span>}
-                  {!!r.CLUSTER_TYPE && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#0f172a', color: '#64748b' }}>{String(r.CLUSTER_TYPE)}</span>}
-                  {!!r.REGION_TYPE  && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#0f172a', color: '#64748b' }}>{String(r.REGION_TYPE)}</span>}
+                  {!!r.CLUSTER_TYPE && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'var(--content-bg)', color: 'var(--text-muted)' }}>{String(r.CLUSTER_TYPE)}</span>}
+                  {!!r.REGION_TYPE  && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'var(--content-bg)', color: 'var(--text-muted)' }}>{String(r.REGION_TYPE)}</span>}
                 </div>
               </div>
-              {r.OPERT_DAYS != null && <div style={{ fontSize: 9, color: '#64748b', marginBottom: 6 }}>⏱ Oper Days: <span style={{ color: '#94a3b8', fontWeight: 700 }}>{String(r.OPERT_DAYS)}d</span></div>}
+              {r.OPERT_DAYS != null && <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>⏱ Oper Days: <span style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>{String(r.OPERT_DAYS)}d</span></div>}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
                 {[
                   { label: 'TY Sale', val: fmt(r.TY_V), color: '#38bdf8' },
                   { label: 'TY Qty', val: fmt(r.TY_QTY), color: '#7dd3fc' },
                   { label: 'TY Achv', val: tyAchv !== null ? tyAchv.toFixed(1) + '%' : '—', color: achvC },
-                  { label: 'LY Sale', val: fmt(r.LY_V), color: '#94a3b8' },
+                  { label: 'LY Sale', val: fmt(r.LY_V), color: 'var(--text-secondary)' },
                   { label: 'TY Target', val: fmt(r.TY_TGT_V), color: '#facc15' },
                   { label: 'Growth', val: !isNaN(growth) ? (growth > 0 ? '+' : '') + growth.toFixed(1) + '%' : '—', color: !isNaN(growth) && growth >= 0 ? '#22c55e' : '#ef4444' },
                 ].map(m => (
-                  <div key={m.label} style={{ background: '#0f172a', borderRadius: 6, padding: '5px 8px' }}>
+                  <div key={m.label} style={{ background: 'var(--content-bg)', borderRadius: 6, padding: '5px 8px' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}</div>
-                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>{m.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>{m.label}</div>
                   </div>
                 ))}
               </div>
@@ -426,7 +436,7 @@ export default function SaleDashboard() {
         {totalPages > 1 && (
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '12px 0', alignItems: 'center' }}>
             <button className="sd-btn" style={{ padding: '8px 18px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
-            <span style={{ fontSize: 12, color: '#64748b' }}>{page} / {totalPages} &nbsp;({rows.length} stores)</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page} / {totalPages} &nbsp;({rows.length} stores)</span>
             <button className="sd-btn" style={{ padding: '8px 18px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next ›</button>
           </div>
         )}
@@ -436,10 +446,10 @@ export default function SaleDashboard() {
       {filterDrawerOpen && (
         <>
           <div onClick={() => setFilterDrawerOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 2000 }} />
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001, background: '#1e293b', borderTop: '1px solid #334155', borderRadius: '16px 16px 0 0', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #334155' }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: '#e2e8f0' }}>Filters</span>
-              <button onClick={() => setFilterDrawerOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}>✕</button>
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001, background: 'var(--card-bg)', borderTop: '1px solid var(--card-border)', borderRadius: '16px 16px 0 0', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--card-border)' }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Filters</span>
+              <button onClick={() => setFilterDrawerOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 20, cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Single-select filters */}
@@ -449,8 +459,8 @@ export default function SaleDashboard() {
                 { label: 'Status', val: selStatus, set: setSelStatus, opts: filters.store_status || ['ACTIVE', 'INACTIVE'] },
               ].map(f => (
                 <div key={f.label}>
-                  <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{f.label}</div>
-                  <select value={f.val} onChange={e => f.set(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '10px 12px', color: '#e2e8f0', fontSize: 13 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{f.label}</div>
+                  <select value={f.val} onChange={e => f.set(e.target.value)} style={{ width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)', fontSize: 13 }}>
                     <option value=''>All {f.label}s</option>
                     {f.opts.map(v => <option key={v}>{v}</option>)}
                   </select>
@@ -460,7 +470,7 @@ export default function SaleDashboard() {
               {(filters.division || []).length > 0 && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Division {selDivisions.length > 0 && <span style={{ color: '#7dd3fc' }}>({selDivisions.length})</span>}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Division {selDivisions.length > 0 && <span style={{ color: '#7dd3fc' }}>({selDivisions.length})</span>}</div>
                     {selDivisions.length > 0 && <button onClick={() => setSelDivisions([])} style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear</button>}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
@@ -479,7 +489,7 @@ export default function SaleDashboard() {
               {(filters.attribute1 || []).length > 0 && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Campaign {selAttrs.length > 0 && <span style={{ color: '#7dd3fc' }}>({selAttrs.length})</span>}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Campaign {selAttrs.length > 0 && <span style={{ color: '#7dd3fc' }}>({selAttrs.length})</span>}</div>
                     {selAttrs.length > 0 && <button onClick={() => setSelAttrs([])} style={{ fontSize: 10, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear</button>}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6 }}>
@@ -499,12 +509,12 @@ export default function SaleDashboard() {
                 <div style={{ fontSize: 10, color: '#7dd3fc', marginBottom: 6, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>TY Period (This Year)</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>FROM</div>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 3 }}>FROM</div>
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '9px 10px', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' as const }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>TO</div>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 3 }}>TO</div>
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width: '100%', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '9px 10px', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' as const }} />
                   </div>
                 </div>
                 {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo('') }} style={{ marginTop: 6, fontSize: 11, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✕ Clear TY dates</button>}
@@ -521,12 +531,12 @@ export default function SaleDashboard() {
                 {customLY && (
                   <div style={{ display: 'flex', gap: 8 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>FROM</div>
-                      <input type="date" value={lyDateFrom} onChange={e => setLyDateFrom(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #f59e0b44', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 3 }}>FROM</div>
+                      <input type="date" value={lyDateFrom} onChange={e => setLyDateFrom(e.target.value)} style={{ width: '100%', background: 'var(--content-bg)', border: '1px solid #f59e0b44', borderRadius: 8, padding: '9px 10px', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' as const }} />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 9, color: '#64748b', marginBottom: 3 }}>TO</div>
-                      <input type="date" value={lyDateTo} onChange={e => setLyDateTo(e.target.value)} style={{ width: '100%', background: '#0f172a', border: '1px solid #f59e0b44', borderRadius: 8, padding: '9px 10px', color: '#e2e8f0', fontSize: 13, boxSizing: 'border-box' as const }} />
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 3 }}>TO</div>
+                      <input type="date" value={lyDateTo} onChange={e => setLyDateTo(e.target.value)} style={{ width: '100%', background: 'var(--content-bg)', border: '1px solid #f59e0b44', borderRadius: 8, padding: '9px 10px', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' as const }} />
                     </div>
                   </div>
                 )}
@@ -534,7 +544,7 @@ export default function SaleDashboard() {
               <button onClick={() => setFilterDrawerOpen(false)} style={{ width: '100%', padding: '13px', borderRadius: 10, border: 'none', background: '#0ea5e9', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>Apply</button>
               {activeFilterCount > 0 && (
                 <button onClick={() => { setSelCluster(''); setSelRegion(''); setSelStatus(''); setSelAttrs([]); setSelDivisions([]); setDateFrom(''); setDateTo(''); setCustomLY(false); setLyDateFrom(''); setLyDateTo('') }}
-                  style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid #334155', background: 'transparent', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ width: '100%', padding: '11px', borderRadius: 10, border: '1px solid var(--card-border)', background: 'transparent', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   Clear All Filters
                 </button>
               )}
@@ -548,6 +558,7 @@ export default function SaleDashboard() {
   // ── Desktop layout ──────────────────────────────────────────────────────────
   return (
     <div className="sale-dash">
+      <StaleBanner />
       <style>{`
         .sale-dash { padding: 12px; font-size: 13px; }
         .kpi-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
@@ -587,7 +598,15 @@ export default function SaleDashboard() {
         .group-header th { background: #0a0f1c; font-size: 10px; text-align: center; border-bottom: 1px solid #2a3a55; opacity: .7; }
       `}</style>
 
-      <h2 style={{ marginBottom: 14 }}>Store-wise Sale Dashboard</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <h2 style={{ margin: 0 }}>Store-wise Sale Dashboard</h2>
+        <button
+          onClick={handleInvalidate}
+          disabled={invalidating}
+          style={{ background: '#7f1d1d', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: invalidating ? 'not-allowed' : 'pointer', opacity: invalidating ? 0.7 : 1 }}
+        >{invalidating ? 'Clearing…' : '🗑 Clear Cache'}</button>
+        {invalidateMsg && <span style={{ fontSize: 12, color: '#4ade80' }}>{invalidateMsg}</span>}
+      </div>
 
       {/* KPI strip */}
       <div className="kpi-strip">
@@ -744,8 +763,8 @@ export default function SaleDashboard() {
               <tr>
                 <Th col="STORE_NAME" label="Store" />
                 <th>Division</th><th>Zone</th><th>Region</th><th>Oper Days</th>
-                <Th col="TY_V" label="Sale ₹" /><Th col="TY_QTY" label="Sale Qty" /><Th col="TY_TGT_V" label="Target" /><th>Achv%</th>
-                <Th col="LY_V" label="Sale ₹" /><Th col="LY_TGT_V" label="Target" /><th>LY Achv%</th>
+                <Th col="TY_V" label="Sale ₹" isNum /><Th col="TY_QTY" label="Sale Qty" isNum /><Th col="TY_TGT_V" label="Target" isNum /><th>Achv%</th>
+                <Th col="LY_V" label="Sale ₹" isNum /><Th col="LY_TGT_V" label="Target" isNum /><th>LY Achv%</th>
                 <th>Growth%</th>
               </tr>
             </thead>
@@ -812,18 +831,19 @@ export default function SaleDashboard() {
               }
               years.sort((a, b) => a.year.localeCompare(b.year))
 
-              function sumRow(rows: Row[]) {
-                return rows.reduce((acc, r) => ({
-                  TY_V:     (acc.TY_V     as number) + Number(r.TY_V     || 0),
-                  TY_QTY:   (acc.TY_QTY   as number) + Number(r.TY_QTY   || 0),
-                  TY_TGT_V: (acc.TY_TGT_V as number) + Number(r.TY_TGT_V || 0),
-                  LY_V:     (acc.LY_V     as number) + Number(r.LY_V     || 0),
-                  LY_TGT_V: (acc.LY_TGT_V as number) + Number(r.LY_TGT_V || 0),
+              type SumResult = { TY_V: number; TY_QTY: number; TY_TGT_V: number; LY_V: number; LY_TGT_V: number }
+              function sumRow(rows: Row[]): SumResult {
+                return rows.reduce<SumResult>((acc, r) => ({
+                  TY_V:     acc.TY_V     + Number(r.TY_V     || 0),
+                  TY_QTY:   acc.TY_QTY   + Number(r.TY_QTY   || 0),
+                  TY_TGT_V: acc.TY_TGT_V + Number(r.TY_TGT_V || 0),
+                  LY_V:     acc.LY_V     + Number(r.LY_V     || 0),
+                  LY_TGT_V: acc.LY_TGT_V + Number(r.LY_TGT_V || 0),
                 }), { TY_V: 0, TY_QTY: 0, TY_TGT_V: 0, LY_V: 0, LY_TGT_V: 0 })
               }
 
-              const GH: React.CSSProperties = { background: '#0f172a', fontWeight: 700, fontSize: 11, color: '#94a3b8', borderBottom: '1px solid #2a3a55' }
-              const YH: React.CSSProperties = { background: '#0a1020', fontWeight: 800, fontSize: 12, color: '#e2e8f0', borderBottom: '2px solid #2a3a55', borderTop: '2px solid #1e3a5f' }
+              const GH: React.CSSProperties = { background: 'var(--content-bg)', fontWeight: 700, fontSize: 11, color: 'var(--text-secondary)', borderBottom: '1px solid #2a3a55' }
+              const YH: React.CSSProperties = { background: '#0a1020', fontWeight: 800, fontSize: 12, color: 'var(--text-primary)', borderBottom: '2px solid #2a3a55', borderTop: '2px solid #1e3a5f' }
 
               return (
                 <table className="sale-table">
@@ -942,8 +962,8 @@ export default function SaleDashboard() {
               <tr>
                 <Th col="STORE_NAME" label="Store" />
                 <th>Zone</th>
-                <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><Th col="TY_TGT_V" label="Target" /><th>Achv%</th>
-                <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><Th col="LY_TGT_V" label="Target" /><th>LY Achv%</th>
+                <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><Th col="TY_TGT_V" label="Target" isNum /><th>Achv%</th>
+                <th style={{ borderLeft: '1px solid #2a3a55' }}>Sale ₹</th><Th col="LY_TGT_V" label="Target" isNum /><th>LY Achv%</th>
                 <th style={{ borderLeft: '1px solid #2a3a55' }}>Growth%</th>
               </tr>
             </thead>
@@ -980,6 +1000,15 @@ export default function SaleDashboard() {
           <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
           <button disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
         </div>
+      )}
+      {numFilter.openCol && numFilter.anchor && (
+        <NumFilterDropdown
+          col={numFilter.openCol}
+          value={numFilter.numFilters[numFilter.openCol]}
+          onChange={v => numFilter.applyFilter(numFilter.openCol!, v)}
+          onClose={() => numFilter.setOpenCol(null)}
+          anchor={numFilter.anchor}
+        />
       )}
     </div>
   )

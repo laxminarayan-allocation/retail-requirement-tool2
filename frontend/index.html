@@ -6,7 +6,17 @@
     <title>Retail Requirement Tool</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--shell-bg, #0f172a); color: var(--text-primary, #e2e8f0); transition: background 0.2s, color 0.2s; }
+
+      /* Theme CSS variables — set by ThemeContext.tsx on :root */
+      :root {
+        --shell-bg: #0f172a; --sidebar-bg: #1e293b; --sidebar-border: #334155;
+        --card-bg: #1e293b; --card-border: #334155; --input-bg: #0f172a;
+        --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #475569;
+        --accent: #38bdf8; --accent-bg: #38bdf818;
+        --success: #34d399; --warning: #fbbf24; --danger: #f87171;
+        --table-header-bg: #0f172a; --table-row-hover: #334155; --table-border: #334155;
+      }
 
       /* Mobile responsive grids */
       @media (max-width: 767px) {

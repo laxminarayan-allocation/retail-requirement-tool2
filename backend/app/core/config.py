@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     oracle_service_name: str = ""
 
     # Oracle connection pool sizing
-    oracle_pool_min: int = 1
-    oracle_pool_max: int = 5
+    oracle_pool_min: int = 2
+    oracle_pool_max: int = 8
 
     # Thick mode for old Oracle password verifiers (DPY-3015)
     oracle_thick_mode: bool = False

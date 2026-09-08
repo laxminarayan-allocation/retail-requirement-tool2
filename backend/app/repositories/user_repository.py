@@ -72,11 +72,20 @@ def set_user_active(user_id: str, is_active: bool) -> None:
         conn.execute("UPDATE users SET is_active = ? WHERE id = ?", (int(is_active), user_id))
 
 
+def set_session_limits(user_id: str, max_desktop: int, max_mobile: int, action: str) -> None:
+    with get_sqlite() as conn:
+        conn.execute(
+            "UPDATE users SET max_desktop_sessions=?, max_mobile_sessions=?, session_limit_action=? WHERE id=?",
+            (max(1, max_desktop), max(0, max_mobile), action, user_id),
+        )
+
+
 def list_users(limit: int = 100, offset: int = 0):
     with get_sqlite() as conn:
         total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         rows = conn.execute(
-            "SELECT id, email, full_name, role, is_active, created_at, last_login_at, temp_admin_expires_at "
+            "SELECT id, email, full_name, role, is_active, created_at, last_login_at, temp_admin_expires_at, "
+            "max_desktop_sessions, max_mobile_sessions, session_limit_action "
             "FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
@@ -196,3 +205,37 @@ def list_logs(user_email: str = None, action: str = None, limit: int = 100, offs
             [*params, limit, offset],
         ).fetchall()
     return [dict(r) for r in rows], total
+
+
+# ── Per-user page access overrides ────────────────────────────────────────────
+
+def get_user_page_access(user_id: str) -> dict:
+    """Returns {page_path: bool} for explicit admin overrides only. No entry = role-based default."""
+    with get_sqlite() as conn:
+        rows = conn.execute(
+            "SELECT page_path, allowed FROM user_page_access WHERE user_id = ?",
+            (user_id,)
+        ).fetchall()
+    return {r["page_path"]: bool(r["allowed"]) for r in rows}
+
+
+def set_user_page_access(user_id: str, page_path: str, allowed: bool, admin_email: str) -> None:
+    with get_sqlite() as conn:
+        conn.execute(
+            """INSERT INTO user_page_access (user_id, page_path, allowed, updated_at, updated_by)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, page_path) DO UPDATE SET
+                 allowed=excluded.allowed,
+                 updated_at=excluded.updated_at,
+                 updated_by=excluded.updated_by""",
+            (user_id, page_path, 1 if allowed else 0, _now(), admin_email),
+        )
+
+
+def delete_user_page_access(user_id: str, page_path: str) -> None:
+    """Remove explicit override — page falls back to role-based access."""
+    with get_sqlite() as conn:
+        conn.execute(
+            "DELETE FROM user_page_access WHERE user_id = ? AND page_path = ?",
+            (user_id, page_path),
+        )

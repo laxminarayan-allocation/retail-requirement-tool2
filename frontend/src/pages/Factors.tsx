@@ -1,15 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import http from '@/api/http'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
-function useIsMobile() {
-  const [mobile, setMobile] = useState(window.innerWidth < 768)
-  useEffect(() => {
-    const fn = () => setMobile(window.innerWidth < 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
-  }, [])
-  return mobile
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -687,15 +679,15 @@ function TreeNode({ node, depth = 0 }: { node: ViewNode; depth?: number }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: node.children.length > 0 ? 'pointer' : 'default' }}
         onClick={() => node.children.length > 0 && setOpen(o => !o)}>
         {node.children.length > 0 && (
-          <span style={{ color: '#475569', fontSize: 10, width: 10 }}>{open ? '▼' : '▶'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 10, width: 10 }}>{open ? '▼' : '▶'}</span>
         )}
         {node.children.length === 0 && <span style={{ width: 10 }} />}
-        <span style={{ fontSize: 10, color: '#334155', background: '#0f172a', border: `1px solid #253761`, borderRadius: 3, padding: '1px 5px' }}>{typeLabel}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--content-bg)', border: `1px solid #253761`, borderRadius: 3, padding: '1px 5px' }}>{typeLabel}</span>
         <span style={{ fontSize: 12, fontWeight: 600, color, fontFamily: 'monospace' }}>{node.owner}.{node.name}</span>
-        <span style={{ fontSize: 10, color: '#334155' }}>{node.columns.length} cols</span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{node.columns.length} cols</span>
         {isView && node.ddl && (
           <button onClick={e => { e.stopPropagation(); setShowDdl(d => !d) }}
-            style={{ fontSize: 9, background: 'transparent', border: '1px solid #253761', borderRadius: 3, color: '#475569', cursor: 'pointer', padding: '1px 6px' }}>
+            style={{ fontSize: 9, background: 'transparent', border: '1px solid #253761', borderRadius: 3, color: 'var(--text-muted)', cursor: 'pointer', padding: '1px 6px' }}>
             {showDdl ? 'Hide SQL' : 'SQL'}
           </button>
         )}
@@ -703,7 +695,7 @@ function TreeNode({ node, depth = 0 }: { node: ViewNode; depth?: number }) {
 
       {/* DDL */}
       {showDdl && node.ddl && (
-        <pre style={{ margin: '4px 0 8px 18px', padding: '10px 14px', background: '#070d1a', border: '1px solid #1e3052', borderRadius: 6, fontSize: 10, color: '#94a3b8', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 400, overflowY: 'auto' }}>
+        <pre style={{ margin: '4px 0 8px 18px', padding: '10px 14px', background: '#070d1a', border: '1px solid #1e3052', borderRadius: 6, fontSize: 10, color: 'var(--text-secondary)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 400, overflowY: 'auto' }}>
           {node.ddl}
         </pre>
       )}
@@ -719,13 +711,13 @@ function TreeNode({ node, depth = 0 }: { node: ViewNode; depth?: number }) {
 function FormulaTable({ formulas }: { formulas: Formula[] }) {
   const [filter, setFilter] = useState('')
   const filtered = filter ? formulas.filter(f => f.alias.toLowerCase().includes(filter.toLowerCase()) || f.expression.toLowerCase().includes(filter.toLowerCase())) : formulas
-  const TH: React.CSSProperties = { padding: '5px 10px', fontSize: 9, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'left', borderBottom: '1px solid #1e293b', background: '#070d1a', position: 'sticky', top: 0 }
+  const TH: React.CSSProperties = { padding: '5px 10px', fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'left', borderBottom: '1px solid #1e293b', background: '#070d1a', position: 'sticky', top: 0 }
   const TD: React.CSSProperties = { padding: '4px 10px', borderBottom: '1px solid #0f172a', fontFamily: 'monospace', verticalAlign: 'top' }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter columns…"
-        style={{ background: '#070d1a', border: '1px solid #253761', borderRadius: 5, color: '#94a3b8', fontSize: 11, padding: '4px 9px', outline: 'none', width: 240 }} />
-      <div style={{ overflowX: 'auto', border: '1px solid #1e293b', borderRadius: 6 }}>
+        style={{ background: '#070d1a', border: '1px solid #253761', borderRadius: 5, color: 'var(--text-secondary)', fontSize: 11, padding: '4px 9px', outline: 'none', width: 240 }} />
+      <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 6 }}>
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11 }}>
           <thead><tr><th style={TH}>Column</th><th style={TH}>Expression / Formula</th></tr></thead>
           <tbody>
@@ -734,14 +726,14 @@ function FormulaTable({ formulas }: { formulas: Formula[] }) {
                 onMouseEnter={e => (e.currentTarget.style.background = '#0f172a')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ ...TD, color: '#38bdf8', whiteSpace: 'nowrap', fontWeight: 700 }}>{f.alias}</td>
-                <td style={{ ...TD, color: '#94a3b8', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{f.expression}</td>
+                <td style={{ ...TD, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{f.expression}</td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={2} style={{ ...TD, color: '#334155', textAlign: 'center', padding: 16 }}>No match</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={2} style={{ ...TD, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>No match</td></tr>}
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 10, color: '#334155' }}>{filtered.length} of {formulas.length} columns</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{filtered.length} of {formulas.length} columns</div>
     </div>
   )
 }
@@ -1057,14 +1049,14 @@ function MCVarsPanel({ setId, config, onRefresh }: { setId: string; config: Fact
                 <div style={{
                   marginTop: 8, padding: '4px 8px', background: C.bg, borderRadius: 4,
                   border: `1px solid ${C.border2}`, fontFamily: 'monospace', fontSize: 9,
-                  color: '#475569', wordBreak: 'break-word' as const,
+                  color: 'var(--text-muted)', wordBreak: 'break-word' as const,
                 }}>
                   {f.formula}
                 </div>
 
                 {changed(f.key) && (
                   <div style={{ marginTop: 6, fontSize: 9, color: C.text4 }}>
-                    Oracle default: <span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>{merged[f.key]}</span>
+                    Oracle default: <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{merged[f.key]}</span>
                   </div>
                 )}
               </div>
@@ -1153,8 +1145,8 @@ function BCVarsPanel({ setId, config, onRefresh }: { setId: string; config: Fact
         )}
         <div style={{ fontSize: 9, color: C.text4, marginTop: 3 }}>{unit}</div>
         <div style={{ fontSize: 9, color: C.text3, marginTop: 5, lineHeight: 1.5 }}>{desc}</div>
-        <div style={{ marginTop: 7, padding: '3px 8px', background: C.bg, borderRadius: 4, border: `1px solid ${C.border2}`, fontFamily: 'monospace', fontSize: 9, color: '#475569', wordBreak: 'break-word' as const }}>{formula}</div>
-        {isChanged && <div style={{ marginTop: 5, fontSize: 9, color: C.text4 }}>Oracle default: <span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>{String(merged[k])}</span></div>}
+        <div style={{ marginTop: 7, padding: '3px 8px', background: C.bg, borderRadius: 4, border: `1px solid ${C.border2}`, fontFamily: 'monospace', fontSize: 9, color: 'var(--text-muted)', wordBreak: 'break-word' as const }}>{formula}</div>
+        {isChanged && <div style={{ marginTop: 5, fontSize: 9, color: C.text4 }}>Oracle default: <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{String(merged[k])}</span></div>}
       </div>
     )
   }
@@ -1285,9 +1277,223 @@ function BCVarsPanel({ setId, config, onRefresh }: { setId: string; config: Fact
   )
 }
 
+// ── Generic Req Vars Panel ────────────────────────────────────────────────────
+
+type ReqVarField = {
+  key: string
+  label: string
+  unit: string
+  formula: string
+  desc: string
+  type?: 'number' | 'text' | 'toggle'
+  step?: number
+}
+
+type ReqVarsGroup = { title: string; subtitle: string; color: string; fields: ReqVarField[] }
+
+const MRP_VARS_DEFAULT: Record<string, number | boolean | string> = {
+  sl_window_days: 7, sl_projection_days: 30, pbs_period_days: 30, min_store_cnt: 1,
+  pbs_fill_threshold: 0.85, fill_bucket_low: 0.50, fill_bucket_mid_low: 0.70, fill_bucket_mid: 0.80, fill_bucket_high: 1.00,
+}
+const MRP_VARS_GROUPS: ReqVarsGroup[] = [
+  { title: 'Sales Projection', subtitle: 'SL_PBS = LAST_WK_SL / sl_window_days × sl_projection_days', color: '#f59e0b', fields: [
+    { key: 'sl_window_days', label: 'Sales Window (days)', unit: 'days', step: 1, formula: 'ROUND(LAST_WK_SL / 7 * 30, 0) AS SL_PBS', desc: 'Period over which sales were accumulated' },
+    { key: 'sl_projection_days', label: 'Projection Period (days)', unit: 'days', step: 1, formula: 'LAST_WK_SL / 7 * 30', desc: 'Forward period to project sales' },
+    { key: 'pbs_period_days', label: 'PBS Period (days)', unit: 'days', step: 1, formula: 'LEAST(GREATEST(STR - 0, 0), 30)', desc: 'Days in each PBS projection period' },
+    { key: 'min_store_cnt', label: 'Min Store Count', unit: 'stores', step: 1, formula: 'HAVING COUNT(DISTINCT STORE_NAME) >= 1', desc: 'Article must be in at least this many stores to appear' },
+  ]},
+  { title: 'Fill Rate Buckets', subtitle: 'FILL_RATE_BUCKET thresholds in T_BASE_6', color: '#fb923c', fields: [
+    { key: 'pbs_fill_threshold', label: 'PBS Fill Threshold', unit: 'ratio', step: 0.01, formula: 'CASE WHEN PBS_FILL > 0.85 THEN …', desc: 'Above this = well-stocked achievement floor' },
+    { key: 'fill_bucket_low', label: 'Fill Bucket — Low', unit: 'ratio', step: 0.05, formula: 'WHEN FILL_RATE < 0.50 THEN \'1.<50%\'', desc: 'Below this → bucket 1.<50%' },
+    { key: 'fill_bucket_mid_low', label: 'Fill Bucket — Mid-Low', unit: 'ratio', step: 0.05, formula: 'WHEN FILL_RATE < 0.70 THEN \'2.50%-70%\'', desc: 'Below this → bucket 2.50%-70%' },
+    { key: 'fill_bucket_mid', label: 'Fill Bucket — Mid', unit: 'ratio', step: 0.05, formula: 'WHEN FILL_RATE < 0.80 THEN \'3.70%-80%\'', desc: 'Below this → bucket 3.70%-80%' },
+    { key: 'fill_bucket_high', label: 'Fill Bucket — High', unit: 'ratio', step: 0.05, formula: 'WHEN FILL_RATE < 1.00 THEN \'4.80%-100%\'', desc: 'At or above → bucket 5.>=100%' },
+  ]},
+]
+
+const ART_VARS_DEFAULT: Record<string, number | boolean | string> = { ...MRP_VARS_DEFAULT }
+const ART_VARS_GROUPS: ReqVarsGroup[] = [
+  { title: 'Sales Projection', subtitle: 'SL_PBS = LAST_WK_SL / sl_window_days × sl_projection_days', color: '#0ea5e9', fields: MRP_VARS_GROUPS[0].fields },
+  { title: 'Fill Rate Buckets', subtitle: 'FILL_RATE_BUCKET thresholds', color: '#38bdf8', fields: MRP_VARS_GROUPS[1].fields },
+]
+
+const SPARK_VARS_DEFAULT: Record<string, number | boolean | string> = {
+  sl_window_days: 7, sl_projection_days: 30, max_slq_cap: 0, pbs_multiplier: 1.0, min_store_cnt: 1, pbs_fill_threshold: 0.85,
+}
+const SPARK_VARS_GROUPS: ReqVarsGroup[] = [
+  { title: 'Sparky PBS', subtitle: 'SPARKY_PBS = MAX_SLQ × pbs_multiplier — fast-moving article targeting', color: '#f97316', fields: [
+    { key: 'sl_window_days', label: 'Sales Window (days)', unit: 'days', step: 1, formula: 'ROUND(LAST_WK_SL / 7 * 30, 0) AS SL_PBS', desc: 'Period over which recent sales are accumulated' },
+    { key: 'sl_projection_days', label: 'Projection Period (days)', unit: 'days', step: 1, formula: 'SL_PBS = LAST_WK_SL / 7 × 30', desc: 'Forward days projected for PBS' },
+    { key: 'max_slq_cap', label: 'MAX_SLQ Cap', unit: 'units (0 = no cap)', step: 1, formula: 'LEAST(MAX_SLQ, cap) or LEAST(MAX(SL_Q), cap)', desc: '0 = unlimited; positive = hard ceiling on max single-store sale qty' },
+    { key: 'pbs_multiplier', label: 'PBS Multiplier', unit: '× SL_PBS', step: 0.1, formula: 'SPARKY_PBS = ROUND(SL_PBS × 1.0, 0)', desc: 'Scale factor applied to projected sale to get Sparky PBS' },
+    { key: 'min_store_cnt', label: 'Min Store Count', unit: 'stores', step: 1, formula: 'HAVING COUNT(DISTINCT STORE_NAME) >= 1', desc: 'Article must sell in at least this many stores to qualify' },
+    { key: 'pbs_fill_threshold', label: 'PBS Fill Threshold', unit: 'ratio', step: 0.01, formula: 'CASE WHEN PBS_FILL > 0.85 THEN …', desc: 'Stores with fill above this are considered well-stocked' },
+  ]},
+]
+
+const OPTION_VARS_DEFAULT: Record<string, number | boolean | string> = {
+  sl_window_days: 7, sl_projection_days: 30, pbs_period_days: 30, option_pbs_multiplier: 1.0, min_store_cnt: 1, pbs_fill_threshold: 0.85,
+}
+const OPTION_VARS_GROUPS: ReqVarsGroup[] = [
+  { title: 'Option PBS', subtitle: 'PBS aggregated at OPTION_LEVEL / ALLOCATION_OPTION grain', color: '#14b8a6', fields: [
+    { key: 'sl_window_days', label: 'Sales Window (days)', unit: 'days', step: 1, formula: 'ROUND(LAST_WK_SL / 7 * 30, 0) AS SL_PBS', desc: 'Sales accumulation window' },
+    { key: 'sl_projection_days', label: 'Projection Period (days)', unit: 'days', step: 1, formula: 'SL_PBS = SL / sl_window × sl_projection', desc: 'Forward projection for PBS' },
+    { key: 'pbs_period_days', label: 'PBS Period (days)', unit: 'days', step: 1, formula: 'LEAST(GREATEST(STR, 0), 30)', desc: 'Days per PBS projection band' },
+    { key: 'option_pbs_multiplier', label: 'Option PBS Multiplier', unit: '× PBS', step: 0.1, formula: 'OPTION_PBS = ROUND(PBS × 1.0, 0)', desc: 'Scale factor applied to article PBS before option aggregation' },
+    { key: 'min_store_cnt', label: 'Min Store Count', unit: 'stores', step: 1, formula: 'HAVING COUNT(DISTINCT STORE_NAME) >= 1', desc: 'Option must cover at least this many stores' },
+    { key: 'pbs_fill_threshold', label: 'PBS Fill Threshold', unit: 'ratio', step: 0.01, formula: 'CASE WHEN PBS_FILL > 0.85 THEN …', desc: 'Well-stocked threshold for achievement floor' },
+  ]},
+]
+
+const LIST_VARS_DEFAULT: Record<string, number | boolean | string> = {
+  list_cover_days: 30, sl_window_days: 7, sl_projection_days: 30, adj_stock_days: 7, min_list_req: 0, min_store_cnt: 1,
+}
+const LIST_VARS_GROUPS: ReqVarsGroup[] = [
+  { title: 'List PBS & Coverage', subtitle: 'LIST_REQ = LIST_Q - ADJ_TTL_STK_Q, ADJ_STK = STK - pending TOs', color: '#f59e0b', fields: [
+    { key: 'list_cover_days', label: 'List Cover Days', unit: 'days', step: 1, formula: 'LIST_Q = ROUND(SL_PBS × list_cover_days / 30, 0)', desc: 'Days of cover the list qty should provide' },
+    { key: 'sl_window_days', label: 'Sales Window (days)', unit: 'days', step: 1, formula: 'ROUND(LAST_WK_SL / 7 × 30, 0) AS SL_PBS', desc: 'Window for recent sales used in PBS calc' },
+    { key: 'sl_projection_days', label: 'Projection Period (days)', unit: 'days', step: 1, formula: 'SL_PBS = SL / sl_window × sl_projection', desc: 'Forward projection for PBS' },
+    { key: 'adj_stock_days', label: 'Adj Stock Window (days)', unit: 'days', step: 1, formula: 'ADJ_STK = TTL_STK_Q - ROUND(SL_PBS × adj_stock_days / 30, 0)', desc: 'Days of pending TO stock deducted from current stock' },
+    { key: 'min_list_req', label: 'Min List Req (filter)', unit: 'units', step: 1, formula: 'HAVING SUM(LIST_REQ) >= 0', desc: 'Filter out rows where list requirement is below this' },
+    { key: 'min_store_cnt', label: 'Min Store Count', unit: 'stores', step: 1, formula: 'HAVING COUNT(DISTINCT STORE_NAME) >= 1', desc: 'Article must be listed in at least this many stores' },
+  ]},
+]
+
+const SIZE_VARS_DEFAULT: Record<string, number | boolean | string> = {
+  sl_window_days: 7, sl_projection_days: 30, pbs_period_days: 30, size_ratio_cap: 2.0, min_size_pbs: 1, pbs_fill_threshold: 0.85,
+}
+const SIZE_VARS_GROUPS: ReqVarsGroup[] = [
+  { title: 'Size PBS', subtitle: 'Size-level PBS computed from article PBS × size ratio', color: '#ec4899', fields: [
+    { key: 'sl_window_days', label: 'Sales Window (days)', unit: 'days', step: 1, formula: 'ROUND(LAST_WK_SL / 7 × 30, 0) AS SL_PBS', desc: 'Sales accumulation window for size PBS' },
+    { key: 'sl_projection_days', label: 'Projection Period (days)', unit: 'days', step: 1, formula: 'SL_PBS = SL / sl_window × sl_projection', desc: 'Forward projection for size PBS' },
+    { key: 'pbs_period_days', label: 'PBS Period (days)', unit: 'days', step: 1, formula: 'LEAST(GREATEST(STR, 0), 30)', desc: 'Days per PBS projection band' },
+    { key: 'size_ratio_cap', label: 'Size Ratio Cap', unit: '× mean', step: 0.1, formula: 'SIZE_RATIO = LEAST(SZ_SL / AVG_SZ_SL, 2.0)', desc: 'Maximum ratio any single size can have vs the mean size PBS' },
+    { key: 'min_size_pbs', label: 'Min Size PBS', unit: 'units', step: 1, formula: 'GREATEST(SIZE_PBS, 1)', desc: 'Floor for each size PBS after ratio is applied' },
+    { key: 'pbs_fill_threshold', label: 'PBS Fill Threshold', unit: 'ratio', step: 0.01, formula: 'CASE WHEN PBS_FILL > 0.85 THEN …', desc: 'Threshold above which store is considered well-stocked' },
+  ]},
+]
+
+interface ReqVarsPanelProps {
+  setId: string
+  config: FactorConfig
+  onRefresh: () => void
+  varKey: string
+  defaults: Record<string, number | boolean | string>
+  groups: ReqVarsGroup[]
+  viewName: string
+  accent: string
+  saveLabel: string
+}
+
+function ReqVarsPanel({ setId, config, onRefresh, varKey, defaults, groups, viewName, accent, saveLabel }: ReqVarsPanelProps) {
+  const stored = (config as unknown as Record<string, unknown>)[varKey] as Record<string, unknown> | null | undefined
+  const merged: Record<string, number | boolean | string> = { ...defaults, ...(stored as Record<string, number | boolean | string> ?? {}) }
+  const [form, setForm] = useState<Record<string, number | boolean | string>>({ ...merged })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const changed = (k: string) => form[k] !== merged[k]
+  const anyChanged = Object.keys(form).some(changed)
+
+  function reset() { setForm({ ...merged }) }
+
+  async function save() {
+    setSaving(true); setSaved(false)
+    try {
+      await apiFetch('PUT', `/factors/${setId}/config`, { ...config, [varKey]: form })
+      onRefresh(); setSaved(true); setTimeout(() => setSaved(false), 2000)
+    } catch (e) { alert('Save failed: ' + e) }
+    finally { setSaving(false) }
+  }
+
+  const numStyle = (k: string): React.CSSProperties => ({
+    background: 'transparent', border: `1px solid ${changed(k) ? C.amber : C.border}`,
+    borderRadius: 5, color: changed(k) ? C.amber : C.blue,
+    fontSize: 16, fontWeight: 700, padding: '4px 8px', width: '100%',
+    outline: 'none', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums', textAlign: 'right' as const,
+  })
+
+  function Field({ f }: { f: ReqVarField }) {
+    const isChanged = changed(f.key)
+    return (
+      <div style={{
+        background: C.surf1, border: `1px solid ${isChanged ? C.amber : C.border}`,
+        borderRadius: 8, padding: '10px 12px',
+        boxShadow: isChanged ? `0 0 0 1px rgba(251,191,36,.15)` : 'none',
+      }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: C.text3, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>
+          {f.label}{isChanged && <span style={{ color: C.amber, marginLeft: 6 }}>● modified</span>}
+        </div>
+        {f.type === 'toggle' ? (
+          <div style={{ display: 'flex', gap: 0, border: `1px solid ${C.border}`, borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
+            {[true, false].map(v => (
+              <button key={String(v)} onClick={() => setForm(p => ({ ...p, [f.key]: v }))}
+                style={{ flex: 1, padding: '4px 0', fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+                  background: form[f.key] === v ? (v ? 'rgba(74,222,128,.15)' : 'rgba(248,113,113,.1)') : 'transparent',
+                  color: form[f.key] === v ? (v ? C.green : C.red) : C.text4 }}>
+                {v ? 'Yes' : 'No'}
+              </button>
+            ))}
+          </div>
+        ) : f.type === 'text' ? (
+          <input style={{ background: C.surf1, border: `1px solid ${isChanged ? C.amber : C.border}`, borderRadius: 5, color: isChanged ? C.amber : C.text1, fontSize: 12, padding: '5px 9px', width: '100%', outline: 'none', fontFamily: 'monospace' }}
+            value={String(form[f.key] ?? '')}
+            onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
+        ) : (
+          <input type="number" step={f.step ?? 0.01} style={numStyle(f.key)}
+            value={String(form[f.key] ?? 0)}
+            onChange={e => setForm(p => ({ ...p, [f.key]: Number(e.target.value) }))} />
+        )}
+        <div style={{ fontSize: 9, color: C.text4, marginTop: 3 }}>{f.unit}</div>
+        <div style={{ fontSize: 9, color: C.text3, marginTop: 5, lineHeight: 1.5 }}>{f.desc}</div>
+        <div style={{ marginTop: 7, padding: '3px 8px', background: C.bg, borderRadius: 4, border: `1px solid ${C.border2}`, fontFamily: 'monospace', fontSize: 9, color: 'var(--text-muted)', wordBreak: 'break-word' as const }}>{f.formula}</div>
+        {isChanged && <div style={{ marginTop: 5, fontSize: 9, color: C.text4 }}>Oracle default: <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{String(merged[f.key])}</span></div>}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ background: `${accent}12`, border: `1px solid ${accent}33`, borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 18, lineHeight: 1 }}>⚙</span>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: accent, marginBottom: 2 }}>
+            Variables extracted from <span style={{ fontFamily: 'monospace' }}>CK_A2166.{viewName}</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>
+            Each value below is a hardcoded constant in the Oracle view DDL. Overriding here updates the Python replication engine.
+          </div>
+        </div>
+      </div>
+
+      {groups.map(g => (
+        <div key={g.title}>
+          <SectionTitle>
+            <span style={{ color: g.color }}>{g.title}</span>
+            <span style={{ fontSize: 9, color: C.text4, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{g.subtitle}</span>
+          </SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 8 }}>
+            {g.fields.map(f => <Field key={f.key} f={f} />)}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, borderTop: `1px solid ${C.border2}` }}>
+        <Btn variant="primary" onClick={save} disabled={saving || !anyChanged} style={{ fontSize: 12, padding: '6px 18px' }}>
+          {saving ? 'Saving…' : `Save ${saveLabel}`}
+        </Btn>
+        {anyChanged && <Btn variant="ghost" onClick={reset} disabled={saving}>Reset to Oracle defaults</Btn>}
+        {saved && <span style={{ fontSize: 11, color: C.green }}>✓ Saved</span>}
+        {!anyChanged && !saved && <span style={{ fontSize: 11, color: C.text4 }}>No changes</span>}
+      </div>
+    </div>
+  )
+}
+
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
-type DetailTab = 'config' | 'grades' | 'divisions' | 'mcvars' | 'bcvars' | 'deepdive'
+type DetailTab = 'config' | 'grades' | 'divisions' | 'mcvars' | 'bcvars' | 'mrpvars' | 'artvars' | 'sparkvars' | 'optionvars' | 'listvars' | 'sizevars' | 'deepdive'
 
 function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: () => void; onDelete: () => void }) {
   const isMobile = useIsMobile()
@@ -1392,8 +1598,14 @@ function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: ()
         <button style={tabStyle('divisions')} onClick={() => setTab('divisions')}>
           Divisions {countBadge(fs.division_factors.length)}
         </button>
-        <button style={tabStyle('mcvars')} onClick={() => setTab('mcvars')}>📐 MC Vars</button>
-        <button style={tabStyle('bcvars')} onClick={() => setTab('bcvars')}>📦 BC Vars</button>
+        <button style={tabStyle('mcvars')} onClick={() => setTab('mcvars')}>📐 MC</button>
+        <button style={tabStyle('bcvars')} onClick={() => setTab('bcvars')}>📦 BC</button>
+        <button style={tabStyle('mrpvars')} onClick={() => setTab('mrpvars')}>💰 MRP</button>
+        <button style={tabStyle('artvars')} onClick={() => setTab('artvars')}>📦 Art</button>
+        <button style={tabStyle('sparkvars')} onClick={() => setTab('sparkvars')}>⚡ Sparky</button>
+        <button style={tabStyle('optionvars')} onClick={() => setTab('optionvars')}>🎛 Option</button>
+        <button style={tabStyle('listvars')} onClick={() => setTab('listvars')}>📝 List</button>
+        <button style={tabStyle('sizevars')} onClick={() => setTab('sizevars')}>📐 Size</button>
         <button style={tabStyle('deepdive')} onClick={() => setTab('deepdive')}>🔬 Logic</button>
       </div>
 
@@ -1407,6 +1619,18 @@ function DetailPanel({ fs, onRefresh, onDelete }: { fs: FactorSet; onRefresh: ()
         {tab === 'mcvars'    && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
         {tab === 'bcvars'    && cfg && <BCVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} />}
         {tab === 'bcvars'    && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
+        {tab === 'mrpvars'   && cfg && <ReqVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} varKey="mrp_vars" defaults={MRP_VARS_DEFAULT} groups={MRP_VARS_GROUPS} viewName="V_MRP_REQ_APPS" accent="#f59e0b" saveLabel="MRP Variables" />}
+        {tab === 'mrpvars'   && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
+        {tab === 'artvars'   && cfg && <ReqVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} varKey="art_vars" defaults={ART_VARS_DEFAULT} groups={ART_VARS_GROUPS} viewName="V_ART_REQ_APPS" accent="#0ea5e9" saveLabel="Art Variables" />}
+        {tab === 'artvars'   && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
+        {tab === 'sparkvars' && cfg && <ReqVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} varKey="spark_vars" defaults={SPARK_VARS_DEFAULT} groups={SPARK_VARS_GROUPS} viewName="V_SPARKY_PBS_REQ" accent="#f97316" saveLabel="Sparky Variables" />}
+        {tab === 'sparkvars' && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
+        {tab === 'optionvars'&& cfg && <ReqVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} varKey="option_vars" defaults={OPTION_VARS_DEFAULT} groups={OPTION_VARS_GROUPS} viewName="V_OPTION_REQ_APPS" accent="#14b8a6" saveLabel="Option Variables" />}
+        {tab === 'optionvars'&& !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
+        {tab === 'listvars'  && cfg && <ReqVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} varKey="list_vars" defaults={LIST_VARS_DEFAULT} groups={LIST_VARS_GROUPS} viewName="V_LIST_PBS_REQ" accent="#f59e0b" saveLabel="List Variables" />}
+        {tab === 'listvars'  && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
+        {tab === 'sizevars'  && cfg && <ReqVarsPanel setId={fs.id} config={cfg} onRefresh={onRefresh} varKey="size_vars" defaults={SIZE_VARS_DEFAULT} groups={SIZE_VARS_GROUPS} viewName="V_SZ_REQ_APPS" accent="#ec4899" saveLabel="Size Variables" />}
+        {tab === 'sizevars'  && !cfg && <div style={{ padding: 32, color: C.text3, fontSize: 13, textAlign: 'center' }}>No config set</div>}
         {tab === 'deepdive'  && <ViewDeepDive />}
       </div>
     </div>
@@ -1479,7 +1703,7 @@ export default function Factors() {
       {isMobile && mobileShowDetail && (
         <button onClick={() => setMobileShowDetail(false)} style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-          background: 'none', border: 'none', borderBottom: '1px solid #334155',
+          background: 'none', border: 'none', borderBottom: '1px solid var(--card-border)',
           color: '#38bdf8', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
         }}>← Back to factor sets</button>
       )}

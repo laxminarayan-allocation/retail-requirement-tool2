@@ -10,7 +10,7 @@ add region_type, store_tag, gm_grade, festival_grouping, bd_tier, asp_tier.
 """
 import logging
 import time
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -264,14 +264,8 @@ async def get_nso_store_summary(
         else:
             grp['opert_days'] = 0
 
-        # SL AVG/D = sl_v (lakhs) / opert_days
-        if 'sl_v' in grp.columns:
-            grp['sl_avg_d'] = grp.apply(
-                lambda r: round(r['sl_v'] / r['opert_days'], 4) if r['opert_days'] > 0 else 0,
-                axis=1,
-            )
-        else:
-            grp['sl_avg_d'] = 0
+        # SL AVG/D placeholder — computed below after mtd_days_in_month is set
+        grp['sl_avg_d'] = 0
 
         # ACH% = sl_v / tgt_v * 100  (both in Lakhs)
         if 'sl_v' in grp.columns and 'tgt_v' in grp.columns:
@@ -294,14 +288,27 @@ async def get_nso_store_summary(
                 axis=1,
             )
 
-        # STR (days) = stk_v / (mtd_sl_v / store_mtd_days)
+        # STR (days) = ttl_stk_v / (mtd_sl_v / store_mtd_days)
         # store_mtd_days = min(opert_days, days elapsed in current month)
-        mtd_days_in_month = date.today().day - 1 or 1
-        if 'stk_v' in grp.columns and 'mtd_sl_v' in grp.columns and 'opert_days' in grp.columns:
+        # On the 1st of a month, MTD data is still previous month's — use prev month's day count
+        _today = date.today()
+        if _today.day == 1:
+            _prev_last = _today - timedelta(days=1)          # last day of previous month
+            mtd_days_in_month = _prev_last.day               # e.g. 31 for Aug, 30 for Apr
+        else:
+            mtd_days_in_month = _today.day - 1 or 1
+        if 'ttl_stk_v' in grp.columns and 'mtd_sl_v' in grp.columns and 'opert_days' in grp.columns:
             def _str(r):
                 store_mtd = min(int(r['opert_days'] or 0), mtd_days_in_month)
-                return round(r['stk_v'] / (r['mtd_sl_v'] / store_mtd), 1) if store_mtd > 0 and r['mtd_sl_v'] > 0 else 0
+                return round(r['ttl_stk_v'] / (r['mtd_sl_v'] / store_mtd), 1) if store_mtd > 0 and r['mtd_sl_v'] > 0 else 0
             grp['str_days'] = grp.apply(_str, axis=1)
+
+        # SL AVG/D = mtd_sl_v (Lakhs) / store_mtd_days  (MTD daily avg, sl_v is 0 in V_NSO)
+        if 'mtd_sl_v' in grp.columns and 'opert_days' in grp.columns:
+            def _sl_avg(r):
+                store_mtd = min(int(r['opert_days'] or 0), mtd_days_in_month)
+                return round(r['mtd_sl_v'] / store_mtd, 4) if store_mtd > 0 and r['mtd_sl_v'] > 0 else 0
+            grp['sl_avg_d'] = grp.apply(_sl_avg, axis=1)
 
         # Sort: ACTIVE first (opening_date asc), then UPCOMING (tentetive_date asc)
         if 'store_status' in grp.columns:

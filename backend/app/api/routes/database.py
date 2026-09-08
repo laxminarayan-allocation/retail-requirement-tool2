@@ -490,3 +490,49 @@ async def get_view_deps(
     except Exception as exc:
         logger.error("get_view_deps failed: %s", exc)
         return APIResponse.fail(message=str(exc))
+
+
+# ── DB Auto-Refresh: freq map + schedule ──────────────────────────────────────
+
+class FreqBody(BaseModel):
+    owner: str
+    object_name: str
+    freq: str  # 'daily' | 'weekly' | 'once'
+
+class ScheduleBody(BaseModel):
+    time: str  # HH:MM
+
+
+@router.get("/output/freq", response_model=APIResponse)
+async def get_freq_map():
+    """Return {owner__object: freq} for all stored entries."""
+    from app.core.db_scheduler import get_freq_map
+    return APIResponse.ok(data={"freq_map": get_freq_map()})
+
+
+@router.post("/output/freq", response_model=APIResponse)
+async def set_freq_entry(body: FreqBody):
+    """Set refresh frequency for a single table/view."""
+    if body.freq not in ("daily", "weekly", "once"):
+        return APIResponse.fail(message="freq must be 'daily', 'weekly', or 'once'")
+    from app.core.db_scheduler import set_freq
+    set_freq(body.owner, body.object_name, body.freq)
+    return APIResponse.ok(data={"owner": body.owner, "object_name": body.object_name, "freq": body.freq})
+
+
+@router.get("/output/schedule", response_model=APIResponse)
+async def get_schedule():
+    """Return current auto-refresh scheduled time (HH:MM)."""
+    from app.core.db_scheduler import get_schedule_time
+    return APIResponse.ok(data={"time": get_schedule_time()})
+
+
+@router.put("/output/schedule", response_model=APIResponse)
+async def update_schedule(body: ScheduleBody):
+    """Update auto-refresh scheduled time (HH:MM)."""
+    import re as _re
+    if not _re.match(r"^\d{2}:\d{2}$", body.time):
+        return APIResponse.fail(message="time must be HH:MM format")
+    from app.core.db_scheduler import set_schedule_time
+    set_schedule_time(body.time)
+    return APIResponse.ok(data={"time": body.time})

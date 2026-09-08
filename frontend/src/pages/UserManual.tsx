@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth, hasRole } from '@/context/AuthContext'
 
 const S: Record<string, React.CSSProperties> = {
   page: {
-    fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#e2e8f0',
+    fontFamily: "'Segoe UI', system-ui, sans-serif", color: 'var(--text-primary)',
     display: 'flex', flexDirection: 'column',
     height: '100%', overflow: 'hidden',
   },
   header: { flexShrink: 0, marginBottom: 16 },
   h1: { fontSize: 20, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 4, color: '#f1f5f9' },
-  sub: { fontSize: 12, color: '#64748b', marginBottom: 0 },
+  sub: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 0 },
   grid: { display: 'flex', gap: 24, flex: 1, minHeight: 0 },
   sidebar: {
     width: 220, flexShrink: 0,
@@ -26,11 +26,11 @@ const S: Record<string, React.CSSProperties> = {
   }),
   content: {
     flex: 1, overflowY: 'auto' as const,
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10,
     padding: '28px 32px', lineHeight: 1.7,
   },
   sectionTitle: { fontSize: 17, fontWeight: 800, color: '#f1f5f9', marginBottom: 12, marginTop: 0 },
-  p: { fontSize: 13, color: '#94a3b8', marginTop: 0, marginBottom: 14 },
+  p: { fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 14 },
   tip: {
     background: 'rgba(56,189,248,.07)', border: '1px solid rgba(56,189,248,.2)',
     borderRadius: 6, padding: '10px 14px', fontSize: 12.5, color: '#7dd3fc',
@@ -41,7 +41,7 @@ const S: Record<string, React.CSSProperties> = {
     borderRadius: 6, padding: '10px 14px', fontSize: 12.5, color: '#fcd34d',
     marginBottom: 14,
   },
-  stepList: { paddingLeft: 18, color: '#94a3b8', fontSize: 13 },
+  stepList: { paddingLeft: 18, color: 'var(--text-secondary)', fontSize: 13 },
   roleRow: {
     display: 'flex', gap: 10, flexWrap: 'wrap' as const, marginBottom: 14,
   },
@@ -54,13 +54,13 @@ const S: Record<string, React.CSSProperties> = {
     color, marginBottom: 6,
   }),
   kbd: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 4,
-    padding: '2px 7px', fontSize: 11, fontFamily: 'monospace', color: '#94a3b8',
+    background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 4,
+    padding: '2px 7px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)',
   },
-  divider: { borderTop: '1px solid #334155', margin: '20px 0' },
+  divider: { borderTop: '1px solid var(--card-border)', margin: '20px 0' },
   sectionLabel: {
     fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase',
-    color: '#334155', marginBottom: 6, marginTop: 18,
+    color: 'var(--text-muted)', marginBottom: 6, marginTop: 18,
   },
 }
 
@@ -128,10 +128,10 @@ export default function UserManual() {
               {sec.label}
             </button>
           ))}
-          <div style={{ marginTop: 12, padding: '10px 12px', background: '#0f172a', borderRadius: 6 }}>
-            <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>Need help?</div>
+          <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--content-bg)', borderRadius: 6 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Need help?</div>
             <div style={{ fontSize: 11, color: '#38bdf8' }}>Use the 💬 chat button</div>
-            <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>bottom-right corner</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>bottom-right corner</div>
           </div>
         </div>
 
@@ -150,7 +150,7 @@ export default function UserManual() {
               you select a season, division, and department, then the engine computes replenishment quantities
               against planned buy (PBS) and current stock positions.
             </div>
-            <p style={S.p}><strong style={{ color: '#cbd5e1' }}>Key capabilities:</strong></p>
+            <p style={S.p}><strong style={{ color: 'var(--text-secondary)' }}>Key capabilities:</strong></p>
             <ul style={S.stepList}>
               <li>Automated store-level replenishment vs PBS targets</li>
               <li>Grade-based PBS multipliers (A/B/C/D store grading)</li>
@@ -166,14 +166,14 @@ export default function UserManual() {
           <Section id="roles" title="Roles & Access">
             <div style={S.roleRow}>
               {[
-                { role: 'Viewer', color: '#94a3b8', perms: ['Dashboard', 'Results', 'History'] },
+                { role: 'Viewer', color: 'var(--text-secondary)', perms: ['Dashboard', 'Results', 'History'] },
                 { role: 'Planner', color: '#34d399', perms: ['+ Master Data', '+ Database Explorer', '+ Calc Factors', '+ Calculation', '+ Settings'] },
                 { role: 'Admin', color: '#818cf8', perms: ['+ Admin Panel', '+ User management', '+ All planner pages'] },
               ].map(r => (
                 <div key={r.role} style={S.roleCard(r.color)}>
                   <div style={S.roleTitle(r.color)}>{r.role}</div>
                   {r.perms.map(p => (
-                    <div key={p} style={{ fontSize: 12, color: '#64748b', marginBottom: 2 }}>{p}</div>
+                    <div key={p} style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>{p}</div>
                   ))}
                 </div>
               ))}
@@ -291,9 +291,9 @@ export default function UserManual() {
                     <strong>Division Overrides</strong> — exclude specific divisions from the run or override safety days per division.
                   </li>
                 </ul>
-                <div style={{ marginTop: 12, padding: '10px 14px', background: '#0f172a', borderRadius: 6 }}>
-                  <span style={{ fontSize: 11, color: '#475569' }}>To activate a set: </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--content-bg)', borderRadius: 6 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>To activate a set: </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     open the factor set → click <strong>Activate</strong>. Only the active set is used in calculations.
                   </span>
                 </div>
@@ -380,8 +380,8 @@ export default function UserManual() {
               },
             ].map(({ q, a }) => (
               <div key={q} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1', marginBottom: 4 }}>Q: {q}</div>
-                <div style={{ fontSize: 12.5, color: '#64748b', lineHeight: 1.6 }}>A: {a}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Q: {q}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>A: {a}</div>
               </div>
             ))}
           </Section>
@@ -389,15 +389,15 @@ export default function UserManual() {
           <Section id="myactivity" title="My Recent Activity">
             <p style={S.p}>Your last 50 actions in this application.</p>
             {logsLoading ? (
-              <div style={{ color: '#475569', fontSize: 13 }}>Loading…</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
             ) : myLogs.length === 0 ? (
-              <div style={{ color: '#334155', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No activity recorded yet.</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No activity recorded yet.</div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
                     {['Action', 'Details', 'IP', 'Time'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: '#475569', fontSize: 10, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', borderBottom: '1px solid #1e293b' }}>{h}</th>
+                      <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: 'var(--text-muted)', fontSize: 10, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', borderBottom: '1px solid #1e293b' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -405,11 +405,11 @@ export default function UserManual() {
                   {myLogs.map(l => (
                     <tr key={l.id}>
                       <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a' }}>
-                        <code style={{ fontSize: 11, color: '#7dd3fc', background: '#0f172a', padding: '2px 6px', borderRadius: 3 }}>{l.action}</code>
+                        <code style={{ fontSize: 11, color: '#7dd3fc', background: 'var(--content-bg)', padding: '2px 6px', borderRadius: 3 }}>{l.action}</code>
                       </td>
-                      <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a', color: '#475569', fontSize: 11 }}>{l.details || '—'}</td>
-                      <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a', color: '#475569', fontFamily: 'monospace', fontSize: 11 }}>{l.ip_address || '—'}</td>
-                      <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a', color: '#334155', fontSize: 11 }}>{l.created_at?.slice(0, 16).replace('T', ' ')}</td>
+                      <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a', color: 'var(--text-muted)', fontSize: 11 }}>{l.details || '—'}</td>
+                      <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11 }}>{l.ip_address || '—'}</td>
+                      <td style={{ padding: '8px 10px', borderBottom: '1px solid #0f172a', color: 'var(--text-muted)', fontSize: 11 }}>{l.created_at?.slice(0, 16).replace('T', ' ')}</td>
                     </tr>
                   ))}
                 </tbody>

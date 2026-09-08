@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at   TEXT,
     last_seen_at    TEXT,
     force_logout    INTEGER NOT NULL DEFAULT 0,
+    max_desktop_sessions  INTEGER NOT NULL DEFAULT 1,
+    max_mobile_sessions   INTEGER NOT NULL DEFAULT 1,
+    session_limit_action  TEXT NOT NULL DEFAULT 'block',  -- 'block' or 'kick'
     -- Profile fields collected at signup
     display_name    TEXT,
     designation     TEXT,
@@ -167,6 +170,7 @@ CREATE TABLE IF NOT EXISTS custom_master_tables (
     label        TEXT NOT NULL,
     added_by     TEXT NOT NULL,
     added_at     TEXT NOT NULL,
+    description  TEXT,
     UNIQUE(schema_owner, object_name)
 );
 
@@ -207,6 +211,15 @@ CREATE TABLE IF NOT EXISTS sop_steps (
     created_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS user_page_access (
+    user_id     TEXT NOT NULL,
+    page_path   TEXT NOT NULL,
+    allowed     INTEGER NOT NULL DEFAULT 1,
+    updated_at  TEXT NOT NULL,
+    updated_by  TEXT NOT NULL,
+    PRIMARY KEY (user_id, page_path)
+);
+
 CREATE TABLE IF NOT EXISTS data_tables (
     id              TEXT PRIMARY KEY,
     table_type      TEXT NOT NULL,   -- MAIN | SUB
@@ -220,6 +233,19 @@ CREATE TABLE IF NOT EXISTS data_tables (
     created_by      TEXT NOT NULL,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS db_refresh_freq (
+    owner       TEXT NOT NULL,
+    object_name TEXT NOT NULL,
+    freq        TEXT NOT NULL DEFAULT 'once',  -- 'daily' | 'weekly' | 'once'
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (owner, object_name)
+);
+
+CREATE TABLE IF NOT EXISTS db_refresh_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
@@ -239,13 +265,16 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE users ADD COLUMN force_logout INTEGER NOT NULL DEFAULT 0")
         logger.info("Migration: added force_logout column to users table")
     for col, defn in [
-        ("display_name",          "TEXT"),
-        ("designation",           "TEXT"),
-        ("department",            "TEXT"),
-        ("dob",                   "TEXT"),
-        ("contact_no",            "TEXT"),
-        ("whatsapp_no",           "TEXT"),
-        ("temp_admin_expires_at", "TEXT"),
+        ("display_name",           "TEXT"),
+        ("designation",            "TEXT"),
+        ("department",             "TEXT"),
+        ("dob",                    "TEXT"),
+        ("contact_no",             "TEXT"),
+        ("whatsapp_no",            "TEXT"),
+        ("temp_admin_expires_at",  "TEXT"),
+        ("max_desktop_sessions",   "INTEGER NOT NULL DEFAULT 1"),
+        ("max_mobile_sessions",    "INTEGER NOT NULL DEFAULT 1"),
+        ("session_limit_action",   "TEXT NOT NULL DEFAULT 'block'"),
     ]:
         if col not in existing_cols:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
@@ -258,7 +287,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE role_requests ADD COLUMN {col} {defn}")
             logger.info("Migration: added %s column to role_requests table", col)
 
-    # custom_master_tables — created by schema if not exists; nothing to migrate
+    # custom_master_tables — add description column if missing
+    cmt_cols = {r[1] for r in conn.execute("PRAGMA table_info(custom_master_tables)")}
+    if "description" not in cmt_cols:
+        conn.execute("ALTER TABLE custom_master_tables ADD COLUMN description TEXT")
+        logger.info("Migration: added description column to custom_master_tables")
 
     # Always ensure the configured admin email has the admin role
     conn.execute(

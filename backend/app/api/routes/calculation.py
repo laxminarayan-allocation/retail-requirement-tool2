@@ -108,16 +108,47 @@ async def get_run(run_id: str):
     return APIResponse.ok(data=record.model_dump(exclude={"request"}))
 
 
-def _apply_result_filters(df, *, min_req, max_req, division, department,
-                          store_grade, store_name, req_only):
+def _apply_result_filters(df, *, min_req, max_req, division, attribute1, department,
+                          store_grade, store_name, req_only, scopes=None):
     """Apply all optional result filters in-place on a DataFrame copy."""
-    import numpy as np
+    import json
+    import pandas as _pd
     if min_req is not None and "req" in df.columns:
         df = df[df["req"] >= min_req]
     if max_req is not None and "req" in df.columns:
         df = df[df["req"] <= max_req]
-    if division and "division" in df.columns:
-        df = df[df["division"] == division]
+    # Multi-scope OR filter (list of {division, attribute1} dicts)
+    parsed_scopes = None
+    if scopes:
+        try:
+            parsed_scopes = json.loads(scopes)
+        except Exception:
+            parsed_scopes = None
+    if parsed_scopes:
+        masks = []
+        for sc in parsed_scopes:
+            m = _pd.Series(True, index=df.index)
+            if sc.get("division") and "division" in df.columns:
+                if sc.get("div_op") == "<>":
+                    m &= df["division"] != sc["division"]
+                else:
+                    m &= df["division"] == sc["division"]
+            if sc.get("attribute1") and "attribute1" in df.columns:
+                if sc.get("attr_op") == "<>":
+                    m &= df["attribute1"] != sc["attribute1"]
+                else:
+                    m &= df["attribute1"] == sc["attribute1"]
+            masks.append(m)
+        if masks:
+            combined = masks[0]
+            for m in masks[1:]:
+                combined |= m
+            df = df[combined]
+    else:
+        if division and "division" in df.columns:
+            df = df[df["division"] == division]
+        if attribute1 and "attribute1" in df.columns:
+            df = df[df["attribute1"] == attribute1]
     if department and "department" in df.columns:
         df = df[df["department"] == department]
     if store_grade and "store_grade" in df.columns:
@@ -139,10 +170,12 @@ async def get_results(
     min_req: Optional[float] = Query(None),
     max_req: Optional[float] = Query(None),
     division: Optional[str] = Query(None),
+    attribute1: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     store_grade: Optional[str] = Query(None),
     store_name: Optional[str] = Query(None),
     req_only: bool = Query(False, description="Exclude zero-REQ rows"),
+    scopes: Optional[str] = Query(None, description="JSON array of {division,attribute1} for OR-filter"),
 ):
     """Return paginated result rows for a completed run with rich filtering."""
     record = run_store.get_run(run_id)
@@ -156,8 +189,9 @@ async def get_results(
         return APIResponse.fail(message="Results not in memory (run may have been evicted)")
 
     df = _apply_result_filters(
-        df, min_req=min_req, max_req=max_req, division=division, department=department,
-        store_grade=store_grade, store_name=store_name, req_only=req_only,
+        df, min_req=min_req, max_req=max_req, division=division, attribute1=attribute1,
+        department=department, store_grade=store_grade, store_name=store_name,
+        req_only=req_only, scopes=scopes,
     )
 
     # Sort
@@ -192,8 +226,10 @@ async def aggregate_results(
     min_req: Optional[float] = Query(None),
     max_req: Optional[float] = Query(None),
     division: Optional[str] = Query(None),
+    attribute1: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     store_grade: Optional[str] = Query(None),
+    scopes: Optional[str] = Query(None),
 ):
     """Return aggregated REQ summary grouped by a dimension column."""
     record = run_store.get_run(run_id)
@@ -207,8 +243,9 @@ async def aggregate_results(
         return APIResponse.fail(message="Results not in memory")
 
     df = _apply_result_filters(
-        df, min_req=min_req, max_req=max_req, division=division, department=department,
-        store_grade=store_grade, store_name=None, req_only=False,
+        df, min_req=min_req, max_req=max_req, division=division, attribute1=attribute1,
+        department=department, store_grade=store_grade, store_name=None,
+        req_only=False, scopes=scopes,
     )
 
     allowed = {"division", "department", "store_grade", "store_name", "attribute1"}
@@ -255,6 +292,7 @@ async def result_filter_options(run_id: str):
 
     return APIResponse.ok(data={
         "divisions": uniq("division"),
+        "attribute1s": uniq("attribute1"),
         "departments": uniq("department"),
         "store_grades": uniq("store_grade"),
         "display_types": uniq("display_type"),

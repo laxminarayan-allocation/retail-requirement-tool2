@@ -7,6 +7,7 @@ import axios from 'axios'
 import PendingPage from '@/pages/PendingPage'
 import AssistantWidget from '@/components/AssistantWidget'
 import NotificationBell from '@/components/NotificationBell'
+import { useOracleRefresh } from '@/context/OracleRefreshContext'
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768)
@@ -21,11 +22,13 @@ function useIsMobile() {
 const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = [
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
   { to: '/database',   label: 'Database Explorer',icon: '🗄️', minRole: 'planner' },
+  { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'planner' },
   { to: '/master-data',label: 'Master Data',      icon: '📂', minRole: 'planner' },
   { to: '/factors',    label: 'Calc Factors',     icon: '⚙️', minRole: 'planner' },
   { to: '/calculation',label: 'Calculation',      icon: '▶️', minRole: 'planner' },
   { to: '/req',          label: 'Requirements',      icon: '📝', minRole: 'planner' },
   { to: '/distribution', label: 'Distribution',      icon: '🔀', minRole: 'planner' },
+  { to: '/option-listing', label: 'Option Listing', icon: '📋', minRole: 'planner' },
   { to: '/results',    label: 'Results',          icon: '📋', minRole: 'viewer'  },
   { to: '/history',    label: 'History',          icon: '🕑', minRole: 'viewer'  },
   { to: '/nso',        label: 'NSO Dashboard',    icon: '🏪', minRole: 'viewer'  },
@@ -247,6 +250,7 @@ function loadViewMode(): ViewMode {
 export default function AppLayout() {
   const { user, token, loading, signout, pageAccess } = useAuth()
   const { tokens, theme } = useTheme()
+  const { isRunning: oracleRunning } = useOracleRefresh()
   const realIsMobile = useIsMobile()
   const [viewMode, setViewModeState] = useState<ViewMode>(loadViewMode)
 
@@ -425,6 +429,7 @@ export default function AppLayout() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: tokens.shellBg, ...(isMobile ? { height: 'auto', overflow: 'visible' } : {}) }}>
+      <style>{`@keyframes oracleSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <AssistantWidget />
       {/* Device name prompt modal */}
       {deviceNamePrompt && (
@@ -590,6 +595,16 @@ export default function AppLayout() {
             <span style={{ fontSize: isMobile ? 11 : 13 }}>CityKart Replenishment</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {oracleRunning && (
+              <NavLink to="/oracle-refresh" style={{ textDecoration: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10,
+                  background: tokens.accentBg, color: tokens.accent, borderRadius: 20,
+                  padding: '3px 10px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                  <span style={{ display: 'inline-block', animation: 'oracleSpin 1s linear infinite' }}>⟳</span>
+                  Oracle Refresh
+                </div>
+              </NavLink>
+            )}
             <div ref={sessionBadgeRef} style={{ position: 'relative', flexShrink: 0 }}>
               <span
                 onClick={() => setSessionPopup(p => !p)}

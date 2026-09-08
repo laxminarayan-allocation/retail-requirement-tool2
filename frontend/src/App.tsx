@@ -20,12 +20,16 @@ import SaleDashboard from '@/pages/SaleDashboard'
 import ReqDashboard from '@/pages/ReqDashboard'
 import DistributionModel from '@/pages/DistributionModel'
 import Simulation from '@/pages/Simulation'
+import OptionListing from '@/pages/OptionListing'
+import OracleRefreshPage from '@/pages/OracleRefreshPage'
+import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 
 export default function App() {
   return (
     <DisplayProvider>
     <ThemeProvider>
     <AuthProvider>
+    <OracleRefreshProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -46,9 +50,12 @@ export default function App() {
             <Route path="req" element={<ReqDashboard />} />
             <Route path="distribution" element={<DistributionModel />} />
             <Route path="simulation" element={<Navigate to="/calculation?tab=simulation" replace />} />
+            <Route path="option-listing" element={<OptionListing />} />
+            <Route path="oracle-refresh" element={<OracleRefreshPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
+    </OracleRefreshProvider>
     </AuthProvider>
     </ThemeProvider>
     </DisplayProvider>

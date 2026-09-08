@@ -34,6 +34,8 @@ from app.api.routes import sale as sale_routes
 from app.api.routes import req_dashboard as req_dashboard_routes
 from app.api.routes import distribution as distribution_routes
 from app.api.routes import simulation as simulation_routes
+from app.api.routes import option_listing as option_listing_routes
+from app.api.routes import oracle_refresh as oracle_refresh_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -219,6 +221,8 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/notifications/",        None,          "viewer"),
     # Simulation — planner+ (reads Oracle-derived data)
     ("/api/simulation/",           None,          "planner"),
+    # Option Listing — Pre-Winter AW26 allocation (planner+)
+    ("/api/option-listing/",       None,          "planner"),
     # Fallback — any API route needs at least viewer
     ("/api/",                      None,          "viewer"),
 ]
@@ -370,6 +374,8 @@ app.include_router(sale_routes.router,  prefix="/api")    # Sale Dashboard
 app.include_router(req_dashboard_routes.router, prefix="/api")  # Requirements Dashboard
 app.include_router(distribution_routes.router, prefix="/api")  # Distribution Model
 app.include_router(simulation_routes.router, prefix="/api")   # Allocation Simulation
+app.include_router(option_listing_routes.router, prefix="/api")  # Option Listing (Pre-Winter AW26)
+app.include_router(oracle_refresh_routes.router, prefix="/api")  # Oracle / Excel Refresh
 
 
 @app.get("/api", tags=["Root"])
@@ -412,7 +418,10 @@ if _DIST_DIR.exists():
         return FileResponse(str(_DIST_DIR / "citykart-logo.png"))
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str):
+    async def spa_fallback(full_path: str, request: Request):
+        # Never serve HTML for API routes — return 404 so the error is obvious
+        if full_path.startswith("api/"):
+            return JSONResponse(status_code=404, content={"detail": f"API route not found: /{full_path}"})
         # Serve index.html — no-cache so browser always gets the latest build
         return FileResponse(
             str(_DIST_DIR / "index.html"),

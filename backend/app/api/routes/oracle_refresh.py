@@ -43,6 +43,9 @@ def _make_job(files: list[str]) -> dict:
         "refreshed":   0,
         "failed":      0,
         "cancelled":   False,
+        "current_file": None,
+        "total_files":  0,
+        "done_files":   0,
     }
 
 # ── Excel refresh worker ──────────────────────────────────────────────────────
@@ -78,6 +81,9 @@ def _refresh_worker(job: dict):
             else:
                 log(f"SKIP (not found): {fp}")
 
+        with _lock:
+            _jobs[jid]["total_files"] = len(expanded)
+
         ok, fail = 0, 0
         for path in expanded:
             # Check cancel flag before each file
@@ -85,6 +91,7 @@ def _refresh_worker(job: dict):
                 if _jobs[jid].get("cancelled"):
                     log("⛔ Cancelled by user.")
                     break
+                _jobs[jid]["current_file"] = path.name
             log(f"Opening: {path.name}")
             try:
                 wb = xl.Workbooks.Open(
@@ -111,6 +118,8 @@ def _refresh_worker(job: dict):
             except Exception as e:
                 log(f"  ✗ ERROR on {path.name}: {e}")
                 fail += 1
+            with _lock:
+                _jobs[jid]["done_files"] = ok + fail
 
         xl.Quit()
         pythoncom.CoUninitialize()
@@ -120,14 +129,14 @@ def _refresh_worker(job: dict):
         if was_cancelled:
             log(f"Stopped — {ok} refreshed, {fail} failed before cancel.")
             with _lock:
-                _jobs[jid].update(status="cancelled",
+                _jobs[jid].update(status="cancelled", current_file=None,
                                   finished_at=datetime.now().isoformat(timespec="seconds"),
                                   refreshed=ok, failed=fail)
                 _audit.append({**_jobs[jid]})
         else:
             log(f"All done — {ok} refreshed, {fail} failed.")
             with _lock:
-                _jobs[jid].update(status="done",
+                _jobs[jid].update(status="done", current_file=None,
                                   finished_at=datetime.now().isoformat(timespec="seconds"),
                                   refreshed=ok, failed=fail)
                 _audit.append({**_jobs[jid]})

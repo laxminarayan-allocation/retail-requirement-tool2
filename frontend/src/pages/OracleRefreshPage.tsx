@@ -288,22 +288,44 @@ export default function OracleRefreshPage() {
               <div style={{ fontSize: 12, color: T.textMuted }}>No Excel files found in this folder.</div>
             ) : null}
 
-            {/* Run / Stop buttons */}
-            <div style={{ display: 'flex', gap: 10, alignSelf: 'flex-start' }}>
-              <button onClick={handleRun} disabled={isRunning || (files.length === 0 && selected.size === 0)}
-                style={{ padding: '10px 24px', borderRadius: 8, border: 'none',
-                  background: isRunning ? T.cardBorder : T.accent, color: '#fff',
-                  fontSize: 14, fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer',
-                  opacity: isRunning ? 0.6 : 1 }}>
-                {isRunning ? '⟳ Refreshing…' : `▶ Run Refresh${selected.size > 0 ? ` (${selected.size} selected)` : files.length > 0 ? ` (all ${files.length})` : ''}`}
-              </button>
-              {isRunning && (
-                <button onClick={cancelRefresh}
-                  style={{ padding: '10px 20px', borderRadius: 8, border: `2px solid #e53e3e`,
-                    background: 'transparent', color: '#e53e3e',
-                    fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                  ⛔ Stop
+            {/* Run / Stop / Done buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={handleRun} disabled={isRunning || (files.length === 0 && selected.size === 0)}
+                  style={{ padding: '10px 24px', borderRadius: 8, border: 'none',
+                    background: isRunning ? T.cardBorder : T.accent, color: '#fff',
+                    fontSize: 14, fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer',
+                    opacity: isRunning ? 0.6 : 1 }}>
+                  {isRunning ? '⟳ Refreshing…' : `▶ Run Refresh${selected.size > 0 ? ` (${selected.size} selected)` : files.length > 0 ? ` (all ${files.length})` : ''}`}
                 </button>
+                {isRunning && (
+                  <button onClick={cancelRefresh}
+                    style={{ padding: '10px 20px', borderRadius: 8, border: `2px solid #e53e3e`,
+                      background: 'transparent', color: '#e53e3e',
+                      fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    ⛔ Stop
+                  </button>
+                )}
+                {job && !isRunning && (job.status === 'done' || job.status === 'cancelled' || job.status === 'error') && (
+                  <button onClick={clearJob}
+                    style={{ padding: '10px 20px', borderRadius: 8, border: `2px solid #22c55e`,
+                      background: 'transparent', color: '#22c55e',
+                      fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    ✓ Done
+                  </button>
+                )}
+              </div>
+              {/* Current file progress */}
+              {isRunning && job?.current_file && (
+                <div style={{ fontSize: 12, color: T.textSecondary, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: T.accent }}>▶</span>
+                  <span style={{ fontFamily: 'monospace' }}>{job.current_file}</span>
+                  {job.total_files > 0 && (
+                    <span style={{ color: T.textMuted }}>
+                      ({job.done_files}/{job.total_files})
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

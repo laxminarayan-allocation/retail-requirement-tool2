@@ -11,6 +11,9 @@ interface Job {
   files: string[]
   log: string[]
   error: string | null
+  current_file: string | null
+  total_files: number
+  done_files: number
 }
 
 interface OracleRefreshContextValue {

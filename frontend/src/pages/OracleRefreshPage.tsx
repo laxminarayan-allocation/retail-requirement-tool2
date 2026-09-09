@@ -91,6 +91,14 @@ export default function OracleRefreshPage() {
   const selectAll  = () => setSelected(new Set(files.map(f => f.path)))
   const selectNone = () => setSelected(new Set())
 
+  const removeRecentFolder = async (f: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await http.delete(`/oracle-refresh/recent-folder?path=${encodeURIComponent(f)}`)
+      setRecentFolders(prev => prev.filter(r => r !== f))
+    } catch { setRecentFolders(prev => prev.filter(r => r !== f)) }
+  }
+
   const handleRun = async () => {
     const sel = selected.size > 0 ? Array.from(selected) : files.map(f => f.path)
     if (!sel.length) return
@@ -188,15 +196,21 @@ export default function OracleRefreshPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
                 {recentFolders.map((f, i) => (
-                  <button key={i} onClick={() => { setFolderInput(f); setTimeout(() => applyFolder(), 50) }}
-                    title={f}
-                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, border: `1px solid ${T.cardBorder}`,
-                      background: f === folder ? T.accentBg : T.cardBg,
-                      color: f === folder ? T.accent : T.textSecondary,
-                      cursor: 'pointer', maxWidth: 220,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    📁 {f.split('\\').filter(Boolean).pop() || f}
-                  </button>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', borderRadius: 12,
+                    border: `1px solid ${T.cardBorder}`,
+                    background: f === folder ? T.accentBg : T.cardBg }}>
+                    <button onClick={() => { setFolderInput(f); setTimeout(() => applyFolder(), 50) }}
+                      title={f}
+                      style={{ fontSize: 11, padding: '3px 8px 3px 10px', border: 'none', background: 'transparent',
+                        color: f === folder ? T.accent : T.textSecondary,
+                        cursor: 'pointer', maxWidth: 200,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      📁 {f.split('\\').filter(Boolean).pop() || f}
+                    </button>
+                    <button onClick={e => removeRecentFolder(f, e)} title="Remove"
+                      style={{ fontSize: 11, padding: '2px 7px 2px 2px', border: 'none', background: 'transparent',
+                        color: T.textMuted, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                  </div>
                 ))}
               </div>
             )}
@@ -407,23 +421,32 @@ export default function OracleRefreshPage() {
                 <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
                   Folder to refresh (leave blank to use Refresh tab's selection)
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={schedFolder} onChange={e => setSchedFolder(e.target.value)}
-                    placeholder="\\10.0.0.25\22-Allocation\..."
-                    style={{ flex: 1, fontSize: 12, fontFamily: 'monospace', padding: '6px 10px',
-                      borderRadius: 6, border: `1px solid ${T.cardBorder}`,
-                      background: T.bg, color: T.textPrimary, outline: 'none' }} />
-                  {recentFolders.length > 0 && (
-                    <select onChange={e => setSchedFolder(e.target.value)} defaultValue=""
-                      style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6,
-                        border: `1px solid ${T.cardBorder}`, background: T.bg, color: T.textSecondary }}>
-                      <option value="" disabled>Recent…</option>
-                      {recentFolders.map((f, i) => (
-                        <option key={i} value={f}>{f.split('\\').filter(Boolean).pop() || f}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                <input value={schedFolder} onChange={e => setSchedFolder(e.target.value)}
+                  placeholder="\\10.0.0.25\22-Allocation\..."
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 12, fontFamily: 'monospace',
+                    padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                    background: T.bg, color: T.textPrimary, outline: 'none' }} />
+                {recentFolders.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                    <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
+                    {recentFolders.map((f, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', borderRadius: 12,
+                        border: `1px solid ${T.cardBorder}`,
+                        background: f === schedFolder ? T.accentBg : T.cardBg }}>
+                        <button onClick={() => setSchedFolder(f)} title={f}
+                          style={{ fontSize: 11, padding: '3px 6px 3px 10px', border: 'none', background: 'transparent',
+                            color: f === schedFolder ? T.accent : T.textSecondary,
+                            cursor: 'pointer', maxWidth: 180,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          📁 {f.split('\\').filter(Boolean).pop() || f}
+                        </button>
+                        <button onClick={e => removeRecentFolder(f, e)} title="Remove"
+                          style={{ fontSize: 11, padding: '2px 7px 2px 2px', border: 'none', background: 'transparent',
+                            color: T.textMuted, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ marginBottom: 6 }}>

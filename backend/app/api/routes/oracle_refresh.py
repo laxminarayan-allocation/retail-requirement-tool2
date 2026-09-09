@@ -297,6 +297,14 @@ def get_audit():
     return {"success": True, "data": data}
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
+@router.delete("/recent-folder")
+def delete_recent_folder(path: str):
+    cfg = _load_config()
+    recents = cfg.get("recent_folders", [])
+    cfg["recent_folders"] = [r for r in recents if r != path]
+    _save_config(cfg)
+    return {"success": True, "data": cfg["recent_folders"]}
+
 @router.get("/schedule")
 def get_schedule():
     cfg = _load_config()

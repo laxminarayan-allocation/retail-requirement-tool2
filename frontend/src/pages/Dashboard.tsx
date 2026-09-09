@@ -360,7 +360,7 @@ interface DetailData {
   columns: string[]
 }
 
-function YearSplitCard({ oracle }: { oracle: Record<string, Record<string, number>> }) {
+function YearSplitCard({ oracle, onDrill }: { oracle: Record<string, Record<string, number>>; onDrill: (split: string, value: string) => void }) {
   const [tab, setTab] = useState<'cy' | 'fy'>('fy')
   const cy = oracle.store_cal_year_dist ?? {}
   const fy = oracle.store_fin_year_dist ?? {}
@@ -397,7 +397,10 @@ function YearSplitCard({ oracle }: { oracle: Record<string, Record<string, numbe
         const a = activeDist[yr] ?? 0
         const u = upcomingDist[yr] ?? 0
         return (
-          <div key={yr} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10 }}>
+          <div key={yr} onClick={() => onDrill(tab, yr)} title={`Click to see stores opened in ${yr}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
             <span style={{ width: 36, color: 'var(--text-secondary)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{yr}</span>
             <div style={{ flex: 1, height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
               <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
@@ -561,7 +564,7 @@ const STATE_LABELS: Record<string, string> = {
   'ASSAM': 'Assam', 'GURGAON': 'Gurgaon', 'J&K': 'J&K',
 }
 
-interface DrillStore { code: string; name: string; status: string; grade: string; zone: string; state: string; area: number | null }
+interface DrillStore { code: string; name: string; status: string; grade: string; zone: string; state: string; area: number | null; opening_date?: string }
 interface DrillState { split: string; value: string }
 
 function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => void }) {
@@ -606,7 +609,7 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
     !q || s.code.toLowerCase().includes(q.toLowerCase()) || s.name.toLowerCase().includes(q.toLowerCase())
   )
 
-  const SPLIT_LABEL: Record<string, string> = { zone: 'Zone', state: 'State', grade: 'Grade', tag: 'Store Tag' }
+  const SPLIT_LABEL: Record<string, string> = { zone: 'Zone', state: 'State', grade: 'Grade', tag: 'Store Tag', fy: 'Financial Year', cy: 'Calendar Year' }
   const displayValue = drill.split === 'state' ? (STATE_LABELS[drill.value] ?? drill.value) : drill.value
 
   return (
@@ -656,7 +659,9 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #1e293b' }}>
-                  {['Code', 'Name', 'Status', 'Grade', 'Area (sqft)'].map(h => (
+                  {['Code', 'Name', 'Status', 'Grade',
+                    ...(drill.split === 'fy' || drill.split === 'cy' ? ['Opened'] : []),
+                    'Area (sqft)'].map(h => (
                     <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
                   ))}
                 </tr>
@@ -674,6 +679,11 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
                       }}>{s.status || '—'}</span>
                     </td>
                     <td style={{ padding: '5px 8px', color: '#a78bfa', fontWeight: 700 }}>{s.grade || '—'}</td>
+                    {(drill.split === 'fy' || drill.split === 'cy') && (
+                      <td style={{ padding: '5px 8px', color: '#f59e0b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {s.opening_date || '—'}
+                      </td>
+                    )}
                     <td style={{ padding: '5px 8px', color: 'var(--text-muted)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                       {s.area != null ? s.area.toLocaleString('en-IN') : '—'}
                     </td>
@@ -985,7 +995,7 @@ export default function Dashboard() {
           })()}
 
           {/* Year-wise store opening card */}
-          <YearSplitCard oracle={oracle as unknown as Record<string, Record<string, number>>} />
+          <YearSplitCard oracle={oracle as unknown as Record<string, Record<string, number>>} onDrill={(split, value) => setDrillDown({ split, value })} />
 
           {/* State distribution mini */}
           {Object.keys(oracle.store_state_distribution ?? {}).length > 0 && (() => {

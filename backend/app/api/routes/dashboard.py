@@ -811,6 +811,8 @@ _SPLIT_COL_MAP = {
     "state": "state_name",
     "grade": "store_grade",
     "tag":   "store_tag",
+    "fy":    "_fy",   # derived — handled separately
+    "cy":    "_cy",   # derived — handled separately
 }
 
 
@@ -921,6 +923,81 @@ async def stores_by_split(split: str, value: str):
 
             STATUS_ORDER = {"ACTIVE": 0, "UPCOMING": 1}
             stores.sort(key=lambda x: (STATUS_ORDER.get(x["status"], 2), x["code"]))
+            return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
+
+        # FY / CY split — filter by opening_date year
+        if split.lower() in ("fy", "cy"):
+            def _fy_label(dt) -> str:
+                return f"FY{str(dt.year + 1)[-2:]}" if dt.month >= 4 else f"FY{str(dt.year)[-2:]}"
+
+            stores = []
+            if "opening_date" in store_df.columns:
+                od = pd.to_datetime(store_df["opening_date"], errors="coerce")
+                valid = store_df[od.notna()].copy()
+                valid["_fy"] = od[od.notna()].apply(_fy_label)
+                valid["_cy"] = od[od.notna()].dt.year.astype(str)
+                col_key = "_fy" if split.lower() == "fy" else "_cy"
+                filtered_yr = valid[valid[col_key].str.upper() == value.strip().upper()]
+                for r in filtered_yr.to_dict("records"):
+                    area_v = r.get("area")
+                    try:
+                        area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
+                    except Exception:
+                        area_f = None
+                    stores.append({
+                        "code":   str(r.get("store_name", "—")),
+                        "name":   str(r.get("store_name_f", r.get("location", ""))),
+                        "status": str(r.get("store_status", "ACTIVE")).strip().upper(),
+                        "grade":  str(r.get("store_grade", "")),
+                        "zone":   str(r.get("zone", "")),
+                        "state":  str(r.get("state_name", "")),
+                        "area":   area_f,
+                        "opening_date": str(r.get("opening_date", ""))[:10],
+                    })
+            # Also merge upcoming from parquet (store_tag has FY info)
+            try:
+                from app.core.parquet_cache import has_output, read_cache as _rc
+                if has_output("MISRETAIL", "T_STORE_OPENING_DATE"):
+                    sod = _rc("MISRETAIL", "T_STORE_OPENING_DATE")
+                    if sod is not None and "store_status" in sod.columns and "store_tag" in sod.columns:
+                        import re as _re
+                        up = sod[sod["store_status"].str.upper() == "UPCOMING_STORE"].copy()
+                        existing_codes = {s["code"] for s in stores}
+                        def _tag_fy(tag: str) -> str:
+                            m = _re.search(r"FY(\d{2,4})", str(tag), _re.IGNORECASE)
+                            return f"FY{m.group(1)[-2:]}" if m else "FY27"
+                        def _tag_cy(tag: str) -> str:
+                            m = _re.search(r"FY(\d{2,4})", str(tag), _re.IGNORECASE)
+                            return str(2000 + int(m.group(1)[-2:]) - 1) if m else "2026"
+                        up["_match"] = up["store_tag"].fillna("").apply(
+                            _tag_fy if split.lower() == "fy" else _tag_cy
+                        )
+                        for r in up[up["_match"].str.upper() == value.strip().upper()].to_dict("records"):
+                            code = str(r.get("store_name", "—")).strip()
+                            if code in existing_codes:
+                                continue
+                            existing_codes.add(code)
+                            sm = store_lookup.get(code, {})
+                            area_v = r.get("area")
+                            try:
+                                area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
+                            except Exception:
+                                area_f = None
+                            stores.append({
+                                "code":   code,
+                                "name":   str(sm.get("store_name_f", r.get("initial_name", ""))),
+                                "status": "UPCOMING",
+                                "grade":  str(sm.get("store_grade", r.get("store_grade", ""))),
+                                "zone":   str(sm.get("zone", r.get("zone", ""))),
+                                "state":  str(r.get("state", "")),
+                                "area":   area_f,
+                                "opening_date": str(r.get("store_tag", "")),
+                            })
+            except Exception as exc:
+                logger.warning("fy/cy upcoming merge failed: %s", exc)
+
+            STATUS_ORDER = {"ACTIVE": 0, "UPCOMING": 1}
+            stores.sort(key=lambda x: (STATUS_ORDER.get(x["status"], 2), x.get("opening_date", ""), x["code"]))
             return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
 
         # Default: filter directly from store master

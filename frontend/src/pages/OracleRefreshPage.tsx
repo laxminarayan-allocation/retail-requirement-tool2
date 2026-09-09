@@ -471,74 +471,97 @@ export default function OracleRefreshPage() {
               </div>
             )}
 
-            {schedules.map((s, idx) => (
-              <div key={s.id} style={{ background: T.cardBg, border: `1px solid ${s.enabled ? T.accent : T.cardBorder}`,
-                borderRadius: 10, padding: 16 }}>
-                {/* Title row */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            {schedules.map((s, idx) => {
+              const cronParts = s.cron.trim().split(/\s+/)
+              const cronHuman = cronParts.length === 5
+                ? (() => {
+                    const [m, h, , , d] = cronParts
+                    const hh = h === '*' ? '**' : h.padStart(2,'0')
+                    const mm = m === '*' ? '00' : m.padStart(2,'0')
+                    const days = d === '*' ? 'Every day' : d === '1-6' ? 'Mon–Sat' : d === '1-5' ? 'Mon–Fri' : `Days: ${d}`
+                    return `${hh}:${mm}  •  ${days}`
+                  })()
+                : s.cron
+              const folderName = s.folder ? (s.folder.split('\\').filter(Boolean).pop() || s.folder) : '(Refresh tab files)'
+
+              return (
+              <div key={s.id} style={{ background: T.cardBg, border: `2px solid ${s.enabled ? T.accent : T.cardBorder}`,
+                borderRadius: 10, overflow: 'hidden' }}>
+                {/* Summary header — always visible */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 16px', background: s.enabled ? T.accentBg : 'transparent' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flex: 1, minWidth: 0 }}>
                     <input type="checkbox" checked={s.enabled}
                       onChange={e => updateSchedule({ ...s, enabled: e.target.checked })}
-                      style={{ width: 15, height: 15, accentColor: T.accent }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: s.enabled ? T.textPrimary : T.textMuted }}>
-                      Schedule {idx + 1}
-                    </span>
-                    {s.enabled
-                      ? <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: T.accentBg, color: T.accent }}>ON</span>
-                      : <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: T.cardBorder, color: T.textMuted }}>OFF</span>}
+                      style={{ width: 16, height: 16, accentColor: T.accent, flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: s.enabled ? T.accent : T.textMuted,
+                        letterSpacing: 0.5 }}>
+                        ⏰ {cronHuman}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: T.textSecondary, marginTop: 2,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={s.folder}>
+                        📁 {folderName}
+                      </div>
+                    </div>
                   </label>
                   <button onClick={() => deleteSchedule(s.id)}
-                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                      fontSize: 20, lineHeight: 1, flexShrink: 0, marginLeft: 10 }}>✕</button>
                 </div>
 
-                {/* Folder */}
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>Folder</div>
-                  <input value={s.folder}
-                    onChange={e => setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, folder: e.target.value } : x))}
-                    onBlur={() => updateSchedule(s)}
-                    placeholder="\\10.0.0.25\22-Allocation\... (blank = Refresh tab files)"
-                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 12, fontFamily: 'monospace',
-                      padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
-                      background: T.bg, color: T.textPrimary, outline: 'none' }} />
-                  {recentFolders.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
-                      {recentFolders.map((f, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', borderRadius: 12,
-                          border: `1px solid ${T.cardBorder}`,
-                          background: f === s.folder ? T.accentBg : T.cardBg }}>
-                          <button onClick={() => updateSchedule({ ...s, folder: f })} title={f}
-                            style={{ fontSize: 11, padding: '2px 6px 2px 8px', border: 'none', background: 'transparent',
-                              color: f === s.folder ? T.accent : T.textSecondary, cursor: 'pointer',
-                              maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            📁 {f.split('\\').filter(Boolean).pop() || f}
-                          </button>
-                          <button onClick={e => removeRecentFolder(f, e)} title="Remove"
-                            style={{ fontSize: 10, padding: '2px 6px 2px 2px', border: 'none', background: 'transparent',
-                              color: T.textMuted, cursor: 'pointer' }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Cron */}
-                <div>
-                  <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
-                    Cron (min hour * * days) &nbsp;
-                    <span style={{ color: T.accent }}>0 8 * * 1-6</span> = Mon–Sat 8:00 AM
+                {/* Edit fields */}
+                <div style={{ padding: '12px 16px', borderTop: `1px solid ${T.cardBorder}` }}>
+                  {/* Folder */}
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4, fontWeight: 600 }}>📁 Folder path</div>
+                    <input value={s.folder}
+                      onChange={e => setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, folder: e.target.value } : x))}
+                      onBlur={() => updateSchedule(s)}
+                      placeholder="\\10.0.0.25\22-Allocation\... (blank = Refresh tab files)"
+                      style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, fontFamily: 'monospace',
+                        padding: '7px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                        background: T.bg, color: T.textPrimary, outline: 'none' }} />
+                    {recentFolders.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                        <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
+                        {recentFolders.map((f, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', borderRadius: 12,
+                            border: `1px solid ${T.cardBorder}`,
+                            background: f === s.folder ? T.accentBg : T.cardBg }}>
+                            <button onClick={() => updateSchedule({ ...s, folder: f })} title={f}
+                              style={{ fontSize: 11, padding: '2px 6px 2px 8px', border: 'none', background: 'transparent',
+                                color: f === s.folder ? T.accent : T.textSecondary, cursor: 'pointer',
+                                maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              📁 {f.split('\\').filter(Boolean).pop() || f}
+                            </button>
+                            <button onClick={e => removeRecentFolder(f, e)} title="Remove"
+                              style={{ fontSize: 10, padding: '2px 6px 2px 2px', border: 'none', background: 'transparent',
+                                color: T.textMuted, cursor: 'pointer' }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <input value={s.cron}
-                    onChange={e => setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, cron: e.target.value } : x))}
-                    onBlur={() => updateSchedule(s)}
-                    placeholder="0 8 * * 1-6"
-                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, fontFamily: 'monospace',
-                      padding: '7px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
-                      background: T.bg, color: T.textPrimary, outline: 'none' }} />
+
+                  {/* Cron */}
+                  <div>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4, fontWeight: 600 }}>
+                      ⏰ Cron &nbsp;<span style={{ fontWeight: 400 }}>min hour * * days — e.g. <code style={{ color: T.accent }}>30 8 * * 1-6</code> = Mon–Sat 8:30 AM</span>
+                    </div>
+                    <input value={s.cron}
+                      onChange={e => setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, cron: e.target.value } : x))}
+                      onBlur={() => updateSchedule(s)}
+                      placeholder="0 8 * * 1-6"
+                      style={{ width: '100%', boxSizing: 'border-box', fontSize: 15, fontFamily: 'monospace',
+                        fontWeight: 700, padding: '8px 12px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                        background: T.bg, color: T.textPrimary, outline: 'none', letterSpacing: 1 }} />
+                  </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
 
             <div style={{ fontSize: 11, color: T.textMuted, background: T.cardBg,
               border: `1px solid ${T.cardBorder}`, borderRadius: 8, padding: 10 }}>

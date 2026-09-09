@@ -18,10 +18,18 @@ _CONFIG_FILE = Path(__file__).resolve().parents[4] / "oracle_refresh_config.json
 def _load_config() -> dict:
     if _CONFIG_FILE.exists():
         try:
-            return json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
+            cfg = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
+            # Migrate old single schedule → schedules list
+            if "schedule" in cfg and "schedules" not in cfg:
+                s = cfg.pop("schedule")
+                cfg["schedules"] = [{"id": str(uuid.uuid4()), "enabled": s.get("enabled", False),
+                                      "cron": s.get("cron", "0 8 * * 1-6"), "folder": s.get("folder", "")}]
+            if "schedules" not in cfg:
+                cfg["schedules"] = []
+            return cfg
         except Exception:
             pass
-    return {"folder": "", "files": [], "recent_folders": [], "schedule": {"enabled": False, "cron": "0 8 * * 1-6", "folder": ""}}
+    return {"folder": "", "files": [], "recent_folders": [], "schedules": []}
 
 def _save_config(data: dict):
     _CONFIG_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -155,32 +163,33 @@ def _refresh_worker(job: dict):
 _sched_thread: Optional[threading.Thread] = None
 _sched_stop   = threading.Event()
 
+def _cron_matches(cron: str, now: datetime) -> bool:
+    parts = cron.split()
+    if len(parts) != 5: return False
+    m_ok = parts[0] == "*" or int(parts[0]) == now.minute
+    h_ok = parts[1] == "*" or int(parts[1]) == now.hour
+    d_ok = parts[4] == "*" or str(now.weekday()) in parts[4].split(",") or \
+           any(str(now.isoweekday()) in p for p in parts[4].split("-"))
+    return m_ok and h_ok and d_ok
+
 def _sched_loop():
-    """Minimal scheduler: checks every minute if HH:MM matches cron-like time field."""
+    """Checks every minute — fires all enabled schedules whose cron matches now."""
     while not _sched_stop.is_set():
         cfg = _load_config()
-        s = cfg.get("schedule", {})
-        if s.get("enabled"):
-            cron = s.get("cron", "0 8 * * 1-6")   # min hour dow dow dow
-            parts = cron.split()
-            if len(parts) == 5:
-                now = datetime.now()
-                m_ok = parts[0] == "*" or int(parts[0]) == now.minute
-                h_ok = parts[1] == "*" or int(parts[1]) == now.hour
-                d_ok = parts[4] == "*" or str(now.weekday()) in parts[4].split(",") or \
-                       any(str(now.isoweekday()) in p for p in parts[4].split("-"))
-                if m_ok and h_ok and d_ok:
-                    # Use schedule folder if set, else fall back to saved files list
-                    sched_folder = s.get("folder", "").strip()
-                    if sched_folder:
-                        p = Path(sched_folder)
-                        files_to_run = [str(f) for ext in ("*.xlsx","*.xlsm","*.xlsb","*.xls") for f in p.glob(ext)] if p.is_dir() else []
-                    else:
-                        files_to_run = cfg.get("files", [])
-                    if files_to_run:
-                        job = _make_job(files_to_run)
-                        with _lock: _jobs[job["job_id"]] = job
-                        threading.Thread(target=_refresh_worker, args=(job,), daemon=True).start()
+        now = datetime.now()
+        for s in cfg.get("schedules", []):
+            if not s.get("enabled"): continue
+            if not _cron_matches(s.get("cron", ""), now): continue
+            sched_folder = s.get("folder", "").strip()
+            if sched_folder:
+                p = Path(sched_folder)
+                files_to_run = [str(f) for ext in ("*.xlsx","*.xlsm","*.xlsb","*.xls") for f in p.glob(ext)] if p.is_dir() else []
+            else:
+                files_to_run = cfg.get("files", [])
+            if files_to_run:
+                job = _make_job(files_to_run)
+                with _lock: _jobs[job["job_id"]] = job
+                threading.Thread(target=_refresh_worker, args=(job,), daemon=True).start()
         _sched_stop.wait(60)
 
 def _ensure_scheduler():
@@ -201,10 +210,11 @@ class ConfigUpdate(BaseModel):
 class RunRequest(BaseModel):
     files: Optional[list[str]] = None
 
-class ScheduleUpdate(BaseModel):
-    enabled: bool
-    cron:    str = "0 8 * * 1-6"
-    folder:  str = ""
+class ScheduleEntry(BaseModel):
+    id:      Optional[str] = None
+    enabled: bool          = True
+    cron:    str           = "0 8 * * 1-6"
+    folder:  str           = ""
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -341,15 +351,36 @@ def delete_recent_folder(path: str):
     _save_config(cfg)
     return {"success": True, "data": cfg["recent_folders"]}
 
-@router.get("/schedule")
-def get_schedule():
+@router.get("/schedules")
+def get_schedules():
     cfg = _load_config()
-    return {"success": True, "data": cfg.get("schedule", {"enabled": False, "cron": "0 8 * * 1-6"})}
+    return {"success": True, "data": cfg.get("schedules", [])}
 
-@router.post("/schedule")
-def set_schedule(body: ScheduleUpdate):
+@router.post("/schedules")
+def add_schedule(body: ScheduleEntry):
     cfg = _load_config()
-    cfg["schedule"] = {"enabled": body.enabled, "cron": body.cron, "folder": body.folder}
+    entry = {"id": str(uuid.uuid4()), "enabled": body.enabled, "cron": body.cron, "folder": body.folder}
+    cfg.setdefault("schedules", []).append(entry)
     _save_config(cfg)
     _ensure_scheduler()
+    return {"success": True, "data": entry}
+
+@router.put("/schedules/{sid}")
+def update_schedule(sid: str, body: ScheduleEntry):
+    cfg = _load_config()
+    schedules = cfg.get("schedules", [])
+    for i, s in enumerate(schedules):
+        if s["id"] == sid:
+            schedules[i] = {"id": sid, "enabled": body.enabled, "cron": body.cron, "folder": body.folder}
+            _save_config(cfg)
+            _ensure_scheduler()
+            return {"success": True}
+    raise HTTPException(404, "Schedule not found")
+
+@router.delete("/schedules/{sid}")
+def delete_schedule(sid: str):
+    cfg = _load_config()
+    schedules = cfg.get("schedules", [])
+    cfg["schedules"] = [s for s in schedules if s["id"] != sid]
+    _save_config(cfg)
     return {"success": True}

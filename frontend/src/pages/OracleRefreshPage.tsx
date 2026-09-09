@@ -36,10 +36,10 @@ export default function OracleRefreshPage() {
   const [audit, setAudit]           = useState<AuditEntry[]>([])
   const [health, setHealth]         = useState<Record<string, HealthResult> | null>(null)
   const [healthLoading, setHealthLoading] = useState(false)
-  const [schedEnabled, setSchedEnabled] = useState(false)
-  const [schedCron, setSchedCron]       = useState('0 8 * * 1-6')
-  const [schedFolder, setSchedFolder]   = useState('')
   const [schedSaving, setSchedSaving]   = useState(false)
+
+  interface SchedEntry { id: string; enabled: boolean; cron: string; folder: string }
+  const [schedules, setSchedules] = useState<SchedEntry[]>([])
   const [sortKey, setSortKey]       = useState<'size' | 'modified' | 'name'>('size')
   const [sortAsc, setSortAsc]       = useState(true)
 
@@ -49,11 +49,9 @@ export default function OracleRefreshPage() {
       const d = r.data.data
       if (d.folder) { setFolder(d.folder); setFolderInput(d.folder) }
       if (d.recent_folders) setRecentFolders(d.recent_folders ?? [])
-      if (d.schedule) {
-        setSchedEnabled(d.schedule.enabled ?? false)
-        setSchedCron(d.schedule.cron ?? '0 8 * * 1-6')
-        setSchedFolder(d.schedule.folder ?? '')
-      }
+    }).catch(() => {})
+    http.get<{ success: boolean; data: any[] }>('/oracle-refresh/schedules').then(r => {
+      setSchedules(r.data.data ?? [])
     }).catch(() => {})
   }, [])
 
@@ -113,10 +111,27 @@ export default function OracleRefreshPage() {
     finally { setHealthLoading(false) }
   }
 
-  const saveSchedule = async () => {
+  const addSchedule = async () => {
     setSchedSaving(true)
-    try { await http.post('/oracle-refresh/schedule', { enabled: schedEnabled, cron: schedCron, folder: schedFolder }) }
-    finally { setSchedSaving(false) }
+    try {
+      const r = await http.post<{ success: boolean; data: any }>('/oracle-refresh/schedules',
+        { enabled: true, cron: '0 8 * * 1-6', folder: '' })
+      setSchedules(prev => [...prev, r.data.data])
+    } finally { setSchedSaving(false) }
+  }
+
+  const updateSchedule = async (entry: any) => {
+    try {
+      await http.put(`/oracle-refresh/schedules/${entry.id}`, entry)
+      setSchedules(prev => prev.map(s => s.id === entry.id ? entry : s))
+    } catch { /* ignore */ }
+  }
+
+  const deleteSchedule = async (id: string) => {
+    try {
+      await http.delete(`/oracle-refresh/schedules/${id}`)
+      setSchedules(prev => prev.filter(s => s.id !== id))
+    } catch { /* ignore */ }
   }
 
   // Sorted files
@@ -438,74 +453,96 @@ export default function OracleRefreshPage() {
 
         {/* ── SCHEDULER ── */}
         {tab === 'scheduler' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
-            <div style={{ background: T.cardBg, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, marginBottom: 14 }}>
-                ⏰ Auto-Refresh Schedule
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, cursor: 'pointer' }}>
-                <input type="checkbox" checked={schedEnabled} onChange={e => setSchedEnabled(e.target.checked)}
-                  style={{ width: 16, height: 16, accentColor: T.accent }} />
-                <span style={{ fontSize: 13, color: T.textPrimary, fontWeight: 600 }}>Enable scheduled refresh</span>
-              </label>
-              {/* Scheduler folder */}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
-                  Folder to refresh (leave blank to use Refresh tab's selection)
-                </div>
-                <input value={schedFolder} onChange={e => setSchedFolder(e.target.value)}
-                  placeholder="\\10.0.0.25\22-Allocation\..."
-                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 12, fontFamily: 'monospace',
-                    padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
-                    background: T.bg, color: T.textPrimary, outline: 'none' }} />
-                {recentFolders.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
-                    {recentFolders.map((f, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', borderRadius: 12,
-                        border: `1px solid ${T.cardBorder}`,
-                        background: f === schedFolder ? T.accentBg : T.cardBg }}>
-                        <button onClick={() => setSchedFolder(f)} title={f}
-                          style={{ fontSize: 11, padding: '3px 6px 3px 10px', border: 'none', background: 'transparent',
-                            color: f === schedFolder ? T.accent : T.textSecondary,
-                            cursor: 'pointer', maxWidth: 180,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          📁 {f.split('\\').filter(Boolean).pop() || f}
-                        </button>
-                        <button onClick={e => removeRecentFolder(f, e)} title="Remove"
-                          style={{ fontSize: 11, padding: '2px 7px 2px 2px', border: 'none', background: 'transparent',
-                            color: T.textMuted, cursor: 'pointer', lineHeight: 1 }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
-                  Cron expression (min hour * * days)
-                </div>
-                <input value={schedCron} onChange={e => setSchedCron(e.target.value)}
-                  placeholder="0 8 * * 1-6"
-                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, fontFamily: 'monospace',
-                    padding: '7px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
-                    background: T.bg, color: T.textPrimary, outline: 'none' }} />
-              </div>
-              <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 14 }}>
-                Examples: <code style={{ color: T.accent }}>0 8 * * 1-6</code> = Mon–Sat 8:00 AM &nbsp;|&nbsp;
-                <code style={{ color: T.accent }}>30 9 * * *</code> = Daily 9:30 AM
-              </div>
-              <button onClick={saveSchedule} disabled={schedSaving}
-                style={{ padding: '8px 20px', borderRadius: 7, border: 'none',
-                  background: T.accent, color: '#fff', cursor: schedSaving ? 'not-allowed' : 'pointer',
-                  fontSize: 13, fontWeight: 700 }}>
-                {schedSaving ? 'Saving…' : 'Save Schedule'}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 540 }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: T.textPrimary }}>⏰ Schedules</span>
+              <button onClick={addSchedule} disabled={schedSaving}
+                style={{ padding: '7px 16px', borderRadius: 7, border: 'none',
+                  background: T.accent, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                + Add Schedule
               </button>
             </div>
+
+            {schedules.length === 0 && (
+              <div style={{ fontSize: 13, color: T.textMuted, padding: 16, textAlign: 'center',
+                background: T.cardBg, border: `1px solid ${T.cardBorder}`, borderRadius: 10 }}>
+                No schedules yet — click "+ Add Schedule" to create one.
+              </div>
+            )}
+
+            {schedules.map((s, idx) => (
+              <div key={s.id} style={{ background: T.cardBg, border: `1px solid ${s.enabled ? T.accent : T.cardBorder}`,
+                borderRadius: 10, padding: 16 }}>
+                {/* Title row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.enabled}
+                      onChange={e => updateSchedule({ ...s, enabled: e.target.checked })}
+                      style={{ width: 15, height: 15, accentColor: T.accent }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: s.enabled ? T.textPrimary : T.textMuted }}>
+                      Schedule {idx + 1}
+                    </span>
+                    {s.enabled
+                      ? <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: T.accentBg, color: T.accent }}>ON</span>
+                      : <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: T.cardBorder, color: T.textMuted }}>OFF</span>}
+                  </label>
+                  <button onClick={() => deleteSchedule(s.id)}
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+                </div>
+
+                {/* Folder */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>Folder</div>
+                  <input value={s.folder}
+                    onChange={e => setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, folder: e.target.value } : x))}
+                    onBlur={() => updateSchedule(s)}
+                    placeholder="\\10.0.0.25\22-Allocation\... (blank = Refresh tab files)"
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 12, fontFamily: 'monospace',
+                      padding: '6px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                      background: T.bg, color: T.textPrimary, outline: 'none' }} />
+                  {recentFolders.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                      <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
+                      {recentFolders.map((f, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', borderRadius: 12,
+                          border: `1px solid ${T.cardBorder}`,
+                          background: f === s.folder ? T.accentBg : T.cardBg }}>
+                          <button onClick={() => updateSchedule({ ...s, folder: f })} title={f}
+                            style={{ fontSize: 11, padding: '2px 6px 2px 8px', border: 'none', background: 'transparent',
+                              color: f === s.folder ? T.accent : T.textSecondary, cursor: 'pointer',
+                              maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            📁 {f.split('\\').filter(Boolean).pop() || f}
+                          </button>
+                          <button onClick={e => removeRecentFolder(f, e)} title="Remove"
+                            style={{ fontSize: 10, padding: '2px 6px 2px 2px', border: 'none', background: 'transparent',
+                              color: T.textMuted, cursor: 'pointer' }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cron */}
+                <div>
+                  <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
+                    Cron (min hour * * days) &nbsp;
+                    <span style={{ color: T.accent }}>0 8 * * 1-6</span> = Mon–Sat 8:00 AM
+                  </div>
+                  <input value={s.cron}
+                    onChange={e => setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, cron: e.target.value } : x))}
+                    onBlur={() => updateSchedule(s)}
+                    placeholder="0 8 * * 1-6"
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, fontFamily: 'monospace',
+                      padding: '7px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                      background: T.bg, color: T.textPrimary, outline: 'none' }} />
+                </div>
+              </div>
+            ))}
+
             <div style={{ fontSize: 11, color: T.textMuted, background: T.cardBg,
-              border: `1px solid ${T.cardBorder}`, borderRadius: 8, padding: 12 }}>
-              <strong style={{ color: T.textSecondary }}>Note:</strong> Scheduler checks every minute.
-              Files configured in the Refresh tab will be used. Server restart clears in-memory job history but schedule config is saved.
+              border: `1px solid ${T.cardBorder}`, borderRadius: 8, padding: 10 }}>
+              Scheduler checks every minute. Changes save automatically on blur.
             </div>
           </div>
         )}

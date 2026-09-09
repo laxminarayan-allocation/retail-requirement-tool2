@@ -36,6 +36,7 @@ def _save_config(data: dict):
 
 # ── In-memory stores ──────────────────────────────────────────────────────────
 _jobs: dict[str, dict] = {}          # job_id → job
+_running_files: set[str] = set()     # absolute paths currently being refreshed
 _audit: list[dict]     = []          # completed job summaries (last 200)
 _lock  = threading.Lock()
 
@@ -128,12 +129,14 @@ def _refresh_worker(job: dict):
                 fail += 1
             with _lock:
                 _jobs[jid]["done_files"] = ok + fail
+                _running_files.discard(str(path.resolve()))
 
         xl.Quit()
         pythoncom.CoUninitialize()
 
         with _lock:
             was_cancelled = _jobs[jid].get("cancelled", False)
+        abs_paths = {str(Path(f).resolve()) for f in job["files"]}
         if was_cancelled:
             log(f"Stopped — {ok} refreshed, {fail} failed before cancel.")
             with _lock:
@@ -141,6 +144,7 @@ def _refresh_worker(job: dict):
                                   finished_at=datetime.now().isoformat(timespec="seconds"),
                                   refreshed=ok, failed=fail)
                 _audit.append({**_jobs[jid]})
+                _running_files.difference_update(abs_paths)
         else:
             log(f"All done — {ok} refreshed, {fail} failed.")
             with _lock:
@@ -148,16 +152,19 @@ def _refresh_worker(job: dict):
                                   finished_at=datetime.now().isoformat(timespec="seconds"),
                                   refreshed=ok, failed=fail)
                 _audit.append({**_jobs[jid]})
+                _running_files.difference_update(abs_paths)
             if len(_audit) > 200: _audit.pop(0)
 
     except Exception as e:
         import traceback
         msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        abs_paths = {str(Path(f).resolve()) for f in job["files"]}
         with _lock:
             _jobs[jid].update(status="error", error=msg,
                               finished_at=datetime.now().isoformat(timespec="seconds"))
             _jobs[jid]["log"].append(msg)
             _audit.append({**_jobs[jid]})
+            _running_files.difference_update(abs_paths)
 
 # ── Scheduler (simple background thread) ─────────────────────────────────────
 _sched_thread: Optional[threading.Thread] = None
@@ -302,9 +309,16 @@ def run_refresh(body: RunRequest):
     files = body.files if body.files is not None else cfg.get("files", [])
     if not files:
         raise HTTPException(400, "No files selected. Select files or configure a folder first.")
+    # Check for files already running
+    abs_files = [str(Path(f).resolve()) for f in files]
+    with _lock:
+        conflicts = [Path(f).name for f in abs_files if f in _running_files]
+    if conflicts:
+        raise HTTPException(409, f"Already running: {', '.join(conflicts)}. Wait for the current job to finish.")
     job = _make_job(files)
     with _lock:
         _jobs[job["job_id"]] = job
+        _running_files.update(abs_files)
     threading.Thread(target=_refresh_worker, args=(job,), daemon=True).start()
     return {"success": True, "data": {"job_id": job["job_id"]}}
 

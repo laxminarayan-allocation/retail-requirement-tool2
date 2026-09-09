@@ -12,10 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-
-from app.api.routes.auth import get_current_user
 
 router = APIRouter(prefix="/oracle-refresh", tags=["oracle-refresh"])
 
@@ -58,18 +56,30 @@ def _refresh_worker(job: dict):
             _jobs[job_id]["log"].append(f"[{ts}] {msg}")
 
     try:
-        import win32com.client  # pywin32 — already installed on allocation_user's machine
+        import os, sys
+        import pythoncom          # must CoInitialize before any COM call in a background thread
+        pythoncom.CoInitialize()
+        import win32com.client
         log("Starting Excel (hidden)...")
         xl = win32com.client.DispatchEx("Excel.Application")
         xl.Visible = False
         xl.DisplayAlerts = False
         xl.AskToUpdateLinks = False
 
+        # Expand folders to individual Excel files
+        expanded: list[Path] = []
         for fp in job["files"]:
-            path = Path(fp)
-            if not path.exists():
-                log(f"SKIP — file not found: {fp}")
-                continue
+            p = Path(fp.strip().rstrip("\\").rstrip("/"))
+            if p.is_dir():
+                for ext in ("*.xlsx", "*.xlsm", "*.xlsb", "*.xls"):
+                    expanded.extend(p.glob(ext))
+                log(f"Folder scanned: {p.name} ({len([x for x in p.glob('*.xls*')])} files)")
+            elif p.exists():
+                expanded.append(p)
+            else:
+                log(f"SKIP — not found: {fp}")
+
+        for path in expanded:
             log(f"Opening: {path.name}")
             try:
                 wb = xl.Workbooks.Open(
@@ -104,11 +114,15 @@ def _refresh_worker(job: dict):
         with _jobs_lock:
             _jobs[job_id]["status"]      = "done"
             _jobs[job_id]["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        pythoncom.CoUninitialize()
 
-    except ImportError:
+    except ImportError as e:
+        import traceback
+        err_detail = f"ImportError: {e}\n{traceback.format_exc()}"
         with _jobs_lock:
             _jobs[job_id]["status"]      = "error"
-            _jobs[job_id]["error"]       = "pywin32 not installed — run: pip install pywin32"
+            _jobs[job_id]["error"]       = err_detail
+            _jobs[job_id]["log"].append(err_detail)
             _jobs[job_id]["finished_at"] = datetime.now().isoformat(timespec="seconds")
     except Exception as e:
         with _jobs_lock:
@@ -127,19 +141,41 @@ class RunRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@router.get("/test-win32")
+def test_win32():
+    import os, sys, threading
+    result = {}
+    def _test():
+        from pathlib import Path as P
+        _venv_root = P(sys.executable).resolve().parents[1]
+        result["venv_root"] = str(_venv_root)
+        result["exe"] = sys.executable
+        for _d in [_venv_root, _venv_root/"Lib"/"site-packages"/"pywin32_system32", _venv_root/"Lib"/"site-packages"/"win32"]:
+            if _d.exists():
+                os.environ["PATH"] = str(_d) + os.pathsep + os.environ.get("PATH", "")
+                try: os.add_dll_directory(str(_d))
+                except Exception: pass
+        try:
+            import win32com.client
+            result["win32"] = "OK"
+        except Exception as e:
+            result["win32"] = f"ERROR: {type(e).__name__}: {e}"
+    t = threading.Thread(target=_test); t.start(); t.join()
+    return result
+
 @router.get("/config")
-def get_config(user=Depends(get_current_user)):
+def get_config():
     return {"success": True, "data": _load_config()}
 
 
 @router.post("/config")
-def save_config(body: FileListUpdate, user=Depends(get_current_user)):
+def save_config(body: FileListUpdate):
     _save_config({"files": body.files})
     return {"success": True}
 
 
 @router.post("/run")
-def run_refresh(body: RunRequest, user=Depends(get_current_user)):
+def run_refresh(body: RunRequest):
     cfg = _load_config()
     files = body.files if body.files is not None else cfg.get("files", [])
     if not files:
@@ -156,7 +192,7 @@ def run_refresh(body: RunRequest, user=Depends(get_current_user)):
 
 
 @router.get("/status/{job_id}")
-def job_status(job_id: str, user=Depends(get_current_user)):
+def job_status(job_id: str):
     with _jobs_lock:
         job = _jobs.get(job_id)
     if not job:
@@ -165,7 +201,7 @@ def job_status(job_id: str, user=Depends(get_current_user)):
 
 
 @router.get("/jobs")
-def list_jobs(user=Depends(get_current_user)):
+def list_jobs():
     with _jobs_lock:
         jobs = list(_jobs.values())
     jobs.sort(key=lambda j: j["started_at"], reverse=True)

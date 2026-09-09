@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import axios from 'axios'
+import http from '@/api/http'
 import { useTheme } from '@/context/ThemeContext'
 import { useOracleRefresh } from '@/context/OracleRefreshContext'
 
@@ -14,7 +14,7 @@ export default function OracleRefreshPage() {
 
   // Load saved file config on mount
   useEffect(() => {
-    axios.get<{ success: boolean; data: { files: string[] } }>('/api/oracle-refresh/config')
+    http.get<{ success: boolean; data: { files: string[] } }>('/oracle-refresh/config')
       .then(r => setFiles(r.data.data.files ?? []))
       .catch(() => {})
   }, [])
@@ -27,7 +27,7 @@ export default function OracleRefreshPage() {
   const saveFiles = async (list: string[]) => {
     setSaving(true)
     try {
-      await axios.post('/api/oracle-refresh/config', { files: list })
+      await http.post('/oracle-refresh/config', { files: list })
     } finally {
       setSaving(false)
     }

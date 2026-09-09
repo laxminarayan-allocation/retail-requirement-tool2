@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react'
-import axios from 'axios'
+import http from '@/api/http'
 
 export type JobStatus = 'idle' | 'running' | 'done' | 'error'
 
@@ -37,7 +37,7 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
     stopPolling()
     pollRef.current = setInterval(async () => {
       try {
-        const res = await axios.get<{ success: boolean; data: Job }>(`/api/oracle-refresh/status/${jobId}`)
+        const res = await http.get<{ success: boolean; data: Job }>(`/oracle-refresh/status/${jobId}`)
         const j = res.data.data
         setJob(j)
         if (j.status !== 'running') stopPolling()
@@ -49,8 +49,8 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
 
   const startRefresh = useCallback(async (files?: string[]) => {
     try {
-      const res = await axios.post<{ success: boolean; data: { job_id: string } }>(
-        '/api/oracle-refresh/run',
+      const res = await http.post<{ success: boolean; data: { job_id: string } }>(
+        '/oracle-refresh/run',
         { files: files ?? null }
       )
       const jobId = res.data.data.job_id

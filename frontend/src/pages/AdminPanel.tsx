@@ -814,6 +814,11 @@ const MATRIX_PAGES: (PageDef | GroupDef)[] = [
   { icon: '🕑', name: 'History',           path: '/history',     minRole: 'viewer',  views: [
     { name: 'Run history', minRole: 'viewer' },
   ]},
+  { icon: '📋', name: 'Option Listing',     path: '/option-listing',  minRole: 'planner', views: [{ name: 'Option listing view', minRole: 'planner' }] },
+  { icon: '🔄', name: 'Oracle Refresh',    path: '/oracle-refresh',  minRole: 'planner', views: [
+    { name: 'File config',  minRole: 'planner' },
+    { name: 'Run refresh',  minRole: 'planner' },
+  ]},
   { group: 'Data & Config' },
   { icon: '🗄️', name: 'Database Explorer', path: '/database',    minRole: 'planner', views: [{ name: 'Table browser',     minRole: 'planner' }] },
   { icon: '📂', name: 'Master Data',       path: '/master-data', minRole: 'planner', views: [{ name: 'Master data tables', minRole: 'planner' }] },

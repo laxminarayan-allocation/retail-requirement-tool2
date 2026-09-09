@@ -188,6 +188,7 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/auth/signin",            None,          None),
     ("/api/auth/forgot-password",   None,          None),
     ("/api/health",                 None,          None),
+    ("/api/oracle-refresh/test-win32", None,       None),
     # Any authenticated (pending+)
     ("/api/auth/me",                None,          "pending"),
     ("/api/auth/signout",           None,          "pending"),
@@ -223,6 +224,8 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/simulation/",           None,          "planner"),
     # Option Listing — Pre-Winter AW26 allocation (planner+)
     ("/api/option-listing/",       None,          "planner"),
+    # Oracle / Excel Refresh (planner+)
+    ("/api/oracle-refresh/",       None,          "planner"),
     # Fallback — any API route needs at least viewer
     ("/api/",                      None,          "viewer"),
 ]

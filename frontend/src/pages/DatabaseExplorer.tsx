@@ -6,7 +6,7 @@
  *   Centre : object list with search
  *   Right  : column detail for selected object
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { api } from '@/api/client'
 import http from '@/api/http'
@@ -1230,18 +1230,49 @@ function DownloadedFilesPanel() {
         </div>
       )}
 
-      {/* File list — Style A: ultra compact */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-        {loading && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 4px' }}>Loading…</div>}
+      {/* File list — Table style (Master Data look) */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 8, background: 'var(--card-bg)' }}>
+        {loading && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '16px', textAlign: 'center' }}>Loading…</div>}
         {!loading && files.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '16px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '32px 0', textAlign: 'center' }}>
             No files yet. Admin can download tables/views using Data Preview or SQL Query &amp; Export.
           </div>
         )}
         {!loading && filteredFiles.length === 0 && files.length > 0 && (
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '8px 0', textAlign: 'center' }}>No match</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '16px 0', textAlign: 'center' }}>No match</div>
         )}
-
+        {filteredFiles.length > 0 && (
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12, tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 28 }} />
+              <col style={{ width: '34%' }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 200 }} />
+            </colgroup>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 3 }}>
+              <tr>
+                {[['', ''], ['NAME', 'name'], ['ROWS', 'rows'], ['SIZE', 'size'], ['AGE', 'age'], ['FREQ', 'freq'], ['ACTIONS', '']].map(([label, key]) => (
+                  <th key={label} onClick={key ? () => toggleSort(key as SortKey) : undefined}
+                    style={{
+                      padding: '7px 10px', fontSize: 10, fontWeight: 700,
+                      color: sortKey === key ? '#38bdf8' : '#475569',
+                      textAlign: 'left', letterSpacing: '.05em', textTransform: 'uppercase',
+                      borderBottom: `2px solid ${sortKey === key ? '#38bdf8' : '#334155'}`,
+                      background: sortKey === key ? '#0c1829' : '#0f172a',
+                      whiteSpace: 'nowrap', cursor: key ? 'pointer' : 'default',
+                      userSelect: 'none',
+                    }}>
+                    {label}
+                    {sortKey === key && <span style={{ marginLeft: 3, fontSize: 8 }}>{sortAsc ? '▲' : '▼'}</span>}
+                    {key && sortKey !== key && label && <span style={{ marginLeft: 3, opacity: 0.25, fontSize: 8 }}>⇅</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
         {filteredFiles.map(f => {
           const key = `${f.owner}__${f.object}`
           const isOpen = !!wins[key]
@@ -1255,74 +1286,102 @@ function DownloadedFilesPanel() {
           const mdColor: Record<string, string> = { idle: '#38bdf8', adding: '#64748b', done: '#4ade80', exists: '#fbbf24' }
           const rfColor: Record<string, string> = { idle: '#a78bfa', refreshing: '#64748b', done: '#4ade80', error: '#f87171' }
 
-          return (
-            <div key={key}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '3px 8px 3px 6px',
-                background: isSel ? '#0f2233' : isOpen ? '#0c1628' : FREQ_BG[freq],
-                borderLeft: `2px solid ${isSel ? '#38bdf8' : FREQ_BORDER[freq]}`,
-                borderBottom: '1px solid #0d1b2a',
-              }}>
-                {/* Checkbox */}
-                <input type="checkbox" checked={isSel} onChange={() => toggleSelect(key)}
-                  style={{ accentColor: '#38bdf8', width: 11, height: 11, flexShrink: 0, cursor: 'pointer' }} />
+          const rowBg = isSel ? 'rgba(56,189,248,.07)' : isOpen ? 'rgba(56,189,248,.04)' : 'transparent'
+          const TD: React.CSSProperties = {
+            padding: '8px 10px', fontSize: 12, color: 'var(--text-secondary)',
+            borderBottom: '1px solid #1e293b', verticalAlign: 'middle',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            background: rowBg,
+          }
 
-                {/* Stale dot */}
-                {stale && <span title="Stale" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f87171', flexShrink: 0 }} />}
+          return (
+            <Fragment key={key}>
+              <tr style={{ borderLeft: `3px solid ${isSel ? '#38bdf8' : stale ? '#f87171' : FREQ_BORDER[freq]}` }}>
+                {/* Checkbox */}
+                <td style={{ ...TD, padding: '8px 6px', textAlign: 'center' }}>
+                  <input type="checkbox" checked={isSel} onChange={() => toggleSelect(key)}
+                    style={{ accentColor: '#38bdf8', width: 12, height: 12, cursor: 'pointer' }} />
+                </td>
 
                 {/* Name */}
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180, flexShrink: 1 }}
+                <td style={{ ...TD, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 600 }}
                   title={`${f.owner}.${f.object}`}>
-                  <span style={{ color: 'var(--text-muted)' }}>{f.owner}.</span><span style={{ color: '#7dd3fc' }}>{f.object}</span>
-                </span>
+                  {stale && <span title="Stale" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#f87171', marginRight: 6, verticalAlign: 'middle' }} />}
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{f.owner}.</span>
+                  <span style={{ color: '#7dd3fc' }}>{f.object}</span>
+                  {f.owner === 'QUERY' && <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--text-muted)', background: 'var(--content-bg)', padding: '1px 5px', borderRadius: 6, border: '1px solid var(--card-border)' }}>query</span>}
+                </td>
 
-                {/* Meta */}
-                <span style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                  {f.rows.toLocaleString()} · {fmtSize(f.size_bytes)} · <span style={{ color: stale ? '#f87171' : '#334155' }}>{f.age_label}</span>
-                </span>
+                {/* Rows */}
+                <td style={{ ...TD, color: 'var(--text-primary)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                  {f.rows.toLocaleString()}
+                </td>
 
-                <div style={{ flex: 1 }} />
+                {/* Size */}
+                <td style={{ ...TD, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtSize(f.size_bytes)}
+                </td>
+
+                {/* Age */}
+                <td style={{ ...TD, color: stale ? '#f87171' : 'var(--text-muted)' }}>
+                  {f.age_label}
+                </td>
 
                 {/* Freq badge */}
-                <button onClick={() => cycleFreq(key)} title="Click to cycle frequency"
-                  style={{ padding: '1px 6px', fontSize: 8, fontWeight: 700, borderRadius: 8, border: `1px solid ${FREQ_COLOR[freq]}55`, color: FREQ_COLOR[freq], background: `${FREQ_COLOR[freq]}15`, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {FREQ_LABEL[freq]}
-                </button>
+                <td style={{ ...TD }}>
+                  <button onClick={() => cycleFreq(key)} title="Click to cycle frequency"
+                    style={{ padding: '3px 10px', fontSize: 10, fontWeight: 700, borderRadius: 8,
+                      border: `1px solid ${FREQ_COLOR[freq]}55`, color: FREQ_COLOR[freq],
+                      background: `${FREQ_COLOR[freq]}15`, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {FREQ_LABEL[freq]}
+                  </button>
+                </td>
 
-                {/* Action buttons */}
-                <button onClick={() => openWindow(f)} title="View"
-                  style={{ ...actBtn('#7dd3fc'), background: isOpen ? '#0f2a3f' : 'transparent' }}>
-                  {isOpen ? '▼' : '👁'}
-                </button>
-                <button onClick={() => downloadCsv(f.owner, f.object)} title="Download CSV" style={actBtn('#4ade80')}>⬇</button>
-                <button onClick={() => addToMasterData(f.owner, f.object)} disabled={mdSt === 'adding' || mdSt === 'done'} title="Add to Master Data"
-                  style={actBtn(mdColor[mdSt])}>
-                  {mdSt === 'idle' ? '+MD' : mdSt === 'adding' ? '…' : mdSt === 'done' ? '✓' : '⚠'}
-                </button>
-                <button onClick={() => refreshFile(f.owner, f.object)} disabled={rfSt === 'refreshing'} title="Re-fetch from Oracle"
-                  style={actBtn(rfColor[rfSt])}>
-                  {rfSt === 'refreshing' ? '…' : '↻'}
-                </button>
-                <button onClick={() => removeFile(f.owner, f.object)} disabled={rmSt === 'removing'} title="Delete file"
-                  style={actBtn('#f87171')}>
-                  {rmSt === 'removing' ? '…' : '✕'}
-                </button>
-              </div>
+                {/* Actions */}
+                <td style={{ ...TD }}>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button onClick={() => openWindow(f)} title="View"
+                      style={{ ...actBtn('#7dd3fc'), background: isOpen ? '#0f2a3f' : 'transparent', padding: '3px 9px', fontSize: 10 }}>
+                      {isOpen ? '▼ View' : '👁 View'}
+                    </button>
+                    <button onClick={() => downloadCsv(f.owner, f.object)} title="Download CSV"
+                      style={{ ...actBtn('#4ade80'), padding: '3px 9px', fontSize: 10 }}>⬇ CSV</button>
+                    <button onClick={() => addToMasterData(f.owner, f.object)} disabled={mdSt === 'adding' || mdSt === 'done'} title="Add to Master Data"
+                      style={{ ...actBtn(mdColor[mdSt]), padding: '3px 9px', fontSize: 10 }}>
+                      {mdSt === 'idle' ? '+MD' : mdSt === 'adding' ? '…' : mdSt === 'done' ? '✓ MD' : '⚠'}
+                    </button>
+                    <button onClick={() => refreshFile(f.owner, f.object)} disabled={rfSt === 'refreshing'} title="Re-fetch from Oracle"
+                      style={{ ...actBtn(rfColor[rfSt]), padding: '3px 9px', fontSize: 10 }}>
+                      {rfSt === 'refreshing' ? '↻…' : '↻'}
+                    </button>
+                    <button onClick={() => removeFile(f.owner, f.object)} disabled={rmSt === 'removing'} title="Delete file"
+                      style={{ ...actBtn('#f87171'), padding: '3px 9px', fontSize: 10 }}>
+                      {rmSt === 'removing' ? '…' : '✕'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
 
               {/* SQL block inline (QUERY rows only) */}
               {f.owner === 'QUERY' && isOpen && (
-                <div style={{ background: '#080f1a', borderBottom: '1px solid #1e293b', padding: '8px 12px' }}>
-                  <SqlTextBlock file={f} onSaved={(sql) => {
-                    setFiles(prev => prev.map(x =>
-                      x.owner === f.owner && x.object === f.object ? { ...x, sql_text: sql } : x
-                    ))
-                  }} />
-                </div>
+                <tr>
+                  <td colSpan={7} style={{ padding: 0, borderBottom: '1px solid #1e293b' }}>
+                    <div style={{ background: '#080f1a', padding: '8px 12px' }}>
+                      <SqlTextBlock file={f} onSaved={(sql) => {
+                        setFiles(prev => prev.map(x =>
+                          x.owner === f.owner && x.object === f.object ? { ...x, sql_text: sql } : x
+                        ))
+                      }} />
+                    </div>
+                  </td>
+                </tr>
               )}
-            </div>
+            </Fragment>
           )
         })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Downloaded Files expanded panel popup */}

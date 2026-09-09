@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
         import threading as _th2
         def _dashboard_cache_loop():
             import time as _t
-            _t.sleep(30)  # wait 30s for startup warmup to finish first
+            _t.sleep(5)   # brief pause then warm dashboard cache immediately
             while True:
                 try:
                     from app.api.routes.dashboard import _fetch_oracle_stats_fresh

@@ -833,8 +833,11 @@ async def stores_by_split(split: str, value: str):
         store_df = repo.get_all_stores(active_only=False)
 
         # Build a lookup: store_name (code) → store master row as plain dict (vectorized)
+        # drop_duplicates to avoid "DataFrame index must be unique for orient='index'" error
         store_lookup: dict = (
-            store_df.set_index("store_name").to_dict(orient="index")
+            store_df.drop_duplicates(subset=["store_name"])
+                    .set_index("store_name")
+                    .to_dict(orient="index")
             if "store_name" in store_df.columns else {}
         )
 

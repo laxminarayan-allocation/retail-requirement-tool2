@@ -27,8 +27,9 @@ export default function OracleRefreshPage() {
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const [tab, setTab]               = useState<Tab>('refresh')
-  const [folder, setFolder]         = useState('')
+  const [folder, setFolder]           = useState('')
   const [folderInput, setFolderInput] = useState('')
+  const [recentFolders, setRecentFolders] = useState<string[]>([])
   const [files, setFiles]           = useState<FileInfo[]>([])
   const [selected, setSelected]     = useState<Set<string>>(new Set())
   const [loadingFiles, setLoadingFiles] = useState(false)
@@ -36,8 +37,9 @@ export default function OracleRefreshPage() {
   const [health, setHealth]         = useState<Record<string, HealthResult> | null>(null)
   const [healthLoading, setHealthLoading] = useState(false)
   const [schedEnabled, setSchedEnabled] = useState(false)
-  const [schedCron, setSchedCron]   = useState('0 8 * * 1-6')
-  const [schedSaving, setSchedSaving] = useState(false)
+  const [schedCron, setSchedCron]       = useState('0 8 * * 1-6')
+  const [schedFolder, setSchedFolder]   = useState('')
+  const [schedSaving, setSchedSaving]   = useState(false)
   const [sortKey, setSortKey]       = useState<'size' | 'modified' | 'name'>('size')
   const [sortAsc, setSortAsc]       = useState(true)
 
@@ -46,7 +48,12 @@ export default function OracleRefreshPage() {
     http.get<{ success: boolean; data: any }>('/oracle-refresh/config').then(r => {
       const d = r.data.data
       if (d.folder) { setFolder(d.folder); setFolderInput(d.folder) }
-      if (d.schedule) { setSchedEnabled(d.schedule.enabled ?? false); setSchedCron(d.schedule.cron ?? '0 8 * * 1-6') }
+      if (d.recent_folders) setRecentFolders(d.recent_folders ?? [])
+      if (d.schedule) {
+        setSchedEnabled(d.schedule.enabled ?? false)
+        setSchedCron(d.schedule.cron ?? '0 8 * * 1-6')
+        setSchedFolder(d.schedule.folder ?? '')
+      }
     }).catch(() => {})
   }, [])
 
@@ -68,6 +75,10 @@ export default function OracleRefreshPage() {
     setSelected(new Set())
     try {
       await http.post('/oracle-refresh/config', { folder: f })
+      setRecentFolders(prev => {
+        const next = [f, ...prev.filter(x => x !== f)].slice(0, 5)
+        return next
+      })
       const r = await http.get<{ success: boolean; data: FileInfo[] }>(`/oracle-refresh/folder-files?path=${encodeURIComponent(f)}`)
       setFiles(r.data.data ?? [])
     } catch { setFiles([]) }
@@ -96,7 +107,7 @@ export default function OracleRefreshPage() {
 
   const saveSchedule = async () => {
     setSchedSaving(true)
-    try { await http.post('/oracle-refresh/schedule', { enabled: schedEnabled, cron: schedCron }) }
+    try { await http.post('/oracle-refresh/schedule', { enabled: schedEnabled, cron: schedCron, folder: schedFolder }) }
     finally { setSchedSaving(false) }
   }
 
@@ -171,6 +182,24 @@ export default function OracleRefreshPage() {
                 Apply
               </button>
             </div>
+
+            {/* Recent folders */}
+            {recentFolders.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ fontSize: 11, color: T.textMuted, alignSelf: 'center' }}>Recent:</span>
+                {recentFolders.map((f, i) => (
+                  <button key={i} onClick={() => { setFolderInput(f); setTimeout(() => applyFolder(), 50) }}
+                    title={f}
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, border: `1px solid ${T.cardBorder}`,
+                      background: f === folder ? T.accentBg : T.cardBg,
+                      color: f === folder ? T.accent : T.textSecondary,
+                      cursor: 'pointer', maxWidth: 220,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    📁 {f.split('\\').filter(Boolean).pop() || f}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* File list */}
             {loadingFiles ? (
@@ -373,6 +402,30 @@ export default function OracleRefreshPage() {
                   style={{ width: 16, height: 16, accentColor: T.accent }} />
                 <span style={{ fontSize: 13, color: T.textPrimary, fontWeight: 600 }}>Enable scheduled refresh</span>
               </label>
+              {/* Scheduler folder */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
+                  Folder to refresh (leave blank to use Refresh tab's selection)
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={schedFolder} onChange={e => setSchedFolder(e.target.value)}
+                    placeholder="\\10.0.0.25\22-Allocation\..."
+                    style={{ flex: 1, fontSize: 12, fontFamily: 'monospace', padding: '6px 10px',
+                      borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                      background: T.bg, color: T.textPrimary, outline: 'none' }} />
+                  {recentFolders.length > 0 && (
+                    <select onChange={e => setSchedFolder(e.target.value)} defaultValue=""
+                      style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6,
+                        border: `1px solid ${T.cardBorder}`, background: T.bg, color: T.textSecondary }}>
+                      <option value="" disabled>Recent…</option>
+                      {recentFolders.map((f, i) => (
+                        <option key={i} value={f}>{f.split('\\').filter(Boolean).pop() || f}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
               <div style={{ marginBottom: 6 }}>
                 <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
                   Cron expression (min hour * * days)

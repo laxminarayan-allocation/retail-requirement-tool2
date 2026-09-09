@@ -21,7 +21,7 @@ def _load_config() -> dict:
             return json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"folder": "", "files": [], "schedule": {"enabled": False, "cron": "0 8 * * 1-6"}}
+    return {"folder": "", "files": [], "recent_folders": [], "schedule": {"enabled": False, "cron": "0 8 * * 1-6", "folder": ""}}
 
 def _save_config(data: dict):
     _CONFIG_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -145,9 +145,15 @@ def _sched_loop():
                 d_ok = parts[4] == "*" or str(now.weekday()) in parts[4].split(",") or \
                        any(str(now.isoweekday()) in p for p in parts[4].split("-"))
                 if m_ok and h_ok and d_ok:
-                    files = cfg.get("files", [])
-                    if files:
-                        job = _make_job(files)
+                    # Use schedule folder if set, else fall back to saved files list
+                    sched_folder = s.get("folder", "").strip()
+                    if sched_folder:
+                        p = Path(sched_folder)
+                        files_to_run = [str(f) for ext in ("*.xlsx","*.xlsm","*.xlsb","*.xls") for f in p.glob(ext)] if p.is_dir() else []
+                    else:
+                        files_to_run = cfg.get("files", [])
+                    if files_to_run:
+                        job = _make_job(files_to_run)
                         with _lock: _jobs[job["job_id"]] = job
                         threading.Thread(target=_refresh_worker, args=(job,), daemon=True).start()
         _sched_stop.wait(60)
@@ -173,6 +179,7 @@ class RunRequest(BaseModel):
 class ScheduleUpdate(BaseModel):
     enabled: bool
     cron:    str = "0 8 * * 1-6"
+    folder:  str = ""
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -183,8 +190,16 @@ def get_config():
 @router.post("/config")
 def save_config(body: ConfigUpdate):
     cfg = _load_config()
-    if body.folder  is not None: cfg["folder"]   = body.folder
-    if body.files   is not None: cfg["files"]    = body.files
+    if body.folder is not None:
+        cfg["folder"] = body.folder
+        # maintain recent_folders (last 5, no duplicates)
+        if body.folder:
+            recents = cfg.get("recent_folders", [])
+            if body.folder in recents:
+                recents.remove(body.folder)
+            recents.insert(0, body.folder)
+            cfg["recent_folders"] = recents[:5]
+    if body.files    is not None: cfg["files"]    = body.files
     if body.schedule is not None: cfg["schedule"] = body.schedule
     _save_config(cfg)
     return {"success": True}
@@ -290,7 +305,7 @@ def get_schedule():
 @router.post("/schedule")
 def set_schedule(body: ScheduleUpdate):
     cfg = _load_config()
-    cfg["schedule"] = {"enabled": body.enabled, "cron": body.cron}
+    cfg["schedule"] = {"enabled": body.enabled, "cron": body.cron, "folder": body.folder}
     _save_config(cfg)
     _ensure_scheduler()
     return {"success": True}

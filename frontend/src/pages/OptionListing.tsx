@@ -24,7 +24,7 @@ const PIPELINE_STEPS = [
 
 // ─── Tab components ───────────────────────────────────────────────────────────
 
-function PipelineTab({ tokens }: { tokens: any }) {
+function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt: number | null }) {
   const [dispatchRatio, setDispatchRatio] = useState(0.60)
   const [stepStatus, setStepStatus]       = useState<Record<string,string>>({})
   const [logs, setLogs]                   = useState<{text:string;cls:string;key:number}[]>([])
@@ -814,6 +814,7 @@ export default function OptionListing() {
   const { lastCompletedAt } = useOracleRefresh()
   const [tab, setTab] = useState<'pipeline'|'queries'>('pipeline')
 
+
   const tabBtn = (id: 'pipeline'|'queries', label: string) => (
     <button key={id} onClick={() => setTab(id)} style={{
       background: tab === id ? tokens.accentBg : 'transparent',
@@ -839,7 +840,7 @@ export default function OptionListing() {
       {/* Tab content — both always mounted so pipeline keeps running when tab switches */}
       <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
         <div style={{ display: tab === 'pipeline' ? 'block' : 'none' }}>
-          <PipelineTab tokens={tokens} />
+          <PipelineTab tokens={tokens} lastCompletedAt={lastCompletedAt} />
         </div>
         <div style={{ display: tab === 'queries' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
           <QueriesTab tokens={tokens} />

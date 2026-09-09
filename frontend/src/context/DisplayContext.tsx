@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
-export type FontFamily = 'system' | 'roboto' | 'mono' | 'serif'
+export type FontFamily = 'aptos' | 'system' | 'roboto' | 'mono' | 'serif'
 
 export const FONT_LABELS: Record<FontFamily, string> = {
+  aptos:   'Aptos Narrow',
   system:  'System UI',
   roboto:  'Roboto / Clean',
   mono:    'Monospace',
@@ -10,6 +11,7 @@ export const FONT_LABELS: Record<FontFamily, string> = {
 }
 
 const FONT_STACKS: Record<FontFamily, string> = {
+  aptos:  "'Aptos Narrow', 'Calibri', 'Segoe UI', sans-serif",
   system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   roboto: "'Roboto', 'Arial', sans-serif",
   mono:   "'Consolas', 'Cascadia Code', 'Courier New', monospace",
@@ -56,7 +58,7 @@ function save<T>(key: string, v: T) {
 export function DisplayProvider({ children }: { children: ReactNode }) {
   const [zoom, setZoomState]           = useState<number>(() => load('app_zoom', 1.0))
   const [fontSize, setFontSizeState]   = useState<number>(() => load('app_fontSize', 13))
-  const [fontFamily, setFontFamilyState] = useState<FontFamily>(() => load('app_fontFamily', 'system'))
+  const [fontFamily, setFontFamilyState] = useState<FontFamily>(() => load('app_fontFamily', 'aptos'))
   const [brightness, setBrightnessState] = useState<number>(() => load('app_brightness', 1.0))
 
   const setZoom = (z: number) => { setZoomState(z); save('app_zoom', z) }

@@ -19,6 +19,7 @@ interface Job {
 interface OracleRefreshContextValue {
   job: Job | null
   isRunning: boolean
+  lastCompletedAt: number | null   // timestamp when last job finished with status "done"
   startRefresh: (files?: string[]) => Promise<void>
   cancelRefresh: () => Promise<void>
   clearJob: () => void
@@ -28,6 +29,7 @@ const OracleRefreshContext = createContext<OracleRefreshContextValue | null>(nul
 
 export function OracleRefreshProvider({ children }: { children: ReactNode }) {
   const [job, setJob] = useState<Job | null>(null)
+  const [lastCompletedAt, setLastCompletedAt] = useState<number | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopPolling = useCallback(() => {
@@ -44,7 +46,10 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
         const res = await http.get<{ success: boolean; data: Job }>(`/oracle-refresh/status/${jobId}`)
         const j = res.data.data
         setJob(j)
-        if (j.status !== 'running') stopPolling()
+        if (j.status !== 'running') {
+          stopPolling()
+          if (j.status === 'done') setLastCompletedAt(Date.now())
+        }
       } catch {
         stopPolling()
       }
@@ -95,7 +100,7 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
   const isRunning = job?.status === 'running'
 
   return (
-    <OracleRefreshContext.Provider value={{ job, isRunning, startRefresh, cancelRefresh, clearJob }}>
+    <OracleRefreshContext.Provider value={{ job, isRunning, lastCompletedAt, startRefresh, cancelRefresh, clearJob }}>
       {children}
     </OracleRefreshContext.Provider>
   )

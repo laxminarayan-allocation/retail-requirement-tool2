@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import { useTheme } from '@/context/ThemeContext'
+import { useOracleRefresh } from '@/context/OracleRefreshContext'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface QueryMeta { name: string; description: string; table: string; has_params: boolean }
@@ -93,6 +94,11 @@ function PipelineTab({ tokens }: { tokens: any }) {
       setCandLoading(false)
     }
   }
+
+  // Auto-load MC candidates when Oracle Refresh completes
+  useEffect(() => {
+    if (lastCompletedAt) loadCandidates()
+  }, [lastCompletedAt])
 
   const filteredCand = (() => {
     const q = candSearch.trim().toUpperCase()
@@ -374,6 +380,9 @@ function PipelineTab({ tokens }: { tokens: any }) {
                   color: '#22c55e', fontSize: 11, padding: '3px 10px', cursor: candLoading ? 'wait' : 'pointer', fontWeight: 600,
                 }}>
                   {candLoading ? '⟳ Loading…' : candidates.length ? `↺ Refresh (${candidates.length})` : '▶ Load from Oracle'}
+                  {lastCompletedAt && candidates.length > 0 && !candLoading && (
+                    <span style={{ marginLeft: 6, fontSize: 10, color: '#22c55e' }}>✓ auto</span>
+                  )}
                 </button>
               </div>
 
@@ -802,6 +811,7 @@ function QueriesTab({ tokens }: { tokens: any }) {
 
 export default function OptionListing() {
   const { tokens } = useTheme()
+  const { lastCompletedAt } = useOracleRefresh()
   const [tab, setTab] = useState<'pipeline'|'queries'>('pipeline')
 
   const tabBtn = (id: 'pipeline'|'queries', label: string) => (

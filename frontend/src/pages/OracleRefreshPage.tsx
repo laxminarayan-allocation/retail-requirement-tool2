@@ -6,7 +6,7 @@ import { useOracleRefresh } from '@/context/OracleRefreshContext'
 type Tab = 'refresh' | 'audit' | 'health' | 'log' | 'scheduler'
 
 interface FileInfo { name: string; path: string; size: number; modified: string }
-interface AuditEntry { job_id: string; started_at: string; finished_at: string | null; refreshed: number; failed: number; files: string[]; status: string }
+interface AuditEntry { job_id: string; started_at: string; finished_at: string | null; refreshed: number; failed: number; files: string[]; failed_files?: string[]; status: string }
 interface HealthResult { status: string; error?: string; sysdate?: string; path?: string; accessible?: boolean }
 
 function fmtSize(b: number) {
@@ -366,18 +366,34 @@ export default function OracleRefreshPage() {
                 </thead>
                 <tbody>
                   {audit.map((a, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.cardBorder}` }}>
+                    <>
+                    <tr key={i} style={{ borderBottom: (a.failed > 0 && a.failed_files?.length) ? 'none' : `1px solid ${T.cardBorder}` }}>
                       <td style={{ padding: '6px 10px', color: T.textSecondary }}>{a.started_at?.slice(11, 19)}{' '}<span style={{ color: T.textMuted }}>{a.started_at?.slice(0,10)}</span></td>
                       <td style={{ padding: '6px 10px', color: T.textMuted }}>{a.finished_at?.slice(11,19) ?? '—'}</td>
                       <td style={{ padding: '6px 10px' }}>
-                        {a.status === 'done'    ? pill('#22c55e', '#052e16', 'Done') :
-                         a.status === 'running' ? pill(T.accent, T.accentBg, 'Running') :
+                        {a.status === 'done'       ? pill('#22c55e', '#052e16', 'Done') :
+                         a.status === 'cancelled'  ? pill('#f59e0b', '#451a03', 'Cancelled') :
+                         a.status === 'running'    ? pill(T.accent, T.accentBg, 'Running') :
                          pill('#ef4444', '#450a0a', 'Error')}
                       </td>
                       <td style={{ padding: '6px 10px', color: T.textMuted }}>{a.files?.length ?? 0}</td>
                       <td style={{ padding: '6px 10px', color: '#22c55e', fontWeight: 700 }}>{a.refreshed ?? 0}</td>
                       <td style={{ padding: '6px 10px', color: '#ef4444', fontWeight: 700 }}>{a.failed ?? 0}</td>
                     </tr>
+                    {a.failed > 0 && a.failed_files && a.failed_files.length > 0 && (
+                      <tr key={`${i}-fail`} style={{ borderBottom: `1px solid ${T.cardBorder}`, background: '#450a0a22' }}>
+                        <td colSpan={6} style={{ padding: '4px 10px 8px 30px' }}>
+                          <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>✗ Failed files: </span>
+                          {a.failed_files.map((f, fi) => (
+                            <span key={fi} style={{ fontSize: 11, color: '#fca5a5', marginRight: 8,
+                              fontFamily: 'monospace' }}>
+                              {f}{fi < a.failed_files!.length - 1 ? ',' : ''}
+                            </span>
+                          ))}
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   ))}
                 </tbody>
               </table>

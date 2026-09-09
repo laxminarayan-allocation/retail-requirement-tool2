@@ -49,12 +49,13 @@ def _make_job(files: list[str]) -> dict:
         "files":       files,
         "log":         [],
         "error":       None,
-        "refreshed":   0,
-        "failed":      0,
-        "cancelled":   False,
+        "refreshed":    0,
+        "failed":       0,
+        "cancelled":    False,
         "current_file": None,
         "total_files":  0,
         "done_files":   0,
+        "failed_files": [],
     }
 
 # ── Excel refresh worker ──────────────────────────────────────────────────────
@@ -127,6 +128,8 @@ def _refresh_worker(job: dict):
             except Exception as e:
                 log(f"  ✗ ERROR on {path.name}: {e}")
                 fail += 1
+                with _lock:
+                    _jobs[jid]["failed_files"].append(path.name)
             with _lock:
                 _jobs[jid]["done_files"] = ok + fail
                 _running_files.discard(str(path.resolve()))

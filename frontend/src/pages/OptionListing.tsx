@@ -36,6 +36,7 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
   const stepStartRef = useRef<Record<string,number>>({})
   type OutputFile = { name: string; size_kb: number; modified: string }
   const [outputFiles, setOutputFiles]     = useState<OutputFile[]>([])
+  const [outputOpen, setOutputOpen]       = useState(true)
 
   async function loadOutputFiles() {
     try {
@@ -277,20 +278,28 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
       {/* ── Output Files Download Panel ── */}
       {outputFiles.length > 0 && (
         <div style={{ background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`,
-          borderRadius: 8, padding: '14px 16px', marginBottom: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: tokens.textPrimary }}>
-              📂 Output Files — <span style={{ color: tokens.textMuted, fontWeight: 400 }}>
-                D:\Prewinter Color Option Listing New Repeat\Codes\OUTPUT\
+          borderRadius: 8, marginBottom: 18, overflow: 'hidden' }}>
+          {/* Header — click to toggle */}
+          <div onClick={() => setOutputOpen(o => !o)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 16px', cursor: 'pointer', userSelect: 'none',
+              borderBottom: outputOpen ? `1px solid ${tokens.cardBorder}` : 'none' }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: tokens.textPrimary, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 14 }}>{outputOpen ? '▾' : '▸'}</span>
+              📂 Output Files
+              <span style={{ color: tokens.textMuted, fontWeight: 400, fontSize: 11 }}>
+                ({outputFiles.length} files)
               </span>
             </span>
-            <button onClick={loadOutputFiles} style={{
-              fontSize: 11, padding: '3px 10px', borderRadius: 4,
-              background: 'transparent', border: `1px solid ${tokens.cardBorder}`,
-              color: tokens.textMuted, cursor: 'pointer'
-            }}>↺ Refresh</button>
+            <div style={{ display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}>
+              <button onClick={loadOutputFiles} style={{
+                fontSize: 11, padding: '3px 10px', borderRadius: 4,
+                background: 'transparent', border: `1px solid ${tokens.cardBorder}`,
+                color: tokens.textMuted, cursor: 'pointer'
+              }}>↺ Refresh</button>
+            </div>
           </div>
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          {outputOpen && <div style={{ maxHeight: 220, overflowY: 'auto', padding: '0 0 4px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ color: tokens.textMuted, borderBottom: `1px solid ${tokens.cardBorder}` }}>
@@ -328,7 +337,7 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
       {result === 'failed' && (

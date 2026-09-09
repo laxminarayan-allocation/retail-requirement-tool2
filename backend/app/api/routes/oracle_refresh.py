@@ -1,23 +1,18 @@
 """
-oracle_refresh.py
-─────────────────
-Background Excel ODBC + Pivot Table refresh via win32com.
-Jobs run in a thread pool so FastAPI stays non-blocking.
-Job state is in-memory (resets on server restart).
+oracle_refresh.py  —  Oracle ODBC Refresh & Audit API
+Tabs: Refresh | Audit | Health Check | Log | Scheduler
 """
-import json
-import threading
-import uuid
+import json, threading, uuid, os, sched, time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/oracle-refresh", tags=["oracle-refresh"])
 
-# ── Config file (stores list of watched Excel files) ──────────────────────────
+# ── Persistent config ─────────────────────────────────────────────────────────
 _CONFIG_FILE = Path(__file__).resolve().parents[4] / "oracle_refresh_config.json"
 
 def _load_config() -> dict:
@@ -26,183 +21,276 @@ def _load_config() -> dict:
             return json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"files": []}
+    return {"folder": "", "files": [], "schedule": {"enabled": False, "cron": "0 8 * * 1-6"}}
 
 def _save_config(data: dict):
     _CONFIG_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
-# ── In-memory job store ───────────────────────────────────────────────────────
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
+# ── In-memory stores ──────────────────────────────────────────────────────────
+_jobs: dict[str, dict] = {}          # job_id → job
+_audit: list[dict]     = []          # completed job summaries (last 200)
+_lock  = threading.Lock()
 
-def _make_job(file_paths: list[str]) -> dict:
+def _make_job(files: list[str]) -> dict:
     return {
         "job_id":      str(uuid.uuid4()),
-        "status":      "running",   # running | done | error
+        "status":      "running",
         "started_at":  datetime.now().isoformat(timespec="seconds"),
         "finished_at": None,
-        "files":       file_paths,
+        "files":       files,
         "log":         [],
         "error":       None,
+        "refreshed":   0,
+        "failed":      0,
     }
 
-# ── Excel refresh worker (runs in a background thread) ───────────────────────
+# ── Excel refresh worker ──────────────────────────────────────────────────────
 def _refresh_worker(job: dict):
-    job_id = job["job_id"]
+    jid = job["job_id"]
 
     def log(msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
-        with _jobs_lock:
-            _jobs[job_id]["log"].append(f"[{ts}] {msg}")
+        with _lock:
+            _jobs[jid]["log"].append(f"[{ts}] {msg}")
 
     try:
-        import os, sys
-        import pythoncom          # must CoInitialize before any COM call in a background thread
+        import pythoncom
         pythoncom.CoInitialize()
         import win32com.client
-        log("Starting Excel (hidden)...")
+
+        log("Starting Excel (hidden)…")
         xl = win32com.client.DispatchEx("Excel.Application")
         xl.Visible = False
         xl.DisplayAlerts = False
         xl.AskToUpdateLinks = False
 
-        # Expand folders to individual Excel files
+        # Expand folders
         expanded: list[Path] = []
         for fp in job["files"]:
-            p = Path(fp.strip().rstrip("\\").rstrip("/"))
+            p = Path(fp.strip().rstrip("\\/"))
             if p.is_dir():
                 for ext in ("*.xlsx", "*.xlsm", "*.xlsb", "*.xls"):
                     expanded.extend(p.glob(ext))
-                log(f"Folder scanned: {p.name} ({len([x for x in p.glob('*.xls*')])} files)")
+                log(f"Folder: {p.name} — {len(expanded)} file(s) found")
             elif p.exists():
                 expanded.append(p)
             else:
-                log(f"SKIP — not found: {fp}")
+                log(f"SKIP (not found): {fp}")
 
+        ok, fail = 0, 0
         for path in expanded:
             log(f"Opening: {path.name}")
             try:
                 wb = xl.Workbooks.Open(
                     str(path.resolve()),
-                    UpdateLinks=False,
-                    ReadOnly=False,
+                    UpdateLinks=False, ReadOnly=False,
                     IgnoreReadOnlyRecommended=True,
                 )
-                log(f"  Refreshing all connections (ODBC)...")
+                log("  Refreshing ODBC connections…")
                 wb.RefreshAll()
                 xl.CalculateUntilAsyncQueriesDone()
-                log(f"  ODBC refresh done.")
-                # Refresh all pivot caches
-                pivot_count = 0
-                for ws in wb.Worksheets:
+                # Pivot tables
+                pc_count = 0
+                try:
                     for pc in wb.PivotCaches():
-                        try:
-                            pc.Refresh()
-                            pivot_count += 1
-                        except Exception:
-                            pass
-                if pivot_count:
-                    log(f"  Pivot tables refreshed: {pivot_count}")
+                        try: pc.Refresh(); pc_count += 1
+                        except Exception: pass
+                except Exception: pass
+                if pc_count:
+                    log(f"  Pivot tables refreshed: {pc_count}")
                 wb.Save()
                 wb.Close(SaveChanges=False)
-                log(f"  Saved and closed: {path.name}")
+                log(f"  ✓ Done: {path.name}")
+                ok += 1
             except Exception as e:
-                log(f"  ERROR on {path.name}: {e}")
+                log(f"  ✗ ERROR on {path.name}: {e}")
+                fail += 1
 
         xl.Quit()
-        log("All done.")
-        with _jobs_lock:
-            _jobs[job_id]["status"]      = "done"
-            _jobs[job_id]["finished_at"] = datetime.now().isoformat(timespec="seconds")
         pythoncom.CoUninitialize()
+        log(f"All done — {ok} refreshed, {fail} failed.")
 
-    except ImportError as e:
-        import traceback
-        err_detail = f"ImportError: {e}\n{traceback.format_exc()}"
-        with _jobs_lock:
-            _jobs[job_id]["status"]      = "error"
-            _jobs[job_id]["error"]       = err_detail
-            _jobs[job_id]["log"].append(err_detail)
-            _jobs[job_id]["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        with _lock:
+            _jobs[jid].update(status="done",
+                              finished_at=datetime.now().isoformat(timespec="seconds"),
+                              refreshed=ok, failed=fail)
+            _audit.append({**_jobs[jid]})
+            if len(_audit) > 200: _audit.pop(0)
+
     except Exception as e:
-        with _jobs_lock:
-            _jobs[job_id]["status"]      = "error"
-            _jobs[job_id]["error"]       = str(e)
-            _jobs[job_id]["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        import traceback
+        msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        with _lock:
+            _jobs[jid].update(status="error", error=msg,
+                              finished_at=datetime.now().isoformat(timespec="seconds"))
+            _jobs[jid]["log"].append(msg)
+            _audit.append({**_jobs[jid]})
 
+# ── Scheduler (simple background thread) ─────────────────────────────────────
+_sched_thread: Optional[threading.Thread] = None
+_sched_stop   = threading.Event()
+
+def _sched_loop():
+    """Minimal scheduler: checks every minute if HH:MM matches cron-like time field."""
+    while not _sched_stop.is_set():
+        cfg = _load_config()
+        s = cfg.get("schedule", {})
+        if s.get("enabled"):
+            cron = s.get("cron", "0 8 * * 1-6")   # min hour dow dow dow
+            parts = cron.split()
+            if len(parts) == 5:
+                now = datetime.now()
+                m_ok = parts[0] == "*" or int(parts[0]) == now.minute
+                h_ok = parts[1] == "*" or int(parts[1]) == now.hour
+                d_ok = parts[4] == "*" or str(now.weekday()) in parts[4].split(",") or \
+                       any(str(now.isoweekday()) in p for p in parts[4].split("-"))
+                if m_ok and h_ok and d_ok:
+                    files = cfg.get("files", [])
+                    if files:
+                        job = _make_job(files)
+                        with _lock: _jobs[job["job_id"]] = job
+                        threading.Thread(target=_refresh_worker, args=(job,), daemon=True).start()
+        _sched_stop.wait(60)
+
+def _ensure_scheduler():
+    global _sched_thread
+    if _sched_thread is None or not _sched_thread.is_alive():
+        _sched_stop.clear()
+        _sched_thread = threading.Thread(target=_sched_loop, daemon=True)
+        _sched_thread.start()
+
+_ensure_scheduler()
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
-class FileListUpdate(BaseModel):
-    files: list[str]
+class ConfigUpdate(BaseModel):
+    folder:   Optional[str]       = None
+    files:    Optional[list[str]] = None
+    schedule: Optional[dict]      = None
 
 class RunRequest(BaseModel):
-    files: Optional[list[str]] = None   # if None → use saved config
+    files: Optional[list[str]] = None
 
+class ScheduleUpdate(BaseModel):
+    enabled: bool
+    cron:    str = "0 8 * * 1-6"
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-
-@router.get("/test-win32")
-def test_win32():
-    import os, sys, threading
-    result = {}
-    def _test():
-        from pathlib import Path as P
-        _venv_root = P(sys.executable).resolve().parents[1]
-        result["venv_root"] = str(_venv_root)
-        result["exe"] = sys.executable
-        for _d in [_venv_root, _venv_root/"Lib"/"site-packages"/"pywin32_system32", _venv_root/"Lib"/"site-packages"/"win32"]:
-            if _d.exists():
-                os.environ["PATH"] = str(_d) + os.pathsep + os.environ.get("PATH", "")
-                try: os.add_dll_directory(str(_d))
-                except Exception: pass
-        try:
-            import win32com.client
-            result["win32"] = "OK"
-        except Exception as e:
-            result["win32"] = f"ERROR: {type(e).__name__}: {e}"
-    t = threading.Thread(target=_test); t.start(); t.join()
-    return result
 
 @router.get("/config")
 def get_config():
     return {"success": True, "data": _load_config()}
 
-
 @router.post("/config")
-def save_config(body: FileListUpdate):
-    _save_config({"files": body.files})
+def save_config(body: ConfigUpdate):
+    cfg = _load_config()
+    if body.folder  is not None: cfg["folder"]   = body.folder
+    if body.files   is not None: cfg["files"]    = body.files
+    if body.schedule is not None: cfg["schedule"] = body.schedule
+    _save_config(cfg)
     return {"success": True}
 
+# ── Folder listing ────────────────────────────────────────────────────────────
+@router.get("/folder-files")
+def list_folder_files(path: str = ""):
+    if not path:
+        cfg = _load_config()
+        path = cfg.get("folder", "")
+    if not path:
+        return {"success": True, "data": []}
+    p = Path(path)
+    if not p.exists() or not p.is_dir():
+        raise HTTPException(400, f"Folder not found: {path}")
+    files = []
+    for ext in ("*.xlsx", "*.xlsm", "*.xlsb", "*.xls"):
+        for f in sorted(p.glob(ext)):
+            stat = f.stat()
+            files.append({
+                "name": f.name,
+                "path": str(f),
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+            })
+    files.sort(key=lambda x: x["size"])
+    return {"success": True, "data": files}
 
+# ── Health check ──────────────────────────────────────────────────────────────
+@router.get("/health")
+def health_check():
+    results = {}
+    # Check Oracle via cx_Oracle (same as pipeline)
+    try:
+        import cx_Oracle
+        conn = cx_Oracle.connect("Report", "Report", "10.0.0.15:1521/Ginesys")
+        cur = conn.cursor()
+        cur.execute("SELECT SYSDATE FROM DUAL")
+        row = cur.fetchone()
+        conn.close()
+        results["oracle"] = {"status": "ok", "sysdate": str(row[0]) if row else "?"}
+    except Exception as e:
+        results["oracle"] = {"status": "error", "error": str(e)}
+    # Check win32com availability
+    try:
+        import win32com.client
+        results["win32com"] = {"status": "ok"}
+    except Exception as e:
+        results["win32com"] = {"status": "error", "error": str(e)}
+    # Check folder
+    cfg = _load_config()
+    folder = cfg.get("folder", "")
+    if folder:
+        p = Path(folder)
+        results["folder"] = {"status": "ok" if p.exists() else "error",
+                             "path": folder, "accessible": p.exists()}
+    else:
+        results["folder"] = {"status": "not_set"}
+    return {"success": True, "data": results}
+
+# ── Run refresh ───────────────────────────────────────────────────────────────
 @router.post("/run")
 def run_refresh(body: RunRequest):
     cfg = _load_config()
     files = body.files if body.files is not None else cfg.get("files", [])
     if not files:
-        raise HTTPException(400, "No Excel files configured. Add files first.")
-
+        raise HTTPException(400, "No files selected. Select files or configure a folder first.")
     job = _make_job(files)
-    with _jobs_lock:
+    with _lock:
         _jobs[job["job_id"]] = job
-
-    t = threading.Thread(target=_refresh_worker, args=(job,), daemon=True)
-    t.start()
-
+    threading.Thread(target=_refresh_worker, args=(job,), daemon=True).start()
     return {"success": True, "data": {"job_id": job["job_id"]}}
 
-
+# ── Job status ────────────────────────────────────────────────────────────────
 @router.get("/status/{job_id}")
 def job_status(job_id: str):
-    with _jobs_lock:
+    with _lock:
         job = _jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     return {"success": True, "data": job}
 
-
 @router.get("/jobs")
 def list_jobs():
-    with _jobs_lock:
+    with _lock:
         jobs = list(_jobs.values())
     jobs.sort(key=lambda j: j["started_at"], reverse=True)
-    return {"success": True, "data": jobs[:20]}  # last 20
+    return {"success": True, "data": jobs[:20]}
+
+# ── Audit log ─────────────────────────────────────────────────────────────────
+@router.get("/audit")
+def get_audit():
+    with _lock:
+        data = list(reversed(_audit))
+    return {"success": True, "data": data}
+
+# ── Scheduler ─────────────────────────────────────────────────────────────────
+@router.get("/schedule")
+def get_schedule():
+    cfg = _load_config()
+    return {"success": True, "data": cfg.get("schedule", {"enabled": False, "cron": "0 8 * * 1-6"})}
+
+@router.post("/schedule")
+def set_schedule(body: ScheduleUpdate):
+    cfg = _load_config()
+    cfg["schedule"] = {"enabled": body.enabled, "cron": body.cron}
+    _save_config(cfg)
+    _ensure_scheduler()
+    return {"success": True}

@@ -23,7 +23,7 @@ function timeAgo(iso: string) {
 
 export default function OracleRefreshPage() {
   const { tokens } = useTheme()
-  const { job, isRunning, startRefresh, clearJob } = useOracleRefresh()
+  const { job, isRunning, startRefresh, cancelRefresh, clearJob } = useOracleRefresh()
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const [tab, setTab]               = useState<Tab>('refresh')
@@ -288,14 +288,24 @@ export default function OracleRefreshPage() {
               <div style={{ fontSize: 12, color: T.textMuted }}>No Excel files found in this folder.</div>
             ) : null}
 
-            {/* Run button */}
-            <button onClick={handleRun} disabled={isRunning || (files.length === 0 && selected.size === 0)}
-              style={{ padding: '10px 24px', borderRadius: 8, border: 'none', alignSelf: 'flex-start',
-                background: isRunning ? T.cardBorder : T.accent, color: '#fff',
-                fontSize: 14, fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer',
-                opacity: isRunning ? 0.6 : 1 }}>
-              {isRunning ? '⟳ Refreshing…' : `▶ Run Refresh${selected.size > 0 ? ` (${selected.size} selected)` : files.length > 0 ? ` (all ${files.length})` : ''}`}
-            </button>
+            {/* Run / Stop buttons */}
+            <div style={{ display: 'flex', gap: 10, alignSelf: 'flex-start' }}>
+              <button onClick={handleRun} disabled={isRunning || (files.length === 0 && selected.size === 0)}
+                style={{ padding: '10px 24px', borderRadius: 8, border: 'none',
+                  background: isRunning ? T.cardBorder : T.accent, color: '#fff',
+                  fontSize: 14, fontWeight: 700, cursor: isRunning ? 'not-allowed' : 'pointer',
+                  opacity: isRunning ? 0.6 : 1 }}>
+                {isRunning ? '⟳ Refreshing…' : `▶ Run Refresh${selected.size > 0 ? ` (${selected.size} selected)` : files.length > 0 ? ` (all ${files.length})` : ''}`}
+              </button>
+              {isRunning && (
+                <button onClick={cancelRefresh}
+                  style={{ padding: '10px 20px', borderRadius: 8, border: `2px solid #e53e3e`,
+                    background: 'transparent', color: '#e53e3e',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  ⛔ Stop
+                </button>
+              )}
+            </div>
           </div>
         )}
 

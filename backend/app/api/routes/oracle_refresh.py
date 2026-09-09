@@ -42,6 +42,7 @@ def _make_job(files: list[str]) -> dict:
         "error":       None,
         "refreshed":   0,
         "failed":      0,
+        "cancelled":   False,
     }
 
 # ── Excel refresh worker ──────────────────────────────────────────────────────
@@ -79,6 +80,11 @@ def _refresh_worker(job: dict):
 
         ok, fail = 0, 0
         for path in expanded:
+            # Check cancel flag before each file
+            with _lock:
+                if _jobs[jid].get("cancelled"):
+                    log("⛔ Cancelled by user.")
+                    break
             log(f"Opening: {path.name}")
             try:
                 wb = xl.Workbooks.Open(
@@ -108,13 +114,23 @@ def _refresh_worker(job: dict):
 
         xl.Quit()
         pythoncom.CoUninitialize()
-        log(f"All done — {ok} refreshed, {fail} failed.")
 
         with _lock:
-            _jobs[jid].update(status="done",
-                              finished_at=datetime.now().isoformat(timespec="seconds"),
-                              refreshed=ok, failed=fail)
-            _audit.append({**_jobs[jid]})
+            was_cancelled = _jobs[jid].get("cancelled", False)
+        if was_cancelled:
+            log(f"Stopped — {ok} refreshed, {fail} failed before cancel.")
+            with _lock:
+                _jobs[jid].update(status="cancelled",
+                                  finished_at=datetime.now().isoformat(timespec="seconds"),
+                                  refreshed=ok, failed=fail)
+                _audit.append({**_jobs[jid]})
+        else:
+            log(f"All done — {ok} refreshed, {fail} failed.")
+            with _lock:
+                _jobs[jid].update(status="done",
+                                  finished_at=datetime.now().isoformat(timespec="seconds"),
+                                  refreshed=ok, failed=fail)
+                _audit.append({**_jobs[jid]})
             if len(_audit) > 200: _audit.pop(0)
 
     except Exception as e:
@@ -281,6 +297,17 @@ def job_status(job_id: str):
     if not job:
         raise HTTPException(404, "Job not found")
     return {"success": True, "data": job}
+
+@router.post("/cancel/{job_id}")
+def cancel_job(job_id: str):
+    with _lock:
+        job = _jobs.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if job["status"] != "running":
+            raise HTTPException(400, f"Job is not running (status: {job['status']})")
+        job["cancelled"] = True
+    return {"success": True, "message": "Cancel signal sent — will stop after current file."}
 
 @router.get("/jobs")
 def list_jobs():

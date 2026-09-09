@@ -17,6 +17,7 @@ interface OracleRefreshContextValue {
   job: Job | null
   isRunning: boolean
   startRefresh: (files?: string[]) => Promise<void>
+  cancelRefresh: () => Promise<void>
   clearJob: () => void
 }
 
@@ -74,6 +75,13 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
     }
   }, [pollJob])
 
+  const cancelRefresh = useCallback(async () => {
+    if (!job?.job_id || job.status !== 'running') return
+    try {
+      await http.post(`/oracle-refresh/cancel/${job.job_id}`, {})
+    } catch { /* ignore */ }
+  }, [job])
+
   const clearJob = useCallback(() => {
     stopPolling()
     setJob(null)
@@ -84,7 +92,7 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
   const isRunning = job?.status === 'running'
 
   return (
-    <OracleRefreshContext.Provider value={{ job, isRunning, startRefresh, clearJob }}>
+    <OracleRefreshContext.Provider value={{ job, isRunning, startRefresh, cancelRefresh, clearJob }}>
       {children}
     </OracleRefreshContext.Provider>
   )

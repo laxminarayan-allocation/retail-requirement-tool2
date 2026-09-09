@@ -108,6 +108,6 @@ export function OracleRefreshProvider({ children }: { children: ReactNode }) {
 
 export function useOracleRefresh() {
   const ctx = useContext(OracleRefreshContext)
-  if (!ctx) throw new Error('useOracleRefresh must be inside OracleRefreshProvider')
+  if (!ctx) return { job: null, isRunning: false, lastCompletedAt: null, startRefresh: async () => {}, cancelRefresh: async () => {}, clearJob: () => {} } as OracleRefreshContextValue
   return ctx
 }

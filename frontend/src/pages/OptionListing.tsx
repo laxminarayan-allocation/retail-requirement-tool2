@@ -98,7 +98,7 @@ function PipelineTab({ tokens }: { tokens: any }) {
   // Auto-load MC candidates when Oracle Refresh completes
   useEffect(() => {
     if (lastCompletedAt) loadCandidates()
-  }, [lastCompletedAt])
+  }, [lastCompletedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredCand = (() => {
     const q = candSearch.trim().toUpperCase()

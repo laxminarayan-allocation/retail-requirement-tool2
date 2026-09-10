@@ -410,6 +410,7 @@ export default function WarehouseInventory() {
   const [queryTime, setQueryTime] = useState<number | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [tab, setTab] = useState<'data' | 'pivot'>('data')
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const [warehouse, setWarehouse] = useState('')
   const [itemCode, setItemCode] = useState('')
@@ -441,7 +442,13 @@ export default function WarehouseInventory() {
     }
   }
 
-  useEffect(() => { fetchData() }, []) // eslint-disable-line
+  useEffect(() => {
+    http.get('/auth/my-page-access').then(r => {
+      const pa: Record<string, boolean> = r.data?.data?.page_access ?? {}
+      if (pa['/warehouse'] === false) { setAccessDenied(true); return }
+      fetchData()
+    }).catch(() => fetchData())
+  }, []) // eslint-disable-line
 
   const S = {
     page: { padding: '20px 24px', maxWidth: '100%', boxSizing: 'border-box' as const },
@@ -454,6 +461,14 @@ export default function WarehouseInventory() {
     btnGhost: { padding: '7px 14px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 12, background: 'transparent', color: tokens.textMuted },
     tab: (on: boolean) => ({ padding: '7px 18px', borderRadius: '8px 8px 0 0', border: `1px solid ${on ? tokens.accent : tokens.cardBorder}`, borderBottom: on ? `1px solid ${tokens.cardBg}` : `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 400, background: on ? tokens.accent + '22' : 'transparent', color: on ? tokens.accent : tokens.textMuted }),
   }
+
+  if (accessDenied) return (
+    <div style={{ padding: 40, textAlign: 'center' }}>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: tokens.textPrimary, marginBottom: 8 }}>Access Denied</div>
+      <div style={{ fontSize: 13, color: tokens.textMuted }}>You do not have permission to view Warehouse Inventory. Contact your admin.</div>
+    </div>
+  )
 
   return (
     <div style={S.page}>

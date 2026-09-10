@@ -189,6 +189,7 @@ export default function AdminPanel() {
     { path: '/req', label: 'Requirements', minRole: 'planner' },
     { path: '/distribution', label: 'Distribution', minRole: 'planner' },
     { path: '/settings', label: 'Settings', minRole: 'planner' },
+    { path: '/warehouse', label: 'Warehouse Inventory', minRole: 'planner' },
   ] as const
 
   useEffect(() => {
@@ -825,6 +826,10 @@ const MATRIX_PAGES: (PageDef | GroupDef)[] = [
   { icon: '⚙️', name: 'Calc Factors',      path: '/factors',     minRole: 'planner', views: [{ name: 'Factor config',     minRole: 'planner' }] },
   { icon: '▶️', name: 'Calculation',       path: '/calculation', minRole: 'planner', views: [{ name: 'Run calculation',   minRole: 'planner' }] },
   { icon: '🔧', name: 'Settings',          path: '/settings',    minRole: 'planner', views: [{ name: 'User settings',     minRole: 'planner' }] },
+  { icon: '🏭', name: 'Warehouse Inventory', path: '/warehouse', minRole: 'planner', views: [
+    { name: 'Data Table', minRole: 'planner' },
+    { name: 'Pivot',      minRole: 'planner' },
+  ]},
   { group: 'General' },
   { icon: '📖', name: 'User Manual',       path: '/manual',      minRole: 'viewer',  views: [{ name: 'Documentation',     minRole: 'viewer' }] },
   { group: 'Admin Only' },

@@ -37,6 +37,7 @@ from app.api.routes import simulation as simulation_routes
 from app.api.routes import option_listing as option_listing_routes
 from app.api.routes import oracle_refresh as oracle_refresh_routes
 from app.api.routes import versions as versions_routes
+from app.api.routes import warehouse_inventory as warehouse_inventory_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -231,6 +232,9 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/versions",              {"GET"},       None),
     ("/api/versions/",             {"GET"},       None),
     ("/api/versions/",             None,          "admin"),
+    # Warehouse Inventory — viewer+
+    ("/api/warehouse-inventory/",  None,          "viewer"),
+    ("/api/warehouse-inventory",   None,          "viewer"),
     # Fallback — any API route needs at least viewer
     ("/api/",                      None,          "viewer"),
 ]
@@ -385,6 +389,7 @@ app.include_router(simulation_routes.router, prefix="/api")   # Allocation Simul
 app.include_router(option_listing_routes.router, prefix="/api")  # Option Listing (Pre-Winter AW26)
 app.include_router(oracle_refresh_routes.router, prefix="/api")  # Oracle / Excel Refresh
 app.include_router(versions_routes.router, prefix="/api")          # Version Control / Changelog
+app.include_router(warehouse_inventory_routes.router, prefix="/api")  # Warehouse Inventory
 
 
 @app.get("/api", tags=["Root"])

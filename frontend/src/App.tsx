@@ -22,6 +22,7 @@ import DistributionModel from '@/pages/DistributionModel'
 import Simulation from '@/pages/Simulation'
 import OptionListing from '@/pages/OptionListing'
 import OracleRefreshPage from '@/pages/OracleRefreshPage'
+import WarehouseInventory from '@/pages/WarehouseInventory'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="manual" element={<UserManual />} />
             <Route path="procedures" element={<Procedures />} />
             <Route path="nso" element={<NSODashboard />} />
+            <Route path="warehouse" element={<WarehouseInventory />} />
             <Route path="sale" element={<SaleDashboard />} />
             <Route path="req" element={<ReqDashboard />} />
             <Route path="distribution" element={<DistributionModel />} />

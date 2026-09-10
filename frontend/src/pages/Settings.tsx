@@ -725,6 +725,22 @@ export default function Settings() {
     }
   }
 
+  async function handleMobileUpgrade() {
+    if (!confirm('📱 Mobile Upgrade: Frontend build + Backend restart karega.\n\n10-60 seconds ke liye app disconnect hoga. Continue?')) return
+    setActionPending('mobile-upgrade')
+    setActionMsg('Step 1/2: Frontend build ho raha hai…')
+    try {
+      await http.post('/system/build-frontend', {}, { timeout: 150_000 })
+      setActionMsg('Step 2/2: Backend restart ho raha hai…')
+      await http.post('/system/restart-backend').catch(() => {})
+      setActionMsg('✅ Mobile Upgrade done! Mobile pe page hard-refresh karo (Ctrl+Shift+R).')
+    } catch {
+      setActionMsg('Upgrade failed — backend logs check karo.')
+    } finally {
+      setActionPending(null)
+    }
+  }
+
   async function handleGitPush() {
     if (!confirm('Changes commit karke git push karega. Continue?')) return
     setActionPending('git-push')
@@ -809,6 +825,15 @@ export default function Settings() {
             <span style={S.cardTitle}>🔧 Server Control</span>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* ── Mobile Upgrade — prominent button ── */}
+            <button
+              style={{ ...S.btnBlue, background: '#0e7490', border: '2px solid #22d3ee', fontWeight: 800, fontSize: 13, padding: '8px 18px' }}
+              onClick={handleMobileUpgrade}
+              disabled={!!actionPending}
+            >
+              {actionPending === 'mobile-upgrade' ? '⏳ Upgrading…' : '📱 Mobile Upgrade'}
+            </button>
+            <div style={{ width: 1, height: 28, background: 'var(--card-border)' }} />
             <button
               style={{ ...S.btnRed, background: '#b45309' }}
               onClick={handleRestartBackend}
@@ -821,7 +846,7 @@ export default function Settings() {
               onClick={handleBuildFrontend}
               disabled={!!actionPending}
             >
-              {actionPending === 'build-frontend' ? 'Building…' : '⚙ Build Frontend (Mobile Update)'}
+              {actionPending === 'build-frontend' ? 'Building…' : '⚙ Build Frontend'}
             </button>
             <button
               style={{ ...S.btnBlue, background: '#1d4ed8' }}
@@ -844,7 +869,8 @@ export default function Settings() {
             )}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-            Restart Backend — uvicorn restart hoga (5–10s). Build Frontend — npm run build chalega. Push to Git — changes commit + push. Pull/Upgrade — latest code fetch karega.
+            📱 <b>Mobile Upgrade</b> — Build + Restart dono karta hai, mobile pe latest changes aate hain (https://ckho-d-aloc.tail8de265.ts.net). &nbsp;
+            Restart Backend — uvicorn restart (5–10s). Build Frontend — sirf npm run build. Push to Git — commit + push. Pull/Upgrade — latest code fetch.
           </div>
         </div>
       </div>

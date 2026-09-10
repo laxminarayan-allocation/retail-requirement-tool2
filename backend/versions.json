@@ -1,5 +1,17 @@
 [
   {
+    "id": "v1.3.55-auto",
+    "version": "1.3.55",
+    "date": "2026-09-11",
+    "type": "feature",
+    "title": "Warehouse Inventory page with Excel/Power BI style pivot",
+    "desc": "• feat: Warehouse Inventory page with Excel/Power BI style pivot",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "da1ffbfb292d5df7262d529db3d011bb03b37cac",
+    "auto": true
+  },
+  {
     "id": "v1.3.2",
     "version": "1.3.2",
     "date": "2026-09-10",

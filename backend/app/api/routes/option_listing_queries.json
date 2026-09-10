@@ -41,7 +41,7 @@
     "description": "Store × dept × display_type aggregate REQ — CK_A2166.V_MC_REQ_APPS_2",
     "table": "CK_A2166.V_MC_REQ_APPS_2",
     "dynamic_params": {},
-    "sql": "SELECT STORE_NAME STORE, DEPARTMENT, DISPLAY_TYPE, REQ\nFROM CK_A2166.V_MC_REQ_APPS_2\nORDER BY REQ DESC"
+    "sql": "SELECT STORE_NAME STORE, DEPARTMENT, DISPLAY_TYPE, REQ\nFROM CK_A2166.V_MC_REQ_APPS_2"
   },
   "COLOR_FAMILY": {
     "description": "Master colour-family lookup — REPORT.T_COLOR_FAMILY",

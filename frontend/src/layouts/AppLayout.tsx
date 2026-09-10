@@ -1,4 +1,4 @@
-﻿import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
+﻿import { NavLink, Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { useAuth, hasRole, type Role } from '@/context/AuthContext'
 import { useTheme, type ThemeName, THEME_LABELS } from '@/context/ThemeContext'
@@ -8,6 +8,7 @@ import PendingPage from '@/pages/PendingPage'
 import AssistantWidget from '@/components/AssistantWidget'
 import NotificationBell from '@/components/NotificationBell'
 import { useOracleRefresh } from '@/context/OracleRefreshContext'
+import { useZoom, ZOOM_STEPS } from '@/context/ZoomContext'
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768)
@@ -39,6 +40,69 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/manual',    label: 'User Manual',      icon: '📖', minRole: 'viewer'  },
 ]
 
+function NavSearch({ visibleNav, tokens }: {
+  visibleNav: { to: string; label: string; icon: string }[]
+  tokens: any
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const results = query.trim()
+    ? visibleNav.filter(item =>
+        item.label.toLowerCase().includes(query.toLowerCase())
+      )
+    : []
+
+  function go(to: string) {
+    navigate(to)
+    setQuery('')
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ padding: '0 10px 8px', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: tokens.inputBg || '#1e293b', border: `1px solid ${tokens.inputBorder || '#334155'}`, borderRadius: 7, padding: '5px 10px' }}>
+        <span style={{ fontSize: 12, color: tokens.textMuted || '#64748b', flexShrink: 0 }}>🔍</span>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setQuery(''); setOpen(false) }
+            if (e.key === 'Enter' && results.length > 0) go(results[0].to)
+          }}
+          placeholder="Search pages…"
+          style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: 12, color: tokens.textPrimary || '#e2e8f0', '::placeholder': { color: tokens.textMuted } } as any}
+        />
+        {query && (
+          <button onClick={() => { setQuery(''); setOpen(false); inputRef.current?.focus() }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: tokens.textMuted || '#64748b', fontSize: 13, lineHeight: 1, padding: 0 }}>✕</button>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{ position: 'absolute', left: 10, right: 10, top: '100%', zIndex: 200, background: tokens.cardBg || '#1e293b', border: `1px solid ${tokens.cardBorder || '#334155'}`, borderRadius: 7, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', overflow: 'hidden' }}>
+          {results.map(item => (
+            <div
+              key={item.to}
+              onMouseDown={() => go(item.to)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 13, color: tokens.textPrimary || '#e2e8f0', transition: 'background 0.1s' }}
+              onMouseEnter={e => (e.currentTarget.style.background = tokens.navActiveBg || '#312e81')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Admin', temp_admin: 'Temp Admin', planner: 'Planner', viewer: 'Viewer', pending: 'Pending',
 }
@@ -48,25 +112,47 @@ const ROLE_COLOR: Record<string, string> = {
 
 // styles are now computed dynamically via theme tokens — see mkStyles() below
 
-function NavItem({ to, label, icon }: { to: string; label: string; icon: string }) {
+function NavItem({ to, label, icon, reorderMode, onUp, onDown, isFirst, isLast }: {
+  to: string; label: string; icon: string
+  reorderMode?: boolean; onUp?: () => void; onDown?: () => void
+  isFirst?: boolean; isLast?: boolean
+}) {
   const { tokens } = useTheme()
   return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      style={({ isActive }) => ({
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '9px 16px', fontSize: 13,
-        fontWeight: isActive ? 600 : 400,
-        color: isActive ? tokens.navActiveColor : tokens.navInactiveColor,
-        background: isActive ? tokens.navActiveBg : 'transparent',
-        borderLeft: isActive ? `3px solid ${tokens.navActiveBar}` : '3px solid transparent',
-        textDecoration: 'none', transition: 'all 0.15s',
-      })}
-    >
-      <span>{icon}</span>
-      <span>{label}</span>
-    </NavLink>
+    <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+      <NavLink
+        to={to}
+        end={to === '/'}
+        style={({ isActive }) => ({
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: reorderMode ? '7px 8px 7px 16px' : '9px 16px',
+          fontSize: 13, flex: 1,
+          fontWeight: isActive ? 600 : 400,
+          color: isActive ? tokens.navActiveColor : tokens.navInactiveColor,
+          background: isActive ? tokens.navActiveBg : 'transparent',
+          borderLeft: isActive ? `3px solid ${tokens.navActiveBar}` : '3px solid transparent',
+          textDecoration: 'none', transition: 'all 0.15s',
+          pointerEvents: reorderMode ? 'none' : 'auto',
+        })}
+      >
+        <span>{icon}</span>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      </NavLink>
+      {reorderMode && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 6px', flexShrink: 0 }}>
+          <button
+            onClick={onUp} disabled={isFirst}
+            style={{ background: 'none', border: 'none', cursor: isFirst ? 'not-allowed' : 'pointer', color: isFirst ? '#334155' : '#94a3b8', fontSize: 10, lineHeight: 1, padding: '1px 4px', borderRadius: 3 }}
+            title="Move up"
+          >▲</button>
+          <button
+            onClick={onDown} disabled={isLast}
+            style={{ background: 'none', border: 'none', cursor: isLast ? 'not-allowed' : 'pointer', color: isLast ? '#334155' : '#94a3b8', fontSize: 10, lineHeight: 1, padding: '1px 4px', borderRadius: 3 }}
+            title="Move down"
+          >▼</button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -247,6 +333,46 @@ function loadViewMode(): ViewMode {
   try { return (localStorage.getItem('app_viewMode') as ViewMode) || 'auto' } catch { return 'auto' }
 }
 
+function ZoomPill() {
+  const { zoom, zoomIdx, zoomIn, zoomOut, zoomReset, canZoomIn, canZoomOut } = useZoom()
+  const pct = Math.round(zoom * 100)
+  const isDefault = pct === 100
+  return (
+    <div style={{
+      position: 'fixed', bottom: 16, right: 16, zIndex: 9999,
+      display: 'flex', alignItems: 'center', gap: 1,
+      background: 'rgba(15,23,42,0.92)', border: '1px solid #334155',
+      borderRadius: 20, padding: '4px 6px', backdropFilter: 'blur(8px)',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.4)',
+    }}>
+      <button onClick={zoomOut} disabled={!canZoomOut} title="Zoom out  (Ctrl −)" style={{
+        background: 'none', border: 'none', cursor: canZoomOut ? 'pointer' : 'not-allowed',
+        color: canZoomOut ? '#94a3b8' : '#334155', fontSize: 15, lineHeight: 1,
+        padding: '2px 7px', borderRadius: 14, transition: 'background 0.15s',
+      }} onMouseEnter={e => canZoomOut && ((e.target as HTMLElement).style.background='#1e293b')}
+         onMouseLeave={e => ((e.target as HTMLElement).style.background='none')}>−</button>
+
+      <button onClick={zoomReset} title={`Reset zoom  (Ctrl 0)\n${ZOOM_STEPS.map((s,i) => `${i===zoomIdx?'▶':' '} ${Math.round(s*100)}%`).join('\n')}`} style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: isDefault ? '#475569' : '#818cf8',
+        fontSize: 10, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+        padding: '2px 4px', minWidth: 34, textAlign: 'center', borderRadius: 10,
+        transition: 'background 0.15s',
+      }} onMouseEnter={e => ((e.target as HTMLElement).style.background='#1e293b')}
+         onMouseLeave={e => ((e.target as HTMLElement).style.background='none')}>
+        🔍 {pct}%
+      </button>
+
+      <button onClick={zoomIn} disabled={!canZoomIn} title="Zoom in  (Ctrl =)" style={{
+        background: 'none', border: 'none', cursor: canZoomIn ? 'pointer' : 'not-allowed',
+        color: canZoomIn ? '#94a3b8' : '#334155', fontSize: 15, lineHeight: 1,
+        padding: '2px 7px', borderRadius: 14, transition: 'background 0.15s',
+      }} onMouseEnter={e => canZoomIn && ((e.target as HTMLElement).style.background='#1e293b')}
+         onMouseLeave={e => ((e.target as HTMLElement).style.background='none')}>+</button>
+    </div>
+  )
+}
+
 export default function AppLayout() {
   const { user, token, loading, signout, pageAccess } = useAuth()
   const { tokens, theme } = useTheme()
@@ -356,6 +482,13 @@ export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('app_sidebarCollapsed') === '1' } catch { return false }
   })
+  const [reorderMode, setReorderMode] = useState(false)
+  const [navOrder, setNavOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_nav_order')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
 
   function toggleSidebar() {
     setSidebarCollapsed(v => {
@@ -421,16 +554,33 @@ export default function AppLayout() {
     ? user.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
     : user.email[0].toUpperCase()
 
-  const visibleNav = NAV_ITEMS.filter(item => {
-    // Explicit admin override takes priority over role-based check
-    if (item.to in pageAccess) return pageAccess[item.to]
-    return hasRole(user, item.minRole)
-  })
+  const visibleNav = (() => {
+    const filtered = NAV_ITEMS.filter(item => {
+      if (item.to in pageAccess) return pageAccess[item.to]
+      return hasRole(user, item.minRole)
+    })
+    if (navOrder.length === 0) return filtered
+    const orderMap = new Map(navOrder.map((to, i) => [to, i]))
+    return [...filtered].sort((a, b) => {
+      const ai = orderMap.has(a.to) ? orderMap.get(a.to)! : 9999
+      const bi = orderMap.has(b.to) ? orderMap.get(b.to)! : 9999
+      return ai - bi
+    })
+  })()
+
+  function moveNavItem(from: number, to: number) {
+    const newOrder = visibleNav.map(i => i.to)
+    const [moved] = newOrder.splice(from, 1)
+    newOrder.splice(to, 0, moved)
+    setNavOrder(newOrder)
+    try { localStorage.setItem('app_nav_order', JSON.stringify(newOrder)) } catch {}
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: tokens.shellBg, ...(isMobile ? { height: 'auto', overflow: 'visible' } : {}) }}>
       <style>{`@keyframes oracleSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <AssistantWidget />
+      <ZoomPill />
       {/* Device name prompt modal */}
       {deviceNamePrompt && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -492,8 +642,33 @@ export default function AppLayout() {
           </div>
         </div>
         <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
-          {visibleNav.map(item => (
-            <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
+          <NavSearch visibleNav={visibleNav} tokens={tokens} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 10px 6px', gap: 6 }}>
+            {reorderMode && navOrder.length > 0 && (
+              <button
+                onClick={() => { setNavOrder([]); try { localStorage.removeItem('app_nav_order') } catch {} }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: 10, padding: '2px 6px', borderRadius: 4 }}
+                title="Reset to default order"
+              >reset</button>
+            )}
+            <button
+              onClick={() => setReorderMode(v => !v)}
+              style={{ background: reorderMode ? '#6d28d9' : 'none', border: `1px solid ${reorderMode ? '#6d28d9' : 'transparent'}`, cursor: 'pointer', color: reorderMode ? '#e9d5ff' : '#64748b', fontSize: 11, padding: '2px 7px', borderRadius: 4, transition: 'all 0.15s' }}
+              title="Reorder navigation"
+            >↕</button>
+          </div>
+          {visibleNav.map((item, idx) => (
+            <NavItem
+              key={item.to}
+              to={item.to}
+              label={item.label}
+              icon={item.icon}
+              reorderMode={reorderMode}
+              isFirst={idx === 0}
+              isLast={idx === visibleNav.length - 1}
+              onUp={() => moveNavItem(idx, idx - 1)}
+              onDown={() => moveNavItem(idx, idx + 1)}
+            />
           ))}
         </nav>
         <div style={{ borderTop: `1px solid ${tokens.sidebarBorder}`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>

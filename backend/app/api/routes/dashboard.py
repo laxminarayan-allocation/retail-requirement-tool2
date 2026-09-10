@@ -109,20 +109,26 @@ def _safe_oracle_stats() -> dict:
         except Exception as exc:
             logger.warning("upcoming store count failed: %s", exc)
 
-        # opening_60d / opening_2026 / last_opened — from active store_df opening_date
+        # opening_60d / opening_2026 / last_opened — from T_STORE_OPENING_DATE parquet
         last_opened_name = ""
         last_opened_date = ""
-        if "opening_date" in store_df.columns:
-            od_active = pd.to_datetime(store_df["opening_date"], errors="coerce")
+        _sod_src = _sod
+        if _sod_src is not None and "opening_date" in _sod_src.columns:
+            _sod_src = _sod_src.copy()
+            _sod_src.columns = [c.lower() for c in _sod_src.columns]
+            od_active = pd.to_datetime(_sod_src["opening_date"], errors="coerce")
             today = pd.Timestamp.now().normalize()
             cutoff_60 = today - pd.Timedelta(days=60)
             opening_60d  = int(((od_active >= cutoff_60) & (od_active <= today)).sum())
             opening_2026 = int((od_active.dt.year == 2026).sum())
-            valid_mask = od_active.notna()
+            valid_mask = od_active.notna() & (od_active <= today)
             if valid_mask.any():
-                idx_last = od_active[valid_mask].idxmax()
-                last_opened_name = str(store_df.loc[idx_last, "store_name"] if "store_name" in store_df.columns else store_df.loc[idx_last, "sitealias"])
-                last_opened_date = od_active[idx_last].strftime("%d %b %Y")
+                max_date = od_active[valid_mask].max()
+                same_day_mask = od_active == max_date
+                name_col = "store_name" if "store_name" in _sod_src.columns else "sitealias"
+                names = _sod_src.loc[same_day_mask, name_col].dropna().tolist()
+                last_opened_name = ", ".join(str(n) for n in names)
+                last_opened_date = max_date.strftime("%d %b %Y")
 
         total_all_stores = active_stores + upcoming_stores
         status_dist: dict = {"ACTIVE": active_stores}
@@ -146,8 +152,18 @@ def _safe_oracle_stats() -> dict:
             active_nso = int((od >= pd.Timestamp(nso_start)).sum())
 
         grade_dist: dict = {}
+        zone_grade_dist: dict = {}
         if "store_grade" in store_df.columns:
             grade_dist = store_df["store_grade"].fillna("—").value_counts().to_dict()
+        if "store_grade" in store_df.columns and "zone" in store_df.columns:
+            try:
+                zg = store_df[["zone", "store_grade"]].fillna("—")
+                for zone_val, grp in zg.groupby("zone"):
+                    zone_key = str(zone_val).strip()
+                    if zone_key and zone_key not in ("-", "—", ""):
+                        zone_grade_dist[zone_key] = {str(k): int(v) for k, v in grp["store_grade"].value_counts().to_dict().items() if str(k) not in ("-", "—")}
+            except Exception as _zge:
+                logger.warning("zone_grade dist failed: %s", _zge)
 
         upcoming_grade_dist: dict = {}
         try:
@@ -207,6 +223,31 @@ def _safe_oracle_stats() -> dict:
                 store_tag_upcoming_dist = upcoming_tag["store_tag"].fillna("-").value_counts().to_dict()
         except Exception as _te:
             logger.warning("store_tag dist failed: %s", _te)
+
+        store_city_dist: dict = {}
+        store_city_upcoming_dist: dict = {}
+        state_city_dist: dict = {}   # {state: {city: count}}
+        try:
+            city_col = next((c for c in ("city", "store_city", "city_name") if _sod is not None and c in _sod.columns), None)
+            if _sod is not None and "store_status" in _sod.columns and city_col:
+                active_city = _sod[_sod["store_status"].str.upper() == "ACTIVE"]
+                upcoming_city = _sod[_sod["store_status"].str.upper() == "UPCOMING_STORE"]
+                store_city_dist = active_city[city_col].fillna("—").value_counts().to_dict()
+                store_city_upcoming_dist = upcoming_city[city_col].fillna("—").value_counts().to_dict()
+                if "state" in active_city.columns:
+                    for state_val, grp in active_city.groupby("state"):
+                        sk = str(state_val).strip()
+                        if sk and sk not in ("-", "—", ""):
+                            state_city_dist[sk] = {str(c): int(v) for c, v in grp[city_col].fillna("—").value_counts().to_dict().items() if str(c) not in ("-", "—")}
+            elif "state_name" in store_df.columns:
+                city_col_df = next((c for c in ("city", "store_city", "city_name") if c in store_df.columns), None)
+                if city_col_df:
+                    for state_val, grp in store_df.groupby("state_name"):
+                        sk = str(state_val).strip()
+                        if sk and sk not in ("-", "—", ""):
+                            state_city_dist[sk] = {str(c): int(v) for c, v in grp[city_col_df].fillna("—").value_counts().to_dict().items() if str(c) not in ("-", "—")}
+        except Exception as _ce:
+            logger.warning("store_city dist failed: %s", _ce)
 
         # Calendar year and financial year store counts from opening_date
         cal_year_dist: dict = {}
@@ -274,6 +315,7 @@ def _safe_oracle_stats() -> dict:
             "items_by_attribute1": {str(k): int(v) for k, v in items_by_attr.items()},
             "store_grade_distribution": {str(k): int(v) for k, v in sorted(grade_dist.items())},
             "upcoming_grade_distribution": {str(k): int(v) for k, v in sorted(upcoming_grade_dist.items())},
+            "zone_grade_distribution": zone_grade_dist,
             "store_zone_distribution": {str(k): int(v) for k, v in zone_dist.items()},
             "store_zone_upcoming": {str(k): int(v) for k, v in zone_upcoming_dist.items()},
             "store_state_distribution": {str(k): int(v) for k, v in state_dist.items()},
@@ -284,6 +326,9 @@ def _safe_oracle_stats() -> dict:
             "store_fin_year_dist": {str(k): int(v) for k, v in fin_year_dist.items()},
             "store_cal_year_upcoming": {str(k): int(v) for k, v in cal_year_upcoming_dist.items()},
             "store_fin_year_upcoming": {str(k): int(v) for k, v in fin_year_upcoming_dist.items()},
+            "store_city_distribution": {str(k): int(v) for k, v in store_city_dist.items()},
+            "store_city_upcoming": {str(k): int(v) for k, v in store_city_upcoming_dist.items()},
+            "state_city_distribution": state_city_dist,
         }
         _oracle_cache.update(result)
         _oracle_cache_ts = time.time()
@@ -316,6 +361,7 @@ def _safe_oracle_stats() -> dict:
             "items_by_attribute1": {},
             "store_grade_distribution": {},
             "upcoming_grade_distribution": {},
+            "zone_grade_distribution": {},
             "store_zone_distribution": {},
             "store_zone_upcoming": {},
             "store_state_distribution": {},
@@ -326,6 +372,9 @@ def _safe_oracle_stats() -> dict:
             "store_fin_year_dist": {},
             "store_cal_year_upcoming": {},
             "store_fin_year_upcoming": {},
+            "store_city_distribution": {},
+            "store_city_upcoming": {},
+            "state_city_distribution": {},
         }
 
 
@@ -809,6 +858,7 @@ def _norm_state_dict(d: dict) -> dict:
 _SPLIT_COL_MAP = {
     "zone":  "zone",
     "state": "state_name",
+    "city":  "city",
     "grade": "store_grade",
     "tag":   "store_tag",
     "fy":    "_fy",   # derived — handled separately
@@ -827,9 +877,98 @@ async def stores_by_split(split: str, value: str):
         import pandas as pd
         from app.repositories.store_repository import StoreRepository
 
+        # state_city combo: value = "BIHAR|PATNA"
+        if split.lower() == "state_city":
+            parts = value.split("|", 1)
+            if len(parts) != 2:
+                return APIResponse.fail("state_city value must be 'STATE|CITY' e.g. 'BIHAR|PATNA'")
+            state_val, city_val = parts[0].strip(), parts[1].strip()
+            repo = StoreRepository()
+            store_df = repo.get_all_stores(active_only=False)
+            import pandas as pd
+            try:
+                from app.core.parquet_cache import has_output, read_cache as _rc
+                if has_output("MISRETAIL", "T_STORE_OPENING_DATE"):
+                    sod = _rc("MISRETAIL", "T_STORE_OPENING_DATE")
+                    city_col = next((c for c in ("city", "store_city", "city_name") if sod is not None and c in sod.columns), None)
+                    if sod is not None and "state" in sod.columns and city_col:
+                        mask = (sod["state"].fillna("").str.strip().str.upper() == state_val.upper()) & \
+                               (sod[city_col].fillna("").str.strip().str.upper() == city_val.upper()) & \
+                               sod["store_status"].str.upper().isin(["ACTIVE", "UPCOMING_STORE"])
+                        sod_f = sod[mask].copy()
+                        store_lookup = store_df.drop_duplicates(subset=["store_name"]).set_index("store_name").to_dict(orient="index") if "store_name" in store_df.columns else {}
+                        stores = []
+                        for r in sod_f.to_dict("records"):
+                            code = str(r.get("store_name", "—")).strip()
+                            sm = store_lookup.get(code, {})
+                            name = str(sm.get("store_name_f", sm.get("location", ""))) if sm else str(r.get("initial_name", r.get("location", "")))
+                            raw_status = str(r.get("store_status", "")).upper()
+                            status = "ACTIVE" if "ACTIVE" in raw_status and "UPCOMING" not in raw_status else "UPCOMING" if "UPCOMING" in raw_status else raw_status
+                            area_v = r.get("area")
+                            try: area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
+                            except: area_f = None
+                            stores.append({"code": code, "name": name, "status": status,
+                                           "grade": str(sm.get("store_grade", r.get("store_grade", ""))),
+                                           "zone": str(r.get("zone", "")), "state": str(r.get("state", state_val)), "area": area_f})
+                        stores.sort(key=lambda x: (0 if x["status"] == "ACTIVE" else 1, x["code"]))
+                        return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
+            except Exception as _sce:
+                logger.warning("state_city parquet lookup failed: %s", _sce)
+            # fallback: store master
+            city_col_df = next((c for c in ("city", "store_city", "city_name") if c in store_df.columns), None)
+            state_col_df = next((c for c in ("state_name", "state") if c in store_df.columns), None)
+            if not city_col_df or not state_col_df:
+                return APIResponse.ok(data={"stores": [], "count": 0, "note": "city/state column missing in store master"})
+            mask2 = (store_df[state_col_df].fillna("").str.strip().str.upper() == state_val.upper()) & \
+                    (store_df[city_col_df].fillna("").str.strip().str.upper() == city_val.upper())
+            stores = []
+            for r in store_df[mask2].to_dict("records"):
+                area_v = r.get("area")
+                try: area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
+                except: area_f = None
+                stores.append({"code": str(r.get("store_name", "—")), "name": str(r.get("store_name_f", r.get("location", ""))),
+                               "status": str(r.get("store_status", "")).strip().upper(),
+                               "grade": str(r.get("store_grade", "")), "zone": str(r.get("zone", "")),
+                               "state": str(r.get(state_col_df, "")), "area": area_f})
+            stores.sort(key=lambda x: x["code"])
+            return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
+
+        # zone_grade combo: value = "NORTH|A+"
+        if split.lower() == "zone_grade":
+            parts = value.split("|", 1)
+            if len(parts) != 2:
+                return APIResponse.fail("zone_grade value must be 'ZONE|GRADE' e.g. 'NORTH|A+'")
+            zone_val, grade_val = parts[0].strip(), parts[1].strip()
+            repo = StoreRepository()
+            store_df = repo.get_all_stores(active_only=False)
+            import pandas as pd
+            if "zone" not in store_df.columns or "store_grade" not in store_df.columns:
+                return APIResponse.ok(data={"stores": [], "count": 0, "note": "zone or store_grade column missing"})
+            mask = (store_df["zone"].fillna("").str.strip().str.upper() == zone_val.upper()) & \
+                   (store_df["store_grade"].fillna("").str.strip().str.upper() == grade_val.upper())
+            filtered = store_df[mask].copy()
+            stores = []
+            for r in filtered.to_dict("records"):
+                area_v = r.get("area")
+                try:
+                    area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
+                except Exception:
+                    area_f = None
+                stores.append({
+                    "code":   str(r.get("store_name", "—")),
+                    "name":   str(r.get("store_name_f", r.get("location", ""))),
+                    "status": str(r.get("store_status", "")).strip().upper(),
+                    "grade":  str(r.get("store_grade", "")),
+                    "zone":   str(r.get("zone", "")),
+                    "state":  str(r.get("state_name", "")),
+                    "area":   area_f,
+                })
+            stores.sort(key=lambda x: x["code"])
+            return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
+
         col = _SPLIT_COL_MAP.get(split.lower())
         if not col:
-            return APIResponse.fail(f"Unknown split: {split}. Use zone | state | grade | tag")
+            return APIResponse.fail(f"Unknown split: {split}. Use zone | state | city | grade | tag | zone_grade")
 
         repo = StoreRepository()
         store_df = repo.get_all_stores(active_only=False)
@@ -1054,7 +1193,7 @@ async def stores_by_split(split: str, value: str):
                                 upcoming_sod["_zone"].str.upper() == value.strip().upper()
                             ]
                     else:
-                        _PARQUET_COL = {"grade": "store_grade", "tag": "store_tag"}
+                        _PARQUET_COL = {"grade": "store_grade", "tag": "store_tag", "city": "city", "store_city": "city"}
                         pq_col = _PARQUET_COL.get(split.lower())
                         if not pq_col or pq_col not in upcoming_sod.columns:
                             pq_filtered = upcoming_sod.iloc[0:0]

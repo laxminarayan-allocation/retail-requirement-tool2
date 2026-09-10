@@ -1,0 +1,98 @@
+INFO:     Started server process [15708]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+INFO:     Waiting for application shutdown.
+ERROR:    Traceback (most recent call last):
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\starlette\routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\fastapi\routing.py", line 133, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\allocation_user\AppData\Local\Programs\Python\Python313\Lib\contextlib.py", line 221, in __aexit__
+    await anext(self.gen)
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\app\main.py", line 73, in lifespan
+    close_pool()
+    ~~~~~~~~~~^^
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\app\db\oracle.py", line 90, in close_pool
+    _pool.close()
+    ~~~~~~~~~~~^^
+  File "C:\Users\allocation_user\Desktop\Projects\SS27\retail_requirement_tool\backend\venv\Lib\site-packages\oracledb\pool.py", line 428, in close
+    self._impl.close(force)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+  File "src\\oracledb\\impl/thick/pool.pyx", line 202, in oracledb.thick_impl.ThickPoolImpl.close
+  File "src\\oracledb\\impl/thick/utils.pyx", line 456, in oracledb.thick_impl._raise_from_odpi
+  File "src\\oracledb\\impl/thick/utils.pyx", line 446, in oracledb.thick_impl._raise_from_info
+oracledb.exceptions.InterfaceError: DPY-1005: connection pool cannot be closed because connections are busy
+ORA-24422: error occurred while trying to destroy the Session Pool
+Help: https://docs.oracle.com/error-help/db/ora-24422/
+
+ERROR:    Application shutdown failed. Exiting.

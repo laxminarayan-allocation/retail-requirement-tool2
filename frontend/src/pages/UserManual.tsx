@@ -65,13 +65,19 @@ const S: Record<string, React.CSSProperties> = {
 }
 
 const SECTIONS = [
+  { id: 'changelog', label: '🔖  Changelog' },
   { id: 'overview', label: '🗺️  Overview' },
   { id: 'roles', label: '🔑  Roles & Access' },
   { id: 'signup', label: '✍️  Getting Started' },
   { id: 'dashboard', label: '📊  Dashboard' },
   { id: 'calculation', label: '▶️  Running Calculation' },
   { id: 'factors', label: '⚙️  Calc Factors' },
+  { id: 'distribution', label: '📦  Distribution Model' },
+  { id: 'option_listing', label: '🏷️  Option Listing Filter' },
+  { id: 'store_status', label: '🏪  Store Status' },
   { id: 'results', label: '📋  Results & Export' },
+  { id: 'settings_guide', label: '⚙️  Settings & Server' },
+  { id: 'login_guide', label: '🔐  Login & Sessions' },
   { id: 'admin', label: '🛡️  Admin Guide' },
   { id: 'faq', label: '❓  FAQ' },
   { id: 'myactivity', label: '🕐  My Activity' },
@@ -87,12 +93,15 @@ function Section({ id, title, children }: { id: string; title: string; children:
 }
 
 type ActivityLog = { id: string; action: string; details: string; ip_address: string; created_at: string }
+type VersionEntry = { id: string; version: string; date: string; type: string; title: string; desc: string; released: boolean }
 
 export default function UserManual() {
   const { user } = useAuth()
   const [active, setActive] = useState('overview')
   const [myLogs, setMyLogs] = useState<ActivityLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [versions, setVersions] = useState<VersionEntry[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
 
   useEffect(() => {
     if (active === 'myactivity') {
@@ -100,6 +109,12 @@ export default function UserManual() {
       axios.get('/api/auth/my-logs?limit=50')
         .then(r => setMyLogs(r.data.data?.logs || []))
         .finally(() => setLogsLoading(false))
+    }
+    if (active === 'changelog') {
+      setVersionsLoading(true)
+      axios.get('/api/versions')
+        .then(r => setVersions((r.data.data?.versions || []).filter((v: VersionEntry) => v.released)))
+        .finally(() => setVersionsLoading(false))
     }
   }, [active])
 
@@ -137,6 +152,42 @@ export default function UserManual() {
 
         {/* Content */}
         <div style={S.content}>
+
+          <Section id="changelog" title="📋 Changelog — Version History">
+            <p style={S.p}>
+              Sare releases aur updates ki complete list — newest first.
+            </p>
+            {versionsLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>}
+            {!versionsLoading && versions.length === 0 && (
+              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No entries found.</div>
+            )}
+            {versions.map(entry => {
+              const typeMeta: Record<string, { label: string; bg: string; color: string }> = {
+                feature:     { label: '✦ NEW',         bg: 'rgba(56,189,248,.12)',  color: '#38bdf8' },
+                fix:         { label: '✓ FIX',         bg: 'rgba(74,222,128,.10)', color: '#4ade80' },
+                improvement: { label: '↑ IMPROVEMENT', bg: 'rgba(251,191,36,.10)', color: '#fbbf24' },
+                breaking:    { label: '⚠ BREAKING',    bg: 'rgba(248,113,113,.10)', color: '#f87171' },
+              }
+              const tm = typeMeta[entry.type] || typeMeta['feature']
+              return (
+                <div key={entry.id} style={{ display: 'flex', gap: 10, marginBottom: 10, padding: '10px 12px', background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)' }}>
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: tm.bg, color: tm.color, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                      {tm.label}
+                    </span>
+                    <span style={{ fontSize: 10, color: tm.color, fontWeight: 700 }}>v{entry.version}</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{entry.date}</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3 }}>{entry.title}</div>
+                    {entry.desc && <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>{entry.desc}</div>}
+                  </div>
+                </div>
+              )
+            })}
+          </Section>
+
+          <div style={S.divider} />
 
           <Section id="overview" title="Overview">
             <p style={S.p}>
@@ -303,6 +354,118 @@ export default function UserManual() {
             </>
           )}
 
+          {isPlanner && (
+            <>
+              <Section id="distribution" title="Distribution Model">
+                <p style={S.p}>
+                  Distribution Model tab allocation quantities ko store-level pe distribute karta hai
+                  — PBS ke against warehouse stock ko stores mein bhejta hai.
+                </p>
+                <div style={S.sectionLabel}>Distribution Run Karne Ka Procedure</div>
+                <ol style={S.stepList}>
+                  <li style={{ marginBottom: 8 }}>
+                    Pehle <strong>Calculation</strong> run karo aur complete ho jaane do.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>Distribution Model</strong> tab open karo. Run ID dropdown mein latest run select karo.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>WH Column</strong> select karo (default: <code>wh_q</code> — warehouse quantity).
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>Max Rounds</strong> set karo (default: 10 — kitne distribution iterations chalenge).
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    Optional: <strong>Hold Rules</strong> add karo — specific stores ya attribute1 values ko hold karne ke liye.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>Option Listing Filter</strong> toggle karo agar PREWINTER / LT WINTER attribute1 ke liye
+                    option listing hold apply karna ho (details neeche).
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>Run Distribution</strong> button click karo.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    Output table mein columns dikhenge: Store, Grade, Icode, Attribute1, Concept New,
+                    List Tag, Req Qty, Allocated Qty, Reason Not Allocated, etc.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>Download CSV</strong> ya <strong>Download Excel</strong> se export karo.
+                  </li>
+                </ol>
+                <div style={S.tip}>
+                  💡 Agar browser hard refresh (Ctrl+Shift+R) kiya toh run values automatically restore ho jaayenge
+                  (localStorage mein save hote hain).
+                </div>
+                <div style={S.warn}>
+                  ⚠️ Distribution run ke baad CSV mein attribute1, concept_new, aur list_tag columns automatically aate hain.
+                  Preview mein dikhne wale columns CSV mein bhi honge.
+                </div>
+              </Section>
+
+              <div style={S.divider} />
+
+              <Section id="option_listing" title="Option Listing Filter">
+                <p style={S.p}>
+                  Option Listing Filter ek special hold rule hai jo <strong>PREWINTER</strong> aur <strong>LT WINTER</strong> attribute1
+                  wale SKUs ke liye Oracle table <code>T_CLR_CONCEPT_AW26_V1</code> se list_tag check karta hai.
+                </p>
+                <div style={S.sectionLabel}>Kaise Kaam Karta Hai</div>
+                <ul style={S.stepList}>
+                  <li style={{ marginBottom: 8 }}>
+                    <strong>Store × Concept New</strong> join hota hai Oracle table ke saath.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    Agar <code>LIST_TAG = YES</code> hai us store+concept_new ke liye → allocate hoga.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    Agar <code>LIST_TAG = NO</code> ya missing hai → allocation 0 ho jaata hai aur
+                    remark <strong>"HOLD FOR OPTION_LISTING NO"</strong> lagta hai.
+                  </li>
+                  <li style={{ marginBottom: 8 }}>
+                    Yeh rule sirf PREWINTER / LT WINTER attribute1 par apply hota hai — baaki attributes unaffected.
+                  </li>
+                </ul>
+                <div style={S.sectionLabel}>Enable Karne Ka Procedure</div>
+                <ol style={S.stepList}>
+                  <li style={{ marginBottom: 6 }}>Distribution Model page kholo.</li>
+                  <li style={{ marginBottom: 6 }}>
+                    <strong>"Option Listing Filter"</strong> section mein checkbox toggle karo — ON karo.
+                  </li>
+                  <li style={{ marginBottom: 6 }}>
+                    Status badge check karo — Oracle table se data load hai ya nahi confirm hoga.
+                  </li>
+                  <li style={{ marginBottom: 6 }}>
+                    Distribution run karo — output mein <strong>list_tag</strong> column dikhega aur held rows mein reason show hoga.
+                  </li>
+                </ol>
+                <div style={S.tip}>
+                  💡 Summary stats mein "OL Held" count dikhta hai — kitne rows option listing hold se affected hue.
+                </div>
+              </Section>
+
+              <div style={S.divider} />
+            </>
+          )}
+
+          <Section id="store_status" title="Store Status">
+            <p style={S.p}>
+              Store Status page har store ka <strong>division × attribute1 × department</strong> level pe hold status dikhata hai.
+              Stores ko allocation se bahar rakhne ke liye yahan configure karo.
+            </p>
+            <ul style={S.stepList}>
+              <li style={{ marginBottom: 8 }}>
+                <strong>Granular Hold</strong> — ek store ko sirf ek specific division ya dept ke liye hold karo,
+                poore store ko nahi.
+              </li>
+              <li style={{ marginBottom: 8 }}>
+                Hold rules distribution model ke <strong>Hold Rules</strong> section mein automatically reflect honge.
+              </li>
+            </ul>
+          </Section>
+
+          <div style={S.divider} />
+
           <Section id="results" title="Results & Export">
             <p style={S.p}>
               The Results page shows the full store × SKU replenishment output from the most recent
@@ -318,6 +481,88 @@ export default function UserManual() {
               💡 Use <strong>History</strong> to go back to any previous run's results — select the run
               and click View Results.
             </div>
+          </Section>
+
+          <div style={S.divider} />
+
+          <div style={S.divider} />
+
+          {isPlanner && (
+            <Section id="settings_guide" title="Settings & Server Control">
+              <p style={S.p}>
+                Settings page system health, cache management, aur server control provide karta hai.
+              </p>
+              <div style={S.sectionLabel}>Data Cache Management</div>
+              <ul style={S.stepList}>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>Warm Up Cache</strong> — Oracle se item master aur store master preload karo.
+                  Pehle calculation slow hoti hai agar cache cold ho — warmup se speed milti hai.
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>Invalidate Cache</strong> — Oracle data refresh karna ho toh cache clear karo.
+                  Next calculation run fresh Oracle data use karega.
+                </li>
+              </ul>
+              <div style={S.sectionLabel}>Server Control</div>
+              <ul style={S.stepList}>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>↺ Restart Backend</strong> — uvicorn Python server restart ho jaata hai.
+                  5–10 seconds ke liye app disconnect hoga, phir auto reconnect hoga.
+                  Naya code deploy karne ke baad use karo.
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>⚙ Build Frontend (Mobile Update)</strong> — <code>npm run build</code> chalta hai.
+                  Mobile app pe naya UI dikhane ke liye use karo — build ke baad mobile browser refresh karo.
+                </li>
+              </ul>
+              <div style={S.sectionLabel}>Browser Cache</div>
+              <ul style={S.stepList}>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>Clear Data Cache</strong> — browser localStorage mein stored dashboard pins,
+                  view preferences clear ho jaate hain. Auth token safe rehta hai.
+                </li>
+              </ul>
+              <div style={S.warn}>
+                ⚠️ Backend restart karne se all in-memory session data clear ho jaata hai.
+                Active users ko dobara login karna padega.
+              </div>
+            </Section>
+          )}
+
+          <div style={S.divider} />
+
+          <Section id="login_guide" title="Login & Sessions">
+            <div style={S.sectionLabel}>Normal Login</div>
+            <ol style={S.stepList}>
+              <li style={{ marginBottom: 6 }}>Login page pe email aur password dalo.</li>
+              <li style={{ marginBottom: 6 }}><strong>Sign In</strong> click karo.</li>
+            </ol>
+            <div style={S.sectionLabel}>Max Login Limit Reach Hone Par</div>
+            <p style={S.p}>
+              Agar same account se already max sessions active hain (usually 1 desktop session),
+              ek conflict dialog dikhega:
+            </p>
+            <ul style={S.stepList}>
+              <li style={{ marginBottom: 6 }}>
+                Dialog mein active sessions ki details dikhegi — device name, browser, IP.
+              </li>
+              <li style={{ marginBottom: 6 }}>
+                <strong>"⚡ Sign out from all devices & Login here"</strong> button click karo.
+              </li>
+              <li style={{ marginBottom: 6 }}>
+                Yeh <strong>sabhi</strong> existing sessions (sabhi devices) logout kar deta hai
+                aur is device pe fresh login ho jaata hai.
+              </li>
+            </ul>
+            <div style={S.sectionLabel}>Forgot Password</div>
+            <ol style={S.stepList}>
+              <li style={{ marginBottom: 6 }}>Login page pe <strong>Forgot password?</strong> click karo.</li>
+              <li style={{ marginBottom: 6 }}>Registered email daalo aur submit karo.</li>
+              <li style={{ marginBottom: 6 }}>Screen pe temporary password dikhega — use copy karo.</li>
+              <li style={{ marginBottom: 6 }}>
+                <strong>Sign In</strong> pe jaao, temporary password use karo, phir password change karo.
+              </li>
+            </ol>
           </Section>
 
           <div style={S.divider} />

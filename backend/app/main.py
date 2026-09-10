@@ -36,6 +36,7 @@ from app.api.routes import distribution as distribution_routes
 from app.api.routes import simulation as simulation_routes
 from app.api.routes import option_listing as option_listing_routes
 from app.api.routes import oracle_refresh as oracle_refresh_routes
+from app.api.routes import versions as versions_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -226,6 +227,10 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/option-listing/",       None,          "planner"),
     # Oracle / Excel Refresh (planner+)
     ("/api/oracle-refresh/",       None,          "planner"),
+    # Version Control — GET public, write ops admin
+    ("/api/versions",              {"GET"},       None),
+    ("/api/versions/",             {"GET"},       None),
+    ("/api/versions/",             None,          "admin"),
     # Fallback — any API route needs at least viewer
     ("/api/",                      None,          "viewer"),
 ]
@@ -379,6 +384,7 @@ app.include_router(distribution_routes.router, prefix="/api")  # Distribution Mo
 app.include_router(simulation_routes.router, prefix="/api")   # Allocation Simulation
 app.include_router(option_listing_routes.router, prefix="/api")  # Option Listing (Pre-Winter AW26)
 app.include_router(oracle_refresh_routes.router, prefix="/api")  # Oracle / Excel Refresh
+app.include_router(versions_routes.router, prefix="/api")          # Version Control / Changelog
 
 
 @app.get("/api", tags=["Root"])

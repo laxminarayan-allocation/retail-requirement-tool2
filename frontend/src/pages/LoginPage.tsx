@@ -245,7 +245,7 @@ export default function LoginPage() {
             {conflictSessions && conflictSessions.length > 0 && (
               <div style={{ background: '#1e1a2e', border: '1px solid #7c3aed', borderRadius: 8, padding: 12, marginBottom: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#c4b5fd', marginBottom: 8 }}>
-                  Active session(s) on other device(s):
+                  ⚠️ Max login limit reached — active session(s):
                 </div>
                 {conflictSessions.map((s, i) => (
                   <div key={i} style={{ fontSize: 11, color: '#a78bfa', marginBottom: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -256,6 +256,7 @@ export default function LoginPage() {
                     <span>IP: {s.ip || '—'}</span>
                   </div>
                 ))}
+                {error && <div style={{ ...S.err, marginTop: 8, marginBottom: 0 }}>{error}</div>}
                 <button
                   type="button"
                   onClick={handleForceLogin}
@@ -263,7 +264,7 @@ export default function LoginPage() {
                   style={{ marginTop: 10, width: '100%', padding: '8px 0', background: '#7c3aed',
                     color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700,
                     cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
-                  {loading ? 'Logging in…' : '⚡ Logout from all devices & Login here'}
+                  {loading ? 'Signing in…' : '⚡ Sign out from all devices & Login here'}
                 </button>
               </div>
             )}

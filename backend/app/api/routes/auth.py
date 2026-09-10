@@ -349,9 +349,9 @@ async def force_login(request: Request):
     ua = request.headers.get("user-agent", "").lower()
     device_type = "mobile" if any(k in ua for k in ("mobile", "android", "iphone", "ipad")) else "desktop"
     _purge_expired()
-    # Kick all existing sessions for this user+device
+    # Kick ALL existing sessions for this user (all device types)
     to_remove = [sid for sid, s in _active_sessions.items()
-                 if s["user_id"] == user["id"] and s["device_type"] == device_type]
+                 if s["user_id"] == user["id"]]
     for sid in to_remove:
         del _active_sessions[sid]
     update_last_login(user["id"])

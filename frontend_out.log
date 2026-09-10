@@ -1,0 +1,13 @@
+
+> retail-requirement-tool@1.0.0 dev
+> vite --host
+
+Port 5173 is in use, trying another one...
+
+  VITE v5.4.21  ready in 475 ms
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: http://100.98.44.98:5174/
+  ➜  Network: http://10.0.0.59:5174/
+  ➜  press h + enter to show help
+^C^C

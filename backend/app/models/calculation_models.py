@@ -46,6 +46,7 @@ class DistributeRequest(BaseModel):
     wh_col: str = "wh_q"
     max_round: int = 10
     hold_rules: List[HoldRule] = Field(default_factory=list)
+    apply_option_listing: bool = False  # apply T_CLR_CONCEPT_AW26_V1 hold for PREWINTER/LT WINTER
 
 
 class StepLog(BaseModel):

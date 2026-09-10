@@ -148,12 +148,16 @@ interface OracleStats {
   items_by_attribute1: Record<string, number>
   store_grade_distribution: Record<string, number>
   upcoming_grade_distribution: Record<string, number>
+  zone_grade_distribution: Record<string, Record<string, number>>
   store_zone_distribution: Record<string, number>
   store_zone_upcoming: Record<string, number>
   store_state_distribution: Record<string, number>
   store_state_upcoming: Record<string, number>
   store_tag_distribution: Record<string, number>
   store_tag_upcoming: Record<string, number>
+  store_city_distribution: Record<string, number>
+  store_city_upcoming: Record<string, number>
+  state_city_distribution: Record<string, Record<string, number>>
 }
 
 interface DivBreak { division: string; total_req: number; stores: number; rows: number }
@@ -360,31 +364,320 @@ interface DetailData {
   columns: string[]
 }
 
-function YearSplitCard({ oracle, onDrill }: { oracle: Record<string, Record<string, number>>; onDrill: (split: string, value: string) => void }) {
-  const [tab, setTab] = useState<'cy' | 'fy'>('fy')
+const STATE_LABELS: Record<string, string> = {
+  'UP': 'Uttar Pradesh', 'MP': 'Madhya Pradesh', 'CH': 'CHHATTISGARH',
+  'AR': 'Arunachal', 'AP': 'Andhra Pradesh', 'TN': 'Tamil Nadu',
+  'MH': 'Maharashtra', 'GJ': 'Gujarat', 'RJ': 'Rajasthan',
+  'WB': 'West Bengal', 'HR': 'Haryana', 'PB': 'Punjab',
+  'UK': 'Uttarakhand', 'HP': 'Himachal', 'GA': 'Goa',
+  'KA': 'Karnataka', 'KL': 'Kerala', 'TG': 'Telangana',
+  'JK': 'J&K', 'KASHMIR': 'KASHMIR', 'JAMMU': 'JAMMU',
+  'ODISHA': 'ODISHA', 'NEW DELHI': 'Delhi', 'JH': 'Jharkhand',
+  'ASSAM': 'Assam', 'GURGAON': 'Gurgaon', 'J&K': 'J&K',
+}
+
+const CITY_COLORS = ['#06b6d4','#38bdf8','#34d399','#a78bfa','#f59e0b','#fb923c','#ec4899','#10b981','#818cf8','#84cc16','#f87171','#67e8f9']
+
+function StateCityCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: OracleStats; onDrill: (split: string, value: string) => void; cardId: string; expanded: boolean; onToggle: (id: string) => void }) {
+  const [viewMode, setViewMode] = useState<'state' | 'city' | 'combo'>('state')
+  const stateDist = oracle.store_state_distribution ?? {}
+  const stateUpDist = oracle.store_state_upcoming ?? {}
+  const cityDist = oracle.store_city_distribution ?? {}
+  const cityUpDist = oracle.store_city_upcoming ?? {}
+  const stateCityDist = oracle.state_city_distribution ?? {}
+  const hasCityData = Object.keys(cityDist).length > 0
+  const hasComboData = Object.keys(stateCityDist).length > 0
+  const hasStateData = Object.keys(stateDist).length > 0
+  if (!hasStateData && !hasCityData) return null
+
+  const tabs = [
+    ...(hasStateData ? ['state'] : []),
+    ...(hasCityData ? ['city'] : []),
+    ...(hasComboData ? ['combo'] : []),
+  ] as ('state' | 'city' | 'combo')[]
+
+  const activeDist = viewMode === 'city' ? cityDist : stateDist
+  const upcomingDist = viewMode === 'city' ? cityUpDist : stateUpDist
+  const allKeys = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+    .filter(k => k !== '—' && k !== '-')
+    .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
+  const mx = Math.max(...allKeys.map(k => (activeDist[k] ?? 0) + (upcomingDist[k] ?? 0)), 1)
+
+  // combo: states sorted by total city count desc
+  const comboStates = Object.keys(stateCityDist)
+    .filter(s => s && s !== '—' && s !== '-')
+    .sort((a, b) => {
+      const ta = Object.values(stateCityDist[a] ?? {}).reduce((s, v) => s + v, 0)
+      const tb = Object.values(stateCityDist[b] ?? {}).reduce((s, v) => s + v, 0)
+      return tb - ta
+    })
+
+  const tabLabel: Record<string, string> = { state: 'State', city: 'City', combo: 'State×City' }
+  return (
+    <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #06b6d4', minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>State & City</div>
+          <ExpandBtn id={cardId} expanded={expanded} onToggle={onToggle} />
+        </div>
+        {tabs.length > 1 && (
+          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {tabs.map(v => (
+              <button key={v} onClick={() => setViewMode(v)} style={{
+                fontSize: 8, padding: '2px 5px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                background: viewMode === v ? '#06b6d422' : 'transparent',
+                border: `1px solid ${viewMode === v ? '#06b6d4' : '#334155'}`,
+                color: viewMode === v ? '#06b6d4' : '#475569',
+              }}>{tabLabel[v]}</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* State / City flat list */}
+      {viewMode !== 'combo' && (
+        <>
+          <div style={{ display: 'flex', gap: 8, fontSize: 9, marginBottom: 6 }}>
+            <span style={{ color: '#38bdf8' }}>● Active</span>
+            <span style={{ color: '#f59e0b' }}>● Upcoming</span>
+          </div>
+          {allKeys.map(key => {
+            const a = activeDist[key] ?? 0
+            const u = upcomingDist[key] ?? 0
+            return (
+              <div key={key} onClick={() => onDrill(viewMode, key)} title={`Click to see all ${key} stores`}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                <span style={{ width: 72, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }}>
+                  {viewMode === 'state' ? (STATE_LABELS[key] ?? key) : key}
+                </span>
+                <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                  <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
+                  <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
+                </div>
+                <span style={{ color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
+                  <span style={{ color: '#38bdf8' }}>{a}</span>{u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
+                </span>
+              </div>
+            )
+          })}
+        </>
+      )}
+
+      {/* State × City stacked combo */}
+      {viewMode === 'combo' && comboStates.map(state => {
+        const cityMap = stateCityDist[state] ?? {}
+        const cities = Object.keys(cityMap).sort((a, b) => (cityMap[b] ?? 0) - (cityMap[a] ?? 0))
+        const total = Object.values(cityMap).reduce((s, v) => s + v, 0)
+        return (
+          <div key={state} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0, width: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={STATE_LABELS[state] ?? state}>{STATE_LABELS[state] ?? state}</span>
+              <div style={{ flex: 1, height: 6, background: 'var(--card-bg)', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                {cities.map((city, ci) => {
+                  const cnt = cityMap[city] ?? 0
+                  return (
+                    <div key={city} title={`${city}: ${cnt}`}
+                      style={{ width: `${(cnt / total) * 100}%`, height: '100%', background: CITY_COLORS[ci % CITY_COLORS.length], cursor: 'pointer' }}
+                      onClick={() => onDrill('state_city', `${state}|${city}`)}
+                    />
+                  )
+                })}
+              </div>
+              <span style={{ fontSize: 8, color: 'var(--text-muted)', flexShrink: 0, minWidth: 18, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', paddingLeft: 60 }}>
+              {cities.slice(0, 6).map((city, ci) => (
+                <span key={city} onClick={() => onDrill('state_city', `${state}|${city}`)} title={`${STATE_LABELS[state] ?? state} · ${city}`}
+                  style={{ fontSize: 7, color: CITY_COLORS[ci % CITY_COLORS.length], cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+                  {city}:{cityMap[city]}
+                </span>
+              ))}
+              {cities.length > 6 && <span style={{ fontSize: 7, color: 'var(--text-muted)' }}>+{cities.length - 6}</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ExpandBtn({ id, expanded, onToggle }: { id: string; expanded: boolean; onToggle: (id: string) => void }) {
+  return (
+    <button onClick={() => onToggle(id)} title={expanded ? 'Collapse' : 'Expand width'} style={{
+      background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px',
+      color: expanded ? '#818cf8' : '#475569', fontSize: 11, lineHeight: 1, flexShrink: 0,
+    }}>{expanded ? '⟵⟶' : '⟶⟵'}</button>
+  )
+}
+
+const GRADE_COLORS: Record<string, string> = {
+  'A+': '#818cf8', 'A': '#38bdf8', 'B+': '#34d399', 'B': '#4ade80',
+  'C': '#f59e0b', 'D': '#fb923c', 'E': '#f87171',
+}
+const GRADE_ORDER = ['A+', 'A', 'B+', 'B', 'C', 'D', 'E']
+
+function GradeCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: OracleStats; onDrill: (split: string, value: string) => void; cardId: string; expanded: boolean; onToggle: (id: string) => void }) {
+  const [tab, setTab] = useState<'grade' | 'zone'>('grade')
+  const activeGrade = Object.entries(oracle.store_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
+  const upcomingGrade = Object.entries(oracle.upcoming_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
+  const zoneGrade = oracle.zone_grade_distribution ?? {}
+  if (activeGrade.length === 0 && upcomingGrade.length === 0) return null
+
+  const allGrades = Array.from(new Set([...activeGrade.map(([k]) => k), ...upcomingGrade.map(([k]) => k)]))
+    .sort((a, b) => {
+      const ai = GRADE_ORDER.indexOf(a); const bi = GRADE_ORDER.indexOf(b)
+      if (ai === -1 && bi === -1) return a.localeCompare(b)
+      if (ai === -1) return 1; if (bi === -1) return -1
+      return ai - bi
+    })
+  const activeMap = Object.fromEntries(activeGrade)
+  const upcomingMap = Object.fromEntries(upcomingGrade)
+  const maxGrade = Math.max(...allGrades.map(g => (activeMap[g] ?? 0) + (upcomingMap[g] ?? 0)), 1)
+
+  const zones = Object.keys(zoneGrade).filter(z => z && z !== '—' && z !== '-').sort()
+  const hasZoneGrade = zones.length > 0
+
+  return (
+    <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Grade Split</div>
+          <ExpandBtn id={cardId} expanded={expanded} onToggle={onToggle} />
+        </div>
+        {hasZoneGrade && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['grade', 'zone'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                fontSize: 9, padding: '2px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                background: tab === t ? '#818cf822' : 'transparent',
+                border: `1px solid ${tab === t ? '#818cf8' : '#334155'}`,
+                color: tab === t ? '#818cf8' : '#475569',
+              }}>{t === 'grade' ? 'Grade' : 'Zone×Grade'}</button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, fontSize: 9, marginBottom: 8 }}>
+        <span style={{ color: '#38bdf8' }}>● Active</span>
+        {tab === 'grade' && <span style={{ color: '#f59e0b' }}>● Upcoming</span>}
+      </div>
+
+      {tab === 'grade' && allGrades.map(grade => {
+        const aVal = activeMap[grade] ?? 0
+        const uVal = upcomingMap[grade] ?? 0
+        const color = GRADE_COLORS[grade] ?? '#64748b'
+        return (
+          <div key={grade} onClick={() => onDrill('grade', grade)} title={`Click to see all Grade ${grade} stores`}
+            style={{ marginBottom: 7, cursor: 'pointer', borderRadius: 4, padding: '2px 3px' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <span style={{ width: 22, fontWeight: 700, fontSize: 11, color, flexShrink: 0 }}>{grade}</span>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${(aVal / maxGrade) * 100}%`, height: '100%', background: '#38bdf8', borderRadius: 2 }} />
+                </div>
+                {uVal > 0 && (
+                  <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${(uVal / maxGrade) * 100}%`, height: '100%', background: '#f59e0b', borderRadius: 2, opacity: 0.85 }} />
+                  </div>
+                )}
+              </div>
+              <div style={{ minWidth: 30, textAlign: 'right', flexShrink: 0, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ color: '#38bdf8' }}>{aVal}</span>
+                {uVal > 0 && <span style={{ color: '#f59e0b' }}> +{uVal}</span>}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      {tab === 'zone' && zones.map(zone => {
+        const gradeMap = zoneGrade[zone] ?? {}
+        const gradesInZone = Object.keys(gradeMap).sort((a, b) => {
+          const ai = GRADE_ORDER.indexOf(a); const bi = GRADE_ORDER.indexOf(b)
+          if (ai === -1 && bi === -1) return a.localeCompare(b)
+          if (ai === -1) return 1; if (bi === -1) return -1
+          return ai - bi
+        })
+        const total = Object.values(gradeMap).reduce((s, v) => s + v, 0)
+        return (
+          <div key={zone} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0, width: 52, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{zone}</span>
+              <div style={{ flex: 1, height: 6, background: 'var(--card-bg)', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+                {gradesInZone.map(g => {
+                  const cnt = gradeMap[g] ?? 0
+                  return (
+                    <div key={g} title={`${zone} · Grade ${g}: ${cnt}`}
+                      style={{ width: `${(cnt / total) * 100}%`, height: '100%', background: GRADE_COLORS[g] ?? '#64748b', cursor: 'pointer' }}
+                      onClick={() => onDrill('zone_grade', `${zone}|${g}`)}
+                    />
+                  )
+                })}
+              </div>
+              <span style={{ fontSize: 8, color: 'var(--text-muted)', flexShrink: 0, minWidth: 18, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', paddingLeft: 56 }}>
+              {gradesInZone.map(g => (
+                <span key={g} onClick={() => onDrill('zone_grade', `${zone}|${g}`)} title={`${zone} · Grade ${g}`}
+                  style={{ fontSize: 8, color: GRADE_COLORS[g] ?? '#64748b', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+                  {g}:{gradeMap[g]}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function YearSplitCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: Record<string, Record<string, number>>; onDrill: (split: string, value: string) => void; cardId: string; expanded: boolean; onToggle: (id: string) => void }) {
+  const [tab, setTab] = useState<'fy' | 'cy' | 'tag'>('fy')
   const cy = oracle.store_cal_year_dist ?? {}
   const fy = oracle.store_fin_year_dist ?? {}
   const cyUp = oracle.store_cal_year_upcoming ?? {}
   const fyUp = oracle.store_fin_year_upcoming ?? {}
-  if (!Object.keys(cy).length && !Object.keys(fy).length) return null
-  const activeDist = tab === 'cy' ? cy : fy
-  const upcomingDist = tab === 'cy' ? cyUp : fyUp
-  const allYears = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)])).sort()
-  const mx = Math.max(...allYears.map(yr => (activeDist[yr] ?? 0) + (upcomingDist[yr] ?? 0)), 1)
+  const tag = oracle.store_tag_distribution ?? {}
+  const tagUp = oracle.store_tag_upcoming ?? {}
+  if (!Object.keys(cy).length && !Object.keys(fy).length && !Object.keys(tag).length) return null
+
+  const activeDist = tab === 'cy' ? cy : tab === 'tag' ? tag : fy
+  const upcomingDist = tab === 'cy' ? cyUp : tab === 'tag' ? tagUp : fyUp
+
+  const allKeys = tab === 'tag'
+    ? Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+        .filter(t => t !== '-' && t !== '—')
+        .sort((a, b) => {
+          const fyA = a.match(/^FY(\d+)\s*-\s*Q(\d)/); const fyB = b.match(/^FY(\d+)\s*-\s*Q(\d)/)
+          if (fyA && fyB) return (parseInt(fyA[1]) * 10 + parseInt(fyA[2])) - (parseInt(fyB[1]) * 10 + parseInt(fyB[2]))
+          if (fyA) return 1; if (fyB) return -1
+          return a.localeCompare(b)
+        })
+    : Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)])).sort()
+
+  const mx = Math.max(...allKeys.map(k => (activeDist[k] ?? 0) + (upcomingDist[k] ?? 0)), 1)
   const COLORS = ['#f59e0b', '#fb923c', '#34d399', '#38bdf8', '#818cf8', '#ec4899', '#a78bfa', '#10b981', '#06b6d4', '#84cc16']
   return (
     <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b', minWidth: 0, overflow: 'hidden' }}>
       <div style={{ marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Openings</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Openings</div>
+            <ExpandBtn id={cardId} expanded={expanded} onToggle={onToggle} />
+          </div>
           <div style={{ display: 'flex', gap: 4 }}>
-            {(['fy', 'cy'] as const).map(t => (
+            {(['fy', 'cy', 'tag'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)} style={{
                 fontSize: 9, padding: '2px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
                 background: tab === t ? '#f59e0b22' : 'transparent',
                 border: `1px solid ${tab === t ? '#f59e0b' : '#334155'}`,
                 color: tab === t ? '#f59e0b' : '#475569',
-              }}>{t === 'cy' ? 'CY' : 'FY'}</button>
+              }}>{t === 'cy' ? 'CY' : t === 'fy' ? 'FY' : 'Tag'}</button>
             ))}
           </div>
         </div>
@@ -393,15 +686,15 @@ function YearSplitCard({ oracle, onDrill }: { oracle: Record<string, Record<stri
           <span style={{ color: '#f59e0b' }}>● Upcoming</span>
         </div>
       </div>
-      {allYears.map((yr, i) => {
-        const a = activeDist[yr] ?? 0
-        const u = upcomingDist[yr] ?? 0
+      {allKeys.map((key, i) => {
+        const a = activeDist[key] ?? 0
+        const u = upcomingDist[key] ?? 0
         return (
-          <div key={yr} onClick={() => onDrill(tab, yr)} title={`Click to see stores opened in ${yr}`}
+          <div key={key} onClick={() => onDrill(tab, key)} title={`Click to see ${tab === 'tag' ? key : `stores opened in ${key}`}`}
             style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-            <span style={{ width: 36, color: 'var(--text-secondary)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{yr}</span>
+            <span style={{ width: tab === 'tag' ? 72 : 36, color: 'var(--text-secondary)', flexShrink: 0, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: tab === 'tag' ? 8 : 10 }}>{key}</span>
             <div style={{ flex: 1, height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
               <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
               <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b', opacity: 0.6 }} />
@@ -472,7 +765,7 @@ function DashboardSkeleton() {
           <SkBox w={110} h={10} />
           <SkBox w={60} h={10} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '200px 125px 120px 165px 100px 130px', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
 
           {/* Left card */}
           <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
@@ -499,9 +792,9 @@ function DashboardSkeleton() {
             <SkBarRows count={10} labelW={28} />
           </div>
 
-          {/* State Split */}
+          {/* State & City */}
           <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 14px' }}>
-            <SkBox w={65} h={9} style={{ marginBottom: 10 }} />
+            <SkBox w={75} h={9} style={{ marginBottom: 10 }} />
             <SkBarRows count={10} labelW={68} />
           </div>
 
@@ -552,17 +845,6 @@ function DashboardSkeleton() {
 }
 
 // ── Store Drill-Down Modal ────────────────────────────────────────────────────
-const STATE_LABELS: Record<string, string> = {
-  'UP': 'Uttar Pradesh', 'MP': 'Madhya Pradesh', 'CH': 'CHHATTISGARH',
-  'AR': 'Arunachal', 'AP': 'Andhra Pradesh', 'TN': 'Tamil Nadu',
-  'MH': 'Maharashtra', 'GJ': 'Gujarat', 'RJ': 'Rajasthan',
-  'WB': 'West Bengal', 'HR': 'Haryana', 'PB': 'Punjab',
-  'UK': 'Uttarakhand', 'HP': 'Himachal', 'GA': 'Goa',
-  'KA': 'Karnataka', 'KL': 'Kerala', 'TG': 'Telangana',
-  'JK': 'J&K', 'KASHMIR': 'KASHMIR', 'JAMMU': 'JAMMU',
-  'ODISHA': 'ODISHA', 'NEW DELHI': 'Delhi', 'JH': 'Jharkhand',
-  'ASSAM': 'Assam', 'GURGAON': 'Gurgaon', 'J&K': 'J&K',
-}
 
 interface DrillStore { code: string; name: string; status: string; grade: string; zone: string; state: string; area: number | null; opening_date?: string }
 interface DrillState { split: string; value: string }
@@ -609,8 +891,10 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
     !q || s.code.toLowerCase().includes(q.toLowerCase()) || s.name.toLowerCase().includes(q.toLowerCase())
   )
 
-  const SPLIT_LABEL: Record<string, string> = { zone: 'Zone', state: 'State', grade: 'Grade', tag: 'Store Tag', fy: 'Financial Year', cy: 'Calendar Year' }
-  const displayValue = drill.split === 'state' ? (STATE_LABELS[drill.value] ?? drill.value) : drill.value
+  const SPLIT_LABEL: Record<string, string> = { zone: 'Zone', state: 'State', city: 'City', grade: 'Grade', zone_grade: 'Zone × Grade', state_city: 'State × City', tag: 'Store Tag', fy: 'Financial Year', cy: 'Calendar Year' }
+  const displayValue = drill.split === 'state' ? (STATE_LABELS[drill.value] ?? drill.value)
+    : drill.split === 'zone_grade' || drill.split === 'state_city' ? drill.value.replace('|', ' · ')
+    : drill.value
 
   return (
     <div style={{
@@ -702,6 +986,16 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [drillDown, setDrillDown] = useState<DrillState | null>(null)
   const [dashTab, setDashTab] = useState<'store-network' | 'allocation'>('store-network')
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('dash_expanded_cards') ?? '[]')) } catch { return new Set() }
+  })
+  const toggleCard = (id: string) => setExpandedCards(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    try { localStorage.setItem('dash_expanded_cards', JSON.stringify([...next])) } catch {}
+    return next
+  })
+  const cardSpan = (id: string): React.CSSProperties => expandedCards.has(id) ? { gridColumn: 'span 2' } : {}
 
   // ── Layer 1: stale-while-revalidate ──────────────────────────────────────
   // Load cached data from localStorage instantly so viewer sees data at 0ms.
@@ -904,12 +1198,13 @@ export default function Dashboard() {
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
         </div>
         <div style={{ width: '100%' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1.3fr 0.8fr 1.1fr', gap: 10, width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, width: '100%', alignItems: 'start' }}>
           {/* Combined Active + Upcoming + Total */}
-          <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '10px 12px', borderLeft: '3px solid #818cf8', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '10px 12px', borderLeft: '3px solid #818cf8', display: 'flex', flexDirection: 'column', gap: 6, ...cardSpan('network') }}>
             {/* Total headline */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8 }}>Store Network</div>
+              <ExpandBtn id="network" expanded={expandedCards.has('network')} onToggle={toggleCard} />
               <div style={{ fontSize: 26, fontWeight: 900, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_all_stores)}</div>
             </div>
             {/* Stacked bar */}
@@ -937,7 +1232,7 @@ export default function Dashboard() {
                 {oracle.last_opened_name && (
                   <div style={{ marginTop: 5, padding: '3px 6px', background: '#0a1628', borderRadius: 3, borderLeft: '2px solid #1e3a5f' }}>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Last Open</div>
-                    <div style={{ fontSize: 11, color: '#7dd3fc', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{oracle.last_opened_name}</div>
+                    <div style={{ fontSize: 11, color: '#7dd3fc', fontWeight: 600, whiteSpace: 'normal', wordBreak: 'break-word' }}>{oracle.last_opened_name}</div>
                     {oracle.last_opened_date && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{oracle.last_opened_date}</div>}
                   </div>
                 )}
@@ -966,9 +1261,12 @@ export default function Dashboard() {
               .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
             const mx = Math.max(...allZones.map(z => (activeDist[z] ?? 0) + (upcomingDist[z] ?? 0)), 1)
             return (
-              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden', ...cardSpan('zone') }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Zone Split</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Zone Split</div>
+                    <ExpandBtn id="zone" expanded={expandedCards.has('zone')} onToggle={toggleCard} />
+                  </div>
                   <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
                     <span style={{ color: '#38bdf8' }}>● Active</span>
                     <span style={{ color: '#f59e0b' }}>● Upcoming</span>
@@ -995,154 +1293,20 @@ export default function Dashboard() {
           })()}
 
           {/* Year-wise store opening card */}
-          <YearSplitCard oracle={oracle as unknown as Record<string, Record<string, number>>} onDrill={(split, value) => setDrillDown({ split, value })} />
+          <div style={cardSpan('year')}>
+            <YearSplitCard oracle={oracle as unknown as Record<string, Record<string, number>>} onDrill={(split, value) => setDrillDown({ split, value })} cardId="year" expanded={expandedCards.has('year')} onToggle={toggleCard} />
+          </div>
 
-          {/* State distribution mini */}
-          {Object.keys(oracle.store_state_distribution ?? {}).length > 0 && (() => {
-            const activeDist = oracle.store_state_distribution ?? {}
-            const upcomingDist = oracle.store_state_upcoming ?? {}
-            const allStates = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
-              .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
-            const mx = Math.max(...allStates.map(s => (activeDist[s] ?? 0) + (upcomingDist[s] ?? 0)))
-            return (
-              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #34d399', minWidth: 0, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>State Split</div>
-                  <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
-                    <span style={{ color: '#38bdf8' }}>● Active</span>
-                    <span style={{ color: '#f59e0b' }}>● Upcoming</span>
-                  </div>
-                </div>
-                {allStates.map(state => {
-                  const a = activeDist[state] ?? 0
-                  const u = upcomingDist[state] ?? 0
-                  const total = a + u
-                  return (
-                    <div key={state} onClick={() => setDrillDown({ split: 'state', value: state })} title={`Click to see all ${STATE_LABELS[state] ?? state} stores`} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <span style={{ width: 72, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }} title={STATE_LABELS[state] ?? state}>
-                        {STATE_LABELS[state] ?? state}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
-                        <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
-                        <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
-                      </div>
-                      <span style={{ color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
-                        <span style={{ color: '#38bdf8' }}>{a}</span>{u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })()}
 
           {/* ── Grade Split card ── */}
-          {(() => {
-            const activeGrade = Object.entries(oracle.store_grade_distribution).filter(([k]) => k !== '—' && k !== '-')
-            const upcomingGrade = Object.entries(oracle.upcoming_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
-            if (activeGrade.length === 0 && upcomingGrade.length === 0) return null
-            const GRADE_COLORS: Record<string, string> = {
-              'A+': '#818cf8', 'A': '#38bdf8', 'B+': '#34d399', 'B': '#4ade80',
-              'C': '#f59e0b', 'D': '#fb923c', 'E': '#f87171',
-            }
-            const GRADE_ORDER = ['A+', 'A', 'B+', 'B', 'C', 'D', 'E']
-            const allGrades = Array.from(new Set([...activeGrade.map(([k]) => k), ...upcomingGrade.map(([k]) => k)]))
-              .sort((a, b) => {
-                const ai = GRADE_ORDER.indexOf(a); const bi = GRADE_ORDER.indexOf(b)
-                if (ai === -1 && bi === -1) return a.localeCompare(b)
-                if (ai === -1) return 1
-                if (bi === -1) return -1
-                return ai - bi
-              })
-            const activeMap = Object.fromEntries(activeGrade)
-            const upcomingMap = Object.fromEntries(upcomingGrade)
-            const maxVal = Math.max(...allGrades.map(g => (activeMap[g] ?? 0) + (upcomingMap[g] ?? 0)), 1)
-            return (
-              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>Grade Split</div>
-                {/* Legend */}
-                <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-                  <span style={{ fontSize: 9, color: '#38bdf8' }}>● Active</span>
-                  <span style={{ fontSize: 9, color: '#f59e0b' }}>● Upcoming</span>
-                </div>
-                {allGrades.map(grade => {
-                  const aVal = activeMap[grade] ?? 0
-                  const uVal = upcomingMap[grade] ?? 0
-                  const color = GRADE_COLORS[grade] ?? '#64748b'
-                  return (
-                    <div key={grade} onClick={() => setDrillDown({ split: 'grade', value: grade })} title={`Click to see all Grade ${grade} stores`} style={{ marginBottom: 7, cursor: 'pointer', borderRadius: 4, padding: '2px 3px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                        <span style={{ width: 22, fontWeight: 700, fontSize: 11, color, flexShrink: 0 }}>{grade}</span>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          {/* Active bar */}
-                          <div style={{ height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
-                            <div style={{ width: `${(aVal / maxVal) * 100}%`, height: '100%', background: '#38bdf8', borderRadius: 2 }} />
-                          </div>
-                          {/* Upcoming bar */}
-                          {uVal > 0 && (
-                            <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
-                              <div style={{ width: `${(uVal / maxVal) * 100}%`, height: '100%', background: '#f59e0b', borderRadius: 2, opacity: 0.85 }} />
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ minWidth: 30, textAlign: 'right', flexShrink: 0, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
-                          <span style={{ color: '#38bdf8' }}>{aVal}</span>
-                          {uVal > 0 && <span style={{ color: '#f59e0b' }}> +{uVal}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })()}
+          <div style={cardSpan('grade')}>
+            <GradeCard oracle={oracle} onDrill={(split, value) => setDrillDown({ split, value })} cardId="grade" expanded={expandedCards.has('grade')} onToggle={toggleCard} />
+          </div>
 
-          {/* ── Store Tag Split card ── */}
-          {Object.keys(oracle.store_tag_distribution ?? {}).length > 0 && (() => {
-            const activeDist = oracle.store_tag_distribution ?? {}
-            const upcomingDist = oracle.store_tag_upcoming ?? {}
-            const allTags = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
-              .filter(t => t !== '-')
-              .sort((a, b) => {
-                const scA = a.match(/^0*(\d+)\s*-\s*Stores/); const scB = b.match(/^0*(\d+)\s*-\s*Stores/)
-                if (scA && scB) return parseInt(scA[1]) - parseInt(scB[1])
-                if (scA) return -1; if (scB) return 1
-                const fyA = a.match(/^FY(\d+)\s*-\s*Q(\d)/); const fyB = b.match(/^FY(\d+)\s*-\s*Q(\d)/)
-                if (fyA && fyB) return (parseInt(fyA[1]) * 10 + parseInt(fyA[2])) - (parseInt(fyB[1]) * 10 + parseInt(fyB[2]))
-                if (fyA) return 1; if (fyB) return -1
-                return a.localeCompare(b)
-              })
-            if (activeDist['-'] || upcomingDist['-']) allTags.push('-')
-            const mx = Math.max(...allTags.map(t => (activeDist[t] ?? 0) + (upcomingDist[t] ?? 0)), 1)
-            return (
-              <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #a78bfa', minWidth: 0, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Store Tag Split</div>
-                  <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
-                    <span style={{ color: '#38bdf8' }}>● Active</span>
-                    <span style={{ color: '#f59e0b' }}>● Upcoming</span>
-                  </div>
-                </div>
-                {allTags.map(tag => {
-                  const a = activeDist[tag] ?? 0
-                  const u = upcomingDist[tag] ?? 0
-                  return (
-                    <div key={tag} onClick={() => setDrillDown({ split: 'tag', value: tag })} title={`Click to see all ${tag} stores`} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <span style={{ width: 56, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }}>{tag}</span>
-                      <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
-                        <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
-                        <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
-                      </div>
-                      <span style={{ fontSize: 9, flexShrink: 0, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {a > 0 && <span style={{ color: '#38bdf8' }}>{a}</span>}
-                        {u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })()}
+          {/* ── State & City card ── */}
+          <div style={cardSpan('statecity')}>
+            <StateCityCard oracle={oracle} onDrill={(split, value) => setDrillDown({ split, value })} cardId="statecity" expanded={expandedCards.has('statecity')} onToggle={toggleCard} />
+          </div>
         </div>
         </div>{/* scroll wrapper */}
       </div>}

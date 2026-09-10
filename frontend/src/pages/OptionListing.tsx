@@ -12,20 +12,20 @@ interface StepEntry { step: string; script: string; ok: boolean; log: string; ts
 interface PipelineStatus { status: 'idle'|'running'|'done'|'failed'; run_id?: string; steps?: string[]; entries?: StepEntry[] }
 
 const PIPELINE_STEPS = [
-  { id: '00', label: 'Download GRC / REQ / SALE / ART_GRID / MC_REQ / COLOR_FAMILY from Oracle' },
-  { id: '02', label: 'Process GRC + PPO → dispatch/hold split' },
-  { id: '03', label: 'Process REQ + sale-floor adjustment' },
-  { id: '07', label: 'LY Sell-Through analysis (Oracle)' },
-  { id: '08', label: 'Listing eligibility (LIST Y/N/CONDITIONAL)' },
-  { id: '04', label: 'Colour distribution engine (core allocation)' },
-  { id: '05', label: 'Management summary workbook' },
-  { id: '06', label: 'Self-audit against all allocation rules' },
+  { id: '00', label: 'Step 01 — Download GRC / REQ / SALE / ART_GRID / MC_REQ / COLOR_FAMILY from Oracle' },
+  { id: '02', label: 'Step 02 — Process GRC + PPO → dispatch/hold split' },
+  { id: '03', label: 'Step 03 — Process REQ + sale-floor adjustment' },
+  { id: '04', label: 'Step 04 — Colour distribution engine (core allocation)' },
+  { id: '07', label: 'Step 05 — LY Sell-Through analysis (Oracle)' },
+  { id: '08', label: 'Step 06 — Listing eligibility (LIST Y/N/CONDITIONAL)' },
+  { id: '05', label: 'Step 07 — Management summary workbook' },
+  { id: '06', label: 'Step 08 — Self-audit against all allocation rules' },
 ]
 
 // ─── Tab components ───────────────────────────────────────────────────────────
 
 function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt: number | null }) {
-  const [dispatchRatio, setDispatchRatio] = useState(0.60)
+  const [dispatchRatio, setDispatchRatio] = useState(0.85)
   const [stepStatus, setStepStatus]       = useState<Record<string,string>>({})
   const [logs, setLogs]                   = useState<{text:string;cls:string;key:number}[]>([])
   const [running, setRunning]             = useState(false)
@@ -78,6 +78,7 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
   const [candLoading, setCandLoading]   = useState(false)
   const [candError, setCandError]       = useState('')
   const [candSearch, setCandSearch]     = useState('')
+  const [mcExpanded, setMcExpanded]     = useState(true)
 
   async function loadCandidates() {
     setCandLoading(true); setCandError('')
@@ -103,13 +104,13 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
 
   const filteredCand = (() => {
     const q = candSearch.trim().toUpperCase()
-    if (!q) return candidates.slice(0, 100)
+    if (!q) return candidates
     return candidates.filter(c =>
       c.DEPARTMENT?.toUpperCase().includes(q) ||
       c.DISPLAY_TYPE?.toUpperCase().includes(q) ||
       c.ARTICLE_NAME?.toUpperCase().includes(q) ||
       String(c.MRP).includes(q)
-    ).slice(0, 100)
+    )
   })()
 
   function addCandidate(c: Candidate) {
@@ -370,9 +371,17 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
               {deptRows.filter(r => r.department.trim()).length} dept(s) — saved locally
             </span>
           )}
+          {newDept && (
+            <button onClick={() => setMcExpanded(p => !p)} title={mcExpanded ? 'Minimize' : 'Maximize'} style={{
+              background: 'transparent', border: `1px solid #22c55e44`, borderRadius: 5,
+              color: '#22c55e', fontSize: 13, padding: '1px 8px', cursor: 'pointer', lineHeight: 1.4,
+            }}>
+              {mcExpanded ? '▲' : '▼'}
+            </button>
+          )}
         </div>
 
-        {newDept && (
+        {newDept && mcExpanded && (
           <div style={{ marginTop: 14 }}>
 
             {/* ── Oracle Search Panel ── */}
@@ -415,11 +424,28 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
                   <div style={{ maxHeight: 200, overflowY: 'auto', borderRadius: 5, border: `1px solid ${tokens.cardBorder}` }}>
                     {/* header */}
                     <div style={{
-                      display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr 70px',
+                      display: 'grid', gridTemplateColumns: '24px 1fr 1fr 1.5fr 70px',
                       gap: 0, padding: '4px 8px',
                       background: tokens.cardBg, borderBottom: `1px solid ${tokens.cardBorder}`,
                       position: 'sticky', top: 0,
                     }}>
+                      <div
+                        title={filteredCand.every(c => deptRows.some(r => r.department===c.DEPARTMENT && r.display_type===c.DISPLAY_TYPE && r.article_name===c.ARTICLE_NAME)) ? 'Deselect all visible' : 'Select all visible'}
+                        onClick={() => {
+                          const allSel = filteredCand.every(c => deptRows.some(r => r.department===c.DEPARTMENT && r.display_type===c.DISPLAY_TYPE && r.article_name===c.ARTICLE_NAME))
+                          if (allSel) {
+                            setDeptRows(deptRows.filter(r => !filteredCand.some(c => c.DEPARTMENT===r.department && c.DISPLAY_TYPE===r.display_type && c.ARTICLE_NAME===r.article_name)))
+                          } else {
+                            const toAdd = filteredCand.filter(c => !deptRows.some(r => r.department===c.DEPARTMENT && r.display_type===c.DISPLAY_TYPE && r.article_name===c.ARTICLE_NAME))
+                            const newRows = toAdd.map(c => ({ department: c.DEPARTMENT??'', display_type: c.DISPLAY_TYPE??'', article_name: c.ARTICLE_NAME??'', mrp_sale: c.MRP!=null?String(c.MRP):'' }))
+                            const base = deptRows.length===1 && !deptRows[0].department.trim() ? [] : deptRows
+                            setDeptRows([...base, ...newRows])
+                          }
+                        }}
+                        style={{ cursor: 'pointer', fontSize: 13, textAlign: 'center', lineHeight: 1, color: filteredCand.every(c => deptRows.some(r => r.department===c.DEPARTMENT && r.display_type===c.DISPLAY_TYPE && r.article_name===c.ARTICLE_NAME)) ? '#22c55e' : tokens.textMuted }}
+                      >
+                        {filteredCand.length > 0 && filteredCand.every(c => deptRows.some(r => r.department===c.DEPARTMENT && r.display_type===c.DISPLAY_TYPE && r.article_name===c.ARTICLE_NAME)) ? '✓' : '○'}
+                      </div>
                       {['Department','Display Type','Article Name','MRP'].map(h => (
                         <div key={h} style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 700, textTransform: 'uppercase' }}>{h}</div>
                       ))}
@@ -432,20 +458,23 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
                       )
                       return (
                         <div key={i}
-                          onClick={() => !alreadyAdded && addCandidate(c)}
-                          title={alreadyAdded ? 'Already added' : 'Click to add'}
+                          onClick={() => { alreadyAdded ? setDeptRows(deptRows.filter(r => !(r.department === c.DEPARTMENT && r.display_type === c.DISPLAY_TYPE && r.article_name === c.ARTICLE_NAME))) : addCandidate(c) }}
+                          title={alreadyAdded ? 'Click to remove' : 'Click to select'}
                           style={{
-                            display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr 70px',
-                            gap: 0, padding: '5px 8px',
-                            background: alreadyAdded ? '#22c55e11' : 'transparent',
+                            display: 'grid', gridTemplateColumns: '24px 1fr 1fr 1.5fr 70px',
+                            gap: 0, padding: '5px 8px', alignItems: 'center',
+                            background: alreadyAdded ? '#22c55e18' : 'transparent',
                             borderBottom: `1px solid ${tokens.cardBorder}`,
-                            cursor: alreadyAdded ? 'default' : 'pointer',
-                            opacity: alreadyAdded ? 0.5 : 1,
+                            cursor: 'pointer',
+                            borderLeft: alreadyAdded ? '2px solid #22c55e' : '2px solid transparent',
                           }}
-                          onMouseEnter={e => { if (!alreadyAdded) (e.currentTarget as HTMLDivElement).style.background = '#22c55e18' }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = alreadyAdded ? '#22c55e11' : 'transparent' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = alreadyAdded ? '#22c55e28' : '#22c55e10' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = alreadyAdded ? '#22c55e18' : 'transparent' }}
                         >
-                          <div style={{ fontSize: 11, color: tokens.textPrimary }}>{c.DEPARTMENT}</div>
+                          <div style={{ fontSize: 13, color: alreadyAdded ? '#22c55e' : tokens.cardBorder, lineHeight: 1, textAlign: 'center' }}>
+                            {alreadyAdded ? '✓' : '○'}
+                          </div>
+                          <div style={{ fontSize: 11, color: alreadyAdded ? '#4ade80' : tokens.textPrimary, fontWeight: alreadyAdded ? 600 : 400 }}>{c.DEPARTMENT}</div>
                           <div style={{ fontSize: 11, color: tokens.textSecondary }}>{c.DISPLAY_TYPE}</div>
                           <div style={{ fontSize: 11, color: tokens.textSecondary }}>{c.ARTICLE_NAME}</div>
                           <div style={{ fontSize: 11, color: '#22c55e' }}>₹{c.MRP}</div>
@@ -455,7 +484,7 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
                     <span style={{ fontSize: 10, color: tokens.textMuted }}>
-                      {filteredCand.length} of {candidates.length} shown · Click a row to add it below
+                      {filteredCand.length === candidates.length ? `${candidates.length} total` : `${filteredCand.length} of ${candidates.length} filtered`} · ✓ = selected (click to toggle)
                     </span>
                     <button onClick={() => {
                       const csv = ['DEPARTMENT,DISPLAY_TYPE,ARTICLE_NAME,MRP',

@@ -24,6 +24,7 @@ type SortMode   = 'fill_rate' | 'combined_req' | 'festive_req'
 interface ItemMasterStatus { ready: boolean; rows: number; cached_at: string | null }
 interface BaseResult { rows: number; columns: string[]; elapsed_ms: number; sample: Record<string, unknown>[] }
 interface DistResult {
+  ol_held_count?: number
   rows: number; elapsed_ms: number; max_round: number
   total_allocated: number; stores_covered: number
   icodes_total: number; icodes_fully_covered: number
@@ -145,15 +146,15 @@ function StatusBadge({ ready }: { ready: boolean }) {
   )
 }
 
-// ── sessionStorage helpers ─────────────────────────────────────────────────────
+// ── localStorage helpers (survives hard refresh) ───────────────────────────────
 const SS_KEY = 'ck_dist_state'
 function ssLoad<T>(field: string, fallback: T): T {
-  try { const v = JSON.parse(sessionStorage.getItem(SS_KEY) ?? '{}'); return v[field] ?? fallback } catch { return fallback }
+  try { const v = JSON.parse(localStorage.getItem(SS_KEY) ?? '{}'); return v[field] ?? fallback } catch { return fallback }
 }
 function ssSave(patch: Record<string, unknown>) {
   try {
-    const cur = JSON.parse(sessionStorage.getItem(SS_KEY) ?? '{}')
-    sessionStorage.setItem(SS_KEY, JSON.stringify({ ...cur, ...patch }))
+    const cur = JSON.parse(localStorage.getItem(SS_KEY) ?? '{}')
+    localStorage.setItem(SS_KEY, JSON.stringify({ ...cur, ...patch }))
   } catch {}
 }
 
@@ -202,6 +203,9 @@ export default function DistributionModel() {
   }, [])
 
   const [imStatus,    setImStatus]    = useState<ItemMasterStatus | null>(null)
+  const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
+  const [olDownloading, setOlDownloading] = useState(false)
+  const [applyOL,     setApplyOL]     = useState(() => ssLoad('applyOL', false))
 
   const [baseLoading, setBaseLoading] = useState(false)
   const [baseResult,  setBaseResult]  = useState<BaseResult | null>(null)
@@ -261,12 +265,22 @@ export default function DistributionModel() {
     } catch { /* silent */ }
   }, [])
 
+  const fetchOlStatus = useCallback(async () => {
+    try {
+      const d = await apiFetch<{ready: boolean; rows: number; cached_at?: string}>('GET', '/distribution/option-listing/status')
+      setOlStatus(d)
+    } catch { /* silent */ }
+  }, [])
+
   useEffect(() => {
     fetchImStatus()
+    fetchOlStatus()
     apiFetch<{ready: boolean}>('GET', '/distribution/base/status')
       .then(d => setBaseCacheReady(d.ready))
       .catch(() => {})
-  }, [fetchImStatus])
+  }, [fetchImStatus, fetchOlStatus])
+
+  useEffect(() => { ssSave({ applyOL }) }, [applyOL])
 
   const buildBase = async () => {
     setBaseLoading(true); setBaseMsg(null); setBaseResult(null)
@@ -301,7 +315,7 @@ export default function DistributionModel() {
     try {
       const res = await http.post<{ success: boolean; data: DistResult; message: string | null }>(
         `/distribution/distribute`,
-        { wh_col: 'wh_q', max_round: maxRound, hold_rules: holdRules },
+        { wh_col: 'wh_q', max_round: maxRound, hold_rules: holdRules, apply_option_listing: applyOL },
         { timeout: 300_000 }
       )
       if (!res.data.success) throw new Error(res.data.message ?? 'API error')
@@ -615,6 +629,43 @@ export default function DistributionModel() {
               (1–20 rounds; Round 1 = art_grid, Round 2+ = +1/store)
             </span>
           </div>
+          {/* ── Option Listing Rule ────────────────────────────────────────── */}
+          <div style={{ background: tokens.cardBg, border: `1px solid ${applyOL ? '#8b5cf6' : tokens.border}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: applyOL ? 10 : 0 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1 }}>
+                <input type="checkbox" checked={applyOL} onChange={e => setApplyOL(e.target.checked)}
+                  style={{ width: 15, height: 15, accentColor: '#8b5cf6', cursor: 'pointer' }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: applyOL ? '#a78bfa' : tokens.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Option Listing Filter
+                </span>
+                <span style={{ fontSize: 10, color: tokens.textMuted }}>PREWINTER · LT WINTER — T_CLR_CONCEPT_AW26_V1</span>
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {olStatus?.ready
+                  ? <span style={{ fontSize: 10, color: '#4ade80' }}>✓ {olStatus.rows.toLocaleString('en-IN')} rows</span>
+                  : <span style={{ fontSize: 10, color: '#f87171' }}>✗ Not cached</span>}
+                <button
+                  onClick={async () => {
+                    setOlDownloading(true)
+                    try {
+                      await apiFetch('POST', '/distribution/option-listing/download')
+                      await fetchOlStatus()
+                    } catch { /* silent */ } finally { setOlDownloading(false) }
+                  }}
+                  disabled={olDownloading}
+                  style={{ ...S.btn('#7c3aed'), padding: '3px 10px', fontSize: 11 }}
+                >
+                  {olDownloading ? '…' : '↓ Refresh'}
+                </button>
+              </div>
+            </div>
+            {applyOL && (
+              <div style={{ fontSize: 11, color: tokens.textMuted, paddingLeft: 23 }}>
+                Stores × concept_new not in YES list → <span style={{ color: '#f87171' }}>Final Alloc = 0</span> · Remark: <em>HOLD FOR OPTION_LISTING NO</em>
+              </div>
+            )}
+          </div>
+
           {/* ── Hold Rules UI ─────────────────────────────────────────────── */}
           <div style={{ background: tokens.cardBg, border: `1px solid ${tokens.border}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -701,6 +752,7 @@ export default function DistributionModel() {
                   { label: 'Stores Covered',      val: distResult.stores_covered.toLocaleString('en-IN') },
                   { label: 'Barcodes Total',      val: distResult.icodes_total },
                   { label: 'Fully Covered',       val: distResult.icodes_fully_covered },
+                  ...(distResult.ol_held_count ? [{ label: 'OL Hold',  val: distResult.ol_held_count.toLocaleString('en-IN') }] : []),
                   { label: 'Time',                val: `${Math.round(distResult.elapsed_ms / 1000)}s` },
                 ].map(stat => (
                   <div key={stat.label}>

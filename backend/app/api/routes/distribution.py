@@ -36,7 +36,9 @@ SELECT DISTINCT
     ICODE,
     OPTION_LEVEL,
     ALLOCATION_OPTION,
-    SZ_GRP
+    SZ_GRP,
+    ATTRIBUTE1,
+    CONCEPT_NEW
 FROM REPORT.V_ITEM_MASTER
 WHERE ICODE IS NOT NULL
 """
@@ -127,6 +129,78 @@ async def download_item_master():
     except Exception as exc:
         logger.exception("item_master download error")
         return APIResponse.fail(message=str(exc))
+
+
+# ── Option Listing (T_CLR_CONCEPT_AW26_V1) endpoints ──────────────────────────
+
+_OL_OWNER = "REPORT"
+_OL_OBJ   = "T_CLR_CONCEPT_AW26_V1"
+_OL_ATTR1_SCOPE = {"LT WINTER", "PREWINTER"}
+
+_OL_SQL = """
+SELECT DISTINCT STORE, CONCEPT_NEW, LIST_TAG
+FROM REPORT.T_CLR_CONCEPT_AW26_V1
+WHERE LIST_TAG IS NOT NULL
+"""
+
+
+@router.get("/option-listing/status", response_model=APIResponse)
+async def option_listing_status():
+    """Return cache status of REPORT.T_CLR_CONCEPT_AW26_V1 parquet."""
+    _require_oracle()
+    try:
+        ready = has_output(_OL_OWNER, _OL_OBJ)
+        meta  = get_meta(_OL_OWNER, _OL_OBJ) if ready else {}
+        return APIResponse.ok(data={
+            "ready":     ready,
+            "rows":      meta.get("rows", 0),
+            "cached_at": meta.get("cached_at"),
+        })
+    except Exception as exc:
+        logger.error("option_listing_status: %s", exc)
+        return APIResponse.fail(message=str(exc))
+
+
+@router.post("/option-listing/download", response_model=APIResponse)
+async def download_option_listing():
+    """Fetch REPORT.T_CLR_CONCEPT_AW26_V1 from Oracle and cache to parquet."""
+    _require_oracle()
+    try:
+        from app.db.oracle import get_pool
+        t0 = time.perf_counter()
+        pool = get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.execute(_OL_SQL)
+                cols = [c[0].lower() for c in cur.description]
+                rows = cur.fetchall()
+        df = pd.DataFrame(rows, columns=cols)
+        write_cache(_OL_OWNER, _OL_OBJ, df)
+        elapsed = round((time.perf_counter() - t0) * 1000, 1)
+        yes_count = int((df["list_tag"].str.upper() == "YES").sum()) if "list_tag" in df.columns else 0
+        logger.info("option_listing download: %d rows (%d YES) in %.0fms", len(df), yes_count, elapsed)
+        return APIResponse.ok(data={
+            "rows":       len(df),
+            "yes_count":  yes_count,
+            "elapsed_ms": elapsed,
+        })
+    except Exception as exc:
+        logger.exception("option_listing download error")
+        return APIResponse.fail(message=str(exc))
+
+
+def _load_option_listing_set() -> set | None:
+    """Load (store, concept_new) YES set from cache. Returns None if not cached."""
+    if not has_output(_OL_OWNER, _OL_OBJ):
+        return None
+    try:
+        ol = read_cache(_OL_OWNER, _OL_OBJ)
+        ol.columns = [c.lower() for c in ol.columns]
+        yes = ol[ol["list_tag"].str.upper() == "YES"][["store", "concept_new"]].drop_duplicates()
+        return set(zip(yes["store"].astype(str).str.strip(), yes["concept_new"].astype(str).str.strip()))
+    except Exception as exc:
+        logger.warning("_load_option_listing_set: %s", exc)
+        return None
 
 
 # ── Distribution Base builder ──────────────────────────────────────────────────
@@ -263,7 +337,15 @@ async def build_distribution_base(
         im = _load("REPORT", "V_ITEM_MASTER")
         if im is not None:
             im.columns = [c.lower() for c in im.columns]
-            im_sub = im[["icode", "option_level", "allocation_option", "sz_grp"]].drop_duplicates("icode")
+            cols = ["icode", "option_level", "allocation_option", "sz_grp"]
+            extras = []
+            for extra in ["attribute1", "concept_new"]:
+                if extra in im.columns:
+                    cols.append(extra)
+                    extras.append(extra)
+            im_sub = im[cols].drop_duplicates("icode")
+            # drop any existing extras from base to avoid _x/_y suffix conflict
+            base = base.drop(columns=[c for c in extras if c in base.columns], errors="ignore")
             base = base.merge(im_sub, on="icode", how="left")
 
         # ── 3. MC REQ (sorting only) — dept + display_type + store_name ───────
@@ -632,8 +714,10 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
             wh_col = body.wh_col
             max_round = body.max_round
             hold_rules = body.hold_rules
+            apply_option_listing = body.apply_option_listing
         else:
             hold_rules = []
+            apply_option_listing = False
 
         t0   = time.perf_counter()
         base = read_cache("DIST", "BASE")
@@ -665,6 +749,52 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
                         base.loc[held, req_col] = 0
                         base.loc[held, "mc_req"] = 0
 
+        # Join list_tag from T_CLR_CONCEPT_AW26_V1 (always, if cached)
+        ol_held_count = 0
+        if has_output(_OL_OWNER, _OL_OBJ) and "concept_new" in base.columns:
+            try:
+                ol_df = read_cache(_OL_OWNER, _OL_OBJ)
+                ol_df.columns = [c.lower() for c in ol_df.columns]
+                ol_df["store"] = ol_df["store"].astype(str).str.strip()
+                ol_df["concept_new"] = ol_df["concept_new"].astype(str).str.strip()
+                # keep one list_tag per store×concept_new (YES wins over NO)
+                ol_df["_rank"] = ol_df["list_tag"].str.upper().map({"YES": 0, "NO": 1}).fillna(2)
+                ol_tag = (ol_df.sort_values("_rank")
+                          .drop_duplicates(subset=["store", "concept_new"])
+                          [["store", "concept_new", "list_tag"]])
+                base["_store_key"] = base["store_name"].astype(str).str.strip()
+                base["_concept_key"] = base["concept_new"].astype(str).str.strip()
+                base = base.merge(
+                    ol_tag.rename(columns={"store": "_store_key", "concept_new": "_concept_key"}),
+                    on=["_store_key", "_concept_key"], how="left"
+                )
+                base.drop(columns=["_store_key", "_concept_key"], inplace=True)
+            except Exception as exc:
+                logger.warning("list_tag join failed: %s", exc)
+
+        # Apply Option Listing hold — PREWINTER/LT WINTER × store×concept_new
+        if apply_option_listing:
+            ol_yes_set = _load_option_listing_set()
+            if ol_yes_set is not None and "attribute1" in base.columns and "concept_new" in base.columns:
+                req_col = "dist_req" if "dist_req" in base.columns else None
+                attr1_in_scope = base["attribute1"].str.upper().isin(_OL_ATTR1_SCOPE)
+                in_yes = pd.Series(
+                    [(str(s).strip(), str(c).strip()) in ol_yes_set
+                     for s, c in zip(base["store_name"], base["concept_new"])],
+                    index=base.index, dtype=bool
+                )
+                ol_hold_mask = attr1_in_scope & ~in_yes
+                ol_held_count = int(ol_hold_mask.sum())
+                if req_col and ol_held_count:
+                    base.loc[ol_hold_mask, req_col] = 0
+                    base.loc[ol_hold_mask, "mc_req"] = 0
+                    if "reason_not_allocated" not in base.columns:
+                        base["reason_not_allocated"] = ""
+                    base.loc[ol_hold_mask, "reason_not_allocated"] = "HOLD FOR OPTION_LISTING NO"
+                logger.info("Option listing hold: %d rows held (attr1 in scope & not in YES list)", ol_held_count)
+            else:
+                logger.warning("Option listing hold requested but cache not ready or columns missing")
+
         max_round = max(1, min(max_round, 20))  # clamp 1-20
         result    = _run_distribution_loop_v2(base, wh_col=wh_col, max_round=max_round)
         elapsed   = round((time.perf_counter() - t0) * 1000, 1)
@@ -688,6 +818,8 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
             "store_name", "store_grade", "icode", "wh_q", "desc4",
             # product
             "department", "display_type", "article_name", "mrp", "cat4", "cat2",
+            # item master extras
+            "attribute1", "concept_new", "list_tag",
             # option
             "option_level", "allocation_option",
             # req inputs
@@ -722,6 +854,7 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
             "stores_covered":         stores_covered,
             "icodes_total":           icodes_total,
             "icodes_fully_covered":   int(fully_covered),
+            "ol_held_count":          ol_held_count,
             "columns":                avail,
             "sample":                 sample_df.to_dict(orient="records"),
         })
@@ -760,6 +893,7 @@ def _build_export_cols(max_round: int) -> list:
     cols = [
         "store_name", "store_grade", "icode", "wh_q", "desc4",
         "department", "display_type", "article_name", "mrp", "cat4", "cat2",
+        "attribute1", "concept_new", "list_tag",
         "option_level", "allocation_option",
         "dist_req", "mc_req", "art_req", "mrp_req", "sz_req", "sparky_req", "option_req",
         "mc_fill_rate", "sorting_rank", "art_grid", "max_grid",

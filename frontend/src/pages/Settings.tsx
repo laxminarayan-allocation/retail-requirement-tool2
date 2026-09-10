@@ -4,9 +4,10 @@
  * Operational control panel: system health, cache management,
  * Oracle pool state, run store metrics, and environment info.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import http from '@/api/http'
+import { useAuth, hasRole } from '@/context/AuthContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -402,6 +403,243 @@ function QuickLinksCard() {
   )
 }
 
+// ── Version entry types ───────────────────────────────────────────────────────
+
+type VersionEntry = {
+  id: string; version: string; date: string; type: string
+  title: string; desc: string; released: boolean; added_by: string
+}
+
+const TYPE_META: Record<string, { label: string; bg: string; color: string }> = {
+  feature:     { label: '✦ NEW',         bg: '#1e3a5f', color: '#38bdf8' },
+  fix:         { label: '✓ FIX',         bg: '#1c2e1c', color: '#4ade80' },
+  improvement: { label: '↑ IMPROVEMENT', bg: '#2d1f00', color: '#fbbf24' },
+  breaking:    { label: '⚠ BREAKING',    bg: '#3b0a0a', color: '#f87171' },
+}
+
+function VersionControlCard() {
+  const { user } = useAuth()
+  const isAdmin = user && hasRole(user, 'admin')
+  const [versions, setVersions] = useState<VersionEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formMsg, setFormMsg] = useState('')
+  const formRef = useRef<HTMLFormElement>(null)
+
+  const [form, setForm] = useState({
+    version: '', date: new Date().toISOString().slice(0, 10),
+    type: 'feature', title: '', desc: '', released: true,
+  })
+
+  async function fetchVersions() {
+    setLoading(true)
+    try {
+      const res = await http.get<{ success: boolean; data: { versions: VersionEntry[] } }>('/versions')
+      if (res.data.success) setVersions(res.data.data.versions)
+    } catch { /* silent */ }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchVersions() }, [])
+
+  async function handleSyncGit() {
+    setSaving(true); setFormMsg('')
+    try {
+      const res = await http.post<{ success: boolean; message: string; data: { added: number } }>('/versions/sync-git', { limit: 50 })
+      setFormMsg(res.data.success ? `✓ ${res.data.message}` : (res.data.message || 'Sync failed'))
+      if (res.data.success) await fetchVersions()
+    } catch { setFormMsg('Sync error — backend check karo') }
+    finally { setSaving(false) }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.version || !form.title) return
+    setSaving(true); setFormMsg('')
+    try {
+      const res = await http.post<{ success: boolean; message: string }>('/versions', form)
+      if (res.data.success) {
+        setFormMsg('✓ Added successfully')
+        setForm({ version: '', date: new Date().toISOString().slice(0, 10), type: 'feature', title: '', desc: '', released: true })
+        setShowForm(false)
+        await fetchVersions()
+      } else {
+        setFormMsg(res.data.message || 'Failed')
+      }
+    } catch { setFormMsg('Error saving entry') }
+    finally { setSaving(false) }
+  }
+
+  async function toggleRelease(entry: VersionEntry) {
+    try {
+      await http.patch(`/versions/${entry.id}`, { released: !entry.released })
+      await fetchVersions()
+    } catch { /* silent */ }
+  }
+
+  async function handleDelete(entry: VersionEntry) {
+    if (!confirm(`Delete version entry "${entry.version} — ${entry.title}"?`)) return
+    try {
+      await http.delete(`/versions/${entry.id}`)
+      await fetchVersions()
+    } catch { /* silent */ }
+  }
+
+  const typeMeta = (t: string) => TYPE_META[t] || TYPE_META['feature']
+
+  return (
+    <div style={{ ...S.card, gridColumn: '1 / -1' }}>
+      <div style={S.cardHead}>
+        <span style={S.cardTitle}>📋 Version Control — Changelog</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            {versions.length} entries
+          </span>
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                style={{ ...S.btnBlue, background: '#0f766e', fontSize: 11 }}
+                onClick={handleSyncGit}
+                disabled={saving}
+                title="Git commits se auto entries banao"
+              >
+                {saving ? 'Syncing…' : '🔄 Sync from Git'}
+              </button>
+              <button
+                style={{ ...S.btnBlue, background: showForm ? '#475569' : '#0ea5e9' }}
+                onClick={() => { setShowForm(v => !v); setFormMsg('') }}
+              >
+                {showForm ? '✕ Cancel' : '+ Add Entry'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add form — admin only */}
+      {isAdmin && showForm && (
+        <form ref={formRef} onSubmit={handleAdd} style={{
+          padding: '12px 14px', borderBottom: '1px solid var(--card-border)',
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
+          background: '#0f1923',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>VERSION *</label>
+            <input
+              style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, padding: '5px 8px', fontSize: 12, color: 'var(--text-primary)' }}
+              placeholder="e.g. 1.4.0" value={form.version}
+              onChange={e => setForm(f => ({ ...f, version: e.target.value }))} required
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>DATE</label>
+            <input
+              type="date"
+              style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, padding: '5px 8px', fontSize: 12, color: 'var(--text-primary)' }}
+              value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>TYPE</label>
+            <select
+              style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, padding: '5px 8px', fontSize: 12, color: 'var(--text-primary)' }}
+              value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+            >
+              <option value="feature">Feature / New</option>
+              <option value="fix">Bug Fix</option>
+              <option value="improvement">Improvement</option>
+              <option value="breaking">Breaking Change</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>RELEASED?</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <input type="checkbox" checked={form.released} onChange={e => setForm(f => ({ ...f, released: e.target.checked }))} />
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{form.released ? 'Yes — visible to all' : 'No — draft only'}</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>TITLE *</label>
+            <input
+              style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, padding: '5px 8px', fontSize: 12, color: 'var(--text-primary)' }}
+              placeholder="Short title of this change" value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>DESCRIPTION</label>
+            <textarea
+              style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 5, padding: '6px 8px', fontSize: 11, color: 'var(--text-primary)', resize: 'vertical', minHeight: 60 }}
+              placeholder="Detailed description of what changed..." value={form.desc}
+              onChange={e => setForm(f => ({ ...f, desc: e.target.value }))}
+            />
+          </div>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="submit" style={{ ...S.btnBlue }} disabled={saving}>
+              {saving ? 'Saving…' : '💾 Save Entry'}
+            </button>
+            {formMsg && <span style={{ fontSize: 11, color: formMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{formMsg}</span>}
+          </div>
+        </form>
+      )}
+
+      {/* Entries list */}
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 480, overflowY: 'auto' }}>
+        {loading && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</span>}
+        {!loading && versions.length === 0 && (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>No entries yet.</span>
+        )}
+        {versions.map(entry => {
+          const tm = typeMeta(entry.type)
+          return (
+            <div key={entry.id} style={{
+              display: 'flex', gap: 10, padding: '9px 10px',
+              background: 'var(--content-bg)', borderRadius: 6, alignItems: 'flex-start',
+              border: entry.released ? '1px solid var(--card-border)' : '1px dashed #334155',
+              opacity: entry.released ? 1 : 0.65,
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: tm.bg, color: tm.color, letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                  {tm.label}
+                </span>
+                <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600 }}>v{entry.version}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  {entry.title}
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>{entry.date}</span>
+                  {!entry.released && <span style={{ fontSize: 9, color: '#f59e0b', marginLeft: 6, background: '#2d1f00', padding: '1px 5px', borderRadius: 3 }}>DRAFT</span>}
+                </div>
+                {entry.desc && <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{entry.desc}</div>}
+                <div style={{ fontSize: 9, color: '#334155', marginTop: 3 }}>by {entry.added_by}</div>
+              </div>
+              {isAdmin && (
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button
+                    onClick={() => toggleRelease(entry)}
+                    title={entry.released ? 'Mark as Draft' : 'Release'}
+                    style={{ background: 'none', border: '1px solid var(--card-border)', borderRadius: 4, padding: '2px 7px', fontSize: 9, color: entry.released ? '#f59e0b' : '#4ade80', cursor: 'pointer' }}
+                  >
+                    {entry.released ? 'Unpublish' : 'Release'}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(entry)}
+                    title="Delete"
+                    style={{ background: 'none', border: '1px solid #334155', borderRadius: 4, padding: '2px 6px', fontSize: 9, color: '#f87171', cursor: 'pointer' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -460,6 +698,61 @@ export default function Settings() {
     }
   }
 
+  async function handleRestartBackend() {
+    if (!confirm('Backend restart karega — 5-10 seconds ke liye disconnect hoga. Continue?')) return
+    setActionPending('restart-backend')
+    setActionMsg(null)
+    try {
+      await http.post('/system/restart-backend')
+      setActionMsg('Backend restart ho raha hai… 10 seconds mein page refresh karo.')
+    } catch {
+      setActionMsg('Restart signal bhej diya — reconnect karein.')
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  async function handleBuildFrontend() {
+    setActionPending('build-frontend')
+    setActionMsg('Frontend build chal raha hai… (~30-60s)')
+    try {
+      const res = await http.post<{ success: boolean; message: string }>('/system/build-frontend', {}, { timeout: 150_000 })
+      setActionMsg(res.data.message ?? 'Build done. Mobile refresh karo.')
+    } catch {
+      setActionMsg('Build failed — backend logs check karo.')
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  async function handleGitPush() {
+    if (!confirm('Changes commit karke git push karega. Continue?')) return
+    setActionPending('git-push')
+    setActionMsg('Git push ho raha hai…')
+    try {
+      const res = await http.post<{ success: boolean; message: string }>('/system/git/push', {}, { timeout: 90_000 })
+      setActionMsg(res.data.message ?? 'Push done.')
+    } catch (e: any) {
+      setActionMsg('Push failed: ' + (e?.response?.data?.message || 'network error'))
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  async function handleGitPull() {
+    if (!confirm('Git pull karega — latest changes server se ayenge. Continue?')) return
+    setActionPending('git-pull')
+    setActionMsg('Git pull ho raha hai…')
+    try {
+      const res = await http.post<{ success: boolean; message: string }>('/system/git/pull', {}, { timeout: 90_000 })
+      setActionMsg(res.data.message ?? 'Pull done.')
+    } catch (e: any) {
+      setActionMsg('Pull failed: ' + (e?.response?.data?.message || 'network error'))
+    } finally {
+      setActionPending(null)
+    }
+  }
+
   return (
     <div style={S.page}>
       {/* Header */}
@@ -506,6 +799,54 @@ export default function Settings() {
         <BrowserCacheCard />
         <RecommendationsCard status={status} />
         <QuickLinksCard />
+
+        {/* ── Version Control / Changelog ─────────────────────────────── */}
+        <VersionControlCard />
+
+        {/* ── Server Control ───────────────────────────────────────────── */}
+        <div style={{ ...S.card, gridColumn: '1 / -1' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={S.cardTitle}>🔧 Server Control</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              style={{ ...S.btnRed, background: '#b45309' }}
+              onClick={handleRestartBackend}
+              disabled={!!actionPending}
+            >
+              {actionPending === 'restart-backend' ? 'Restarting…' : '↺ Restart Backend'}
+            </button>
+            <button
+              style={{ ...S.btnBlue, background: '#0f766e' }}
+              onClick={handleBuildFrontend}
+              disabled={!!actionPending}
+            >
+              {actionPending === 'build-frontend' ? 'Building…' : '⚙ Build Frontend (Mobile Update)'}
+            </button>
+            <button
+              style={{ ...S.btnBlue, background: '#1d4ed8' }}
+              onClick={handleGitPush}
+              disabled={!!actionPending}
+            >
+              {actionPending === 'git-push' ? 'Pushing…' : '⬆ Push to Git'}
+            </button>
+            <button
+              style={{ ...S.btnBlue, background: '#6d28d9' }}
+              onClick={handleGitPull}
+              disabled={!!actionPending}
+            >
+              {actionPending === 'git-pull' ? 'Pulling…' : '⬇ Pull / Upgrade'}
+            </button>
+            {actionMsg && (
+              <span style={{ fontSize: 12, color: actionMsg.includes('fail') || actionMsg.includes('Failed') ? '#f87171' : '#4ade80', marginLeft: 4 }}>
+                {actionMsg}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+            Restart Backend — uvicorn restart hoga (5–10s). Build Frontend — npm run build chalega. Push to Git — changes commit + push. Pull/Upgrade — latest code fetch karega.
+          </div>
+        </div>
       </div>
     </div>
   )

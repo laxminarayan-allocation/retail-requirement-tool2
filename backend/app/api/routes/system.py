@@ -6,6 +6,10 @@ POST /api/system/cache/invalidate — flush Oracle data caches
 POST /api/system/cache/warmup    — trigger background cache preload
 """
 import logging
+import os
+import signal
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -222,3 +226,113 @@ async def warmup_caches():
         message="Cache warmup started in background. Poll GET /api/system/status to check progress.",
         data={"started": True},
     )
+
+
+# ── Server control endpoints ───────────────────────────────────────────────────
+
+_FRONTEND_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "frontend")
+)
+
+_REPO_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+)
+
+
+@router.post("/restart-backend", response_model=APIResponse)
+async def restart_backend():
+    """Restart the uvicorn backend process (sends SIGTERM; watchdog restarts it)."""
+    def _do_restart():
+        time.sleep(0.5)  # let response reach client first
+        os.kill(os.getpid(), signal.SIGTERM)
+    threading.Thread(target=_do_restart, daemon=True).start()
+    return APIResponse.ok(message="Backend restarting… reconnect in a few seconds.")
+
+
+@router.post("/build-frontend", response_model=APIResponse)
+async def build_frontend():
+    """Run npm run build in the frontend directory (updates mobile dist/)."""
+    if not os.path.isdir(_FRONTEND_DIR):
+        return APIResponse.fail(message=f"Frontend dir not found: {_FRONTEND_DIR}")
+    try:
+        t0 = time.perf_counter()
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=_FRONTEND_DIR,
+            capture_output=True, text=True, timeout=120,
+            shell=True
+        )
+        elapsed = round(time.perf_counter() - t0, 1)
+        if result.returncode == 0:
+            return APIResponse.ok(message=f"Frontend build successful ({elapsed}s)", data={"elapsed_s": elapsed})
+        else:
+            return APIResponse.fail(message=f"Build failed: {result.stderr[-500:] if result.stderr else 'unknown error'}")
+    except subprocess.TimeoutExpired:
+        return APIResponse.fail(message="Build timed out (>120s)")
+    except Exception as exc:
+        logger.exception("build_frontend error")
+        return APIResponse.fail(message=str(exc))
+
+
+@router.post("/git/push", response_model=APIResponse)
+async def git_push():
+    """Stage all changes, commit with auto message, and push to remote."""
+    from fastapi import Request as _Req
+    try:
+        # Check if there are any changes
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=_REPO_ROOT, capture_output=True, text=True, timeout=15, shell=True
+        )
+        has_changes = bool(status.stdout.strip())
+
+        if has_changes:
+            # Stage all
+            subprocess.run(["git", "add", "-A"], cwd=_REPO_ROOT, timeout=15, shell=True)
+            # Commit
+            from datetime import date
+            msg = f"chore: auto-commit via Settings panel ({date.today()})"
+            commit = subprocess.run(
+                ["git", "commit", "-m", msg],
+                cwd=_REPO_ROOT, capture_output=True, text=True, timeout=15, shell=True
+            )
+            if commit.returncode != 0 and "nothing to commit" not in commit.stdout:
+                return APIResponse.fail(message=f"Commit failed: {commit.stderr[-300:]}")
+
+        # Push
+        push = subprocess.run(
+            ["git", "push"],
+            cwd=_REPO_ROOT, capture_output=True, text=True, timeout=60, shell=True
+        )
+        if push.returncode == 0:
+            return APIResponse.ok(
+                message="Push successful" + (" (with new commit)" if has_changes else " (already up-to-date)"),
+                data={"pushed": True, "committed": has_changes}
+            )
+        else:
+            return APIResponse.fail(message=f"Push failed: {push.stderr[-400:] or push.stdout[-400:]}")
+    except subprocess.TimeoutExpired:
+        return APIResponse.fail(message="Git operation timed out.")
+    except Exception as exc:
+        logger.exception("git_push error")
+        return APIResponse.fail(message=str(exc))
+
+
+@router.post("/git/pull", response_model=APIResponse)
+async def git_pull():
+    """Pull latest changes from remote (git pull)."""
+    try:
+        result = subprocess.run(
+            ["git", "pull"],
+            cwd=_REPO_ROOT, capture_output=True, text=True, timeout=60, shell=True
+        )
+        if result.returncode == 0:
+            output = result.stdout.strip() or "Already up to date."
+            return APIResponse.ok(message=f"Pull successful: {output[:200]}", data={"output": output})
+        else:
+            return APIResponse.fail(message=f"Pull failed: {result.stderr[-400:]}")
+    except subprocess.TimeoutExpired:
+        return APIResponse.fail(message="Git pull timed out.")
+    except Exception as exc:
+        logger.exception("git_pull error")
+        return APIResponse.fail(message=str(exc))

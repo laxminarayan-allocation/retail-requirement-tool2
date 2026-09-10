@@ -1,0 +1,712 @@
+
+> retail-requirement-tool@1.0.0 dev
+> vite --host
+
+
+  VITE v5.4.21  ready in 353 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://100.98.44.98:5173/
+  ➜  Network: http://10.0.0.59:5173/
+  ➜  press h + enter to show help
+11:14:09 am [vite] warning: Duplicate key "background" in object literal
+745|              borderLeft: `2px solid ${selected === q.name ? tokens.accent : 'transparent'}`,
+746|              padding: '8px 14px', cursor: 'pointer',
+747|              background: selected === q.name ? tokens.accentBg : 'transparent'
+   |              ^
+748|            } as any}>
+749|                <div style={{ fontSize: 12, fontWeight: 600, color: selected === q.name ? tokens.textPrimary : tokens.textSecondary }}>{q.name}</div>
+
+  Plugin: vite:esbuild
+  File: C:/Users/allocation_user/Desktop/Projects/SS27/retail_requirement_tool/frontend/src/pages/OptionListing.tsx
+4:01:43 pm [vite] hmr update /src/pages/Settings.tsx
+4:02:02 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/dashboard/summary
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/session/heartbeat
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/session/heartbeat
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/dashboard/allocation-summary
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/session/heartbeat
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/notifications/mine
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:02 pm [vite] http proxy error: /api/dashboard/allocation-detail?icodes=&page=0&limit=500
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:02:07 pm [vite] hmr update /src/pages/Settings.tsx
+4:04:30 pm [vite] http proxy error: /api/dashboard/summary
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:04:30 pm [vite] http proxy error: /api/system/restart-backend
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:04:30 pm [vite] http proxy error: /api/health/ready
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:04:30 pm [vite] http proxy error: /api/system/status
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:07:06 pm [vite] http proxy error: /api/notifications/mine
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:07:06 pm [vite] http proxy error: /api/auth/active-sessions
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:07:06 pm [vite] http proxy error: /api/dashboard/summary
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:07:06 pm [vite] http proxy error: /api/dashboard/allocation-summary
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:07:06 pm [vite] http proxy error: /api/dashboard/allocation-detail?icodes=&page=0&limit=500
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+4:07:21 pm [vite] hmr update /src/pages/LoginPage.tsx
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/signin
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/my-page-access
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:51 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/notifications/mine
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/master/divisions
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/req/filter_meta
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/store-list
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/item-master/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/option-listing/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/base/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/notifications/mine
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/master/divisions
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/req/filter_meta
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/store-list
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/item-master/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/option-listing/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/base/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/notifications/mine
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/me
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/session/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/master/divisions
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/notifications/mine
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/req/filter_meta
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/base/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/store-list
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/option-listing/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/item-master/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/notifications/mine
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/master/divisions
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/req/filter_meta
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/base/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/store-list
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/item-master/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/distribution/option-listing/status
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/my-page-access
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)
+5:18:52 pm [vite] http proxy error: /api/auth/my-page-access
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1193:18)
+    at afterConnectMultiple (node:net:1783:7)

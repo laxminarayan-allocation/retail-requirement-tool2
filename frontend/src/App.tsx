@@ -23,9 +23,11 @@ import Simulation from '@/pages/Simulation'
 import OptionListing from '@/pages/OptionListing'
 import OracleRefreshPage from '@/pages/OracleRefreshPage'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
+import { ZoomProvider } from '@/context/ZoomContext'
 
 export default function App() {
   return (
+    <ZoomProvider>
     <DisplayProvider>
     <ThemeProvider>
     <AuthProvider>
@@ -59,5 +61,6 @@ export default function App() {
     </AuthProvider>
     </ThemeProvider>
     </DisplayProvider>
+    </ZoomProvider>
   )
 }

@@ -29,7 +29,7 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/distribution', label: 'Distribution',      icon: '🔀', minRole: 'planner' },
   { to: '/simulation',   label: 'Simulation',        icon: '🧮', minRole: 'planner' },
   { to: '/option-listing', label: 'Option Listing', icon: '🗂️', minRole: 'planner' },
-  { to: '/results',    label: 'Results',          icon: '📋', minRole: 'viewer'  },
+  { to: '/results',    label: 'Results',          icon: '📋', minRole: 'planner' },
   { to: '/warehouse',  label: 'Warehouse Inventory', icon: '🏭', minRole: 'viewer'  },
   { to: '/nso',        label: 'NSO Dashboard',    icon: '🏪', minRole: 'viewer'  },
   { to: '/sale',       label: 'Sale Dashboard',   icon: '📊', minRole: 'viewer'  },

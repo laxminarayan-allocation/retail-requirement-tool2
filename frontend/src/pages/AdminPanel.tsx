@@ -174,6 +174,11 @@ export default function AdminPanel() {
   const [expandedPageUser, setExpandedPageUser] = useState<string | null>(null)
   const [userPageAccess, setUserPageAccess] = useState<Record<string, Record<string, boolean>>>({})
   const [pageAccessSaving, setPageAccessSaving] = useState(false)
+  // Password reset modal
+  const [resetModal, setResetModal] = useState<{ userId: string; email: string; name: string } | null>(null)
+  const [resetPw, setResetPw] = useState('')
+  const [resetMsg, setResetMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [resetSaving, setResetSaving] = useState(false)
 
   const ALL_PAGES = [
     { path: '/', label: 'Dashboard', minRole: 'viewer' },
@@ -309,6 +314,21 @@ export default function AdminPanel() {
     } finally {
       setPageAccessSaving(false)
     }
+  }
+
+  async function resetPassword() {
+    if (!resetModal) return
+    if (resetPw.length < 6) { setResetMsg({ ok: false, text: 'Password must be at least 6 characters.' }); return }
+    setResetSaving(true); setResetMsg(null)
+    try {
+      const res = await axios.post('/api/auth/forgot-password', { email: resetModal.email, new_password: resetPw })
+      const msg = res.data?.message || 'Password reset successfully.'
+      setResetMsg({ ok: true, text: msg })
+      setResetPw('')
+      setTimeout(() => { setResetModal(null); setResetMsg(null) }, 2000)
+    } catch (e: any) {
+      setResetMsg({ ok: false, text: e?.response?.data?.message || 'Reset failed.' })
+    } finally { setResetSaving(false) }
   }
 
   return (
@@ -548,12 +568,20 @@ export default function AdminPanel() {
                           )}
                         </td>
                         <td style={S.td}>
-                          <button
-                            style={S.btnSm(u.is_active ? 'deny' : 'approve')}
-                            onClick={() => toggleUserActive(u.id, !u.is_active)}
-                          >
-                            {u.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            <button
+                              style={S.btnSm(u.is_active ? 'deny' : 'approve')}
+                              onClick={() => toggleUserActive(u.id, !u.is_active)}
+                            >
+                              {u.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button
+                              style={{ ...S.btnSm('neutral'), color: '#fbbf24', border: '1px solid #78350f' }}
+                              onClick={() => { setResetModal({ userId: u.id, email: u.email, name: u.full_name }); setResetPw(''); setResetMsg(null) }}
+                            >
+                              🔑 Reset PW
+                            </button>
+                          </div>
                         </td>
                         <td style={S.td}>
                           <SessionLimitCell
@@ -766,6 +794,42 @@ export default function AdminPanel() {
 
       {/* ── Access Matrix ── */}
       {tab === 'access' && <AccessMatrix />}
+
+      {/* Password Reset Modal */}
+      {resetModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) { setResetModal(null); setResetMsg(null) } }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }} />
+          <div style={{ position: 'relative', background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 24, width: 360, maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>🔑 Reset Password</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+              Setting new password for <strong style={{ color: '#94a3b8' }}>{resetModal.name}</strong>
+              <span style={{ display: 'block', fontSize: 11, color: '#475569', marginTop: 2 }}>{resetModal.email}</span>
+            </div>
+            <input
+              type="password"
+              placeholder="New password (min 6 chars)"
+              value={resetPw}
+              onChange={e => setResetPw(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') resetPassword() }}
+              style={{ width: '100%', fontSize: 13, background: '#1e293b', border: '1px solid #334155', color: '#f1f5f9', borderRadius: 6, padding: '8px 10px', boxSizing: 'border-box' as const, outline: 'none', marginBottom: 12, fontFamily: 'inherit' }}
+            />
+            {resetMsg && (
+              <div style={{ fontSize: 12, color: resetMsg.ok ? '#34d399' : '#f87171', marginBottom: 10, padding: '6px 10px', background: resetMsg.ok ? 'rgba(52,211,153,.08)' : 'rgba(248,113,113,.08)', borderRadius: 5, border: `1px solid ${resetMsg.ok ? 'rgba(52,211,153,.3)' : 'rgba(248,113,113,.3)'}` }}>
+                {resetMsg.ok ? '✓ ' : '✕ '}{resetMsg.text}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setResetModal(null); setResetMsg(null) }} style={{ fontSize: 12, padding: '6px 14px', background: 'none', color: '#64748b', border: '1px solid #334155', borderRadius: 6, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={resetPassword} disabled={resetSaving} style={{ fontSize: 12, padding: '6px 16px', background: '#b45309', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, opacity: resetSaving ? 0.6 : 1 }}>
+                {resetSaving ? 'Resetting…' : 'Set Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

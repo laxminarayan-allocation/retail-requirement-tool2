@@ -1155,7 +1155,8 @@ function DownloadedFilesPanel() {
 
       {/* Toolbar */}
       {files.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4, alignItems: 'center', padding: '4px 2px 6px', flexShrink: 0, borderBottom: '1px solid #1e293b', marginBottom: 4 }}>
+        <div style={{ overflowX: 'auto', flexShrink: 0, borderBottom: '1px solid #1e293b', marginBottom: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap' as const, gap: 4, alignItems: 'center', padding: '4px 2px 6px', minWidth: 'max-content' }}>
           {/* Select-all */}
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, userSelect: 'none' as const, marginRight: 2 }}>
             <input type="checkbox"
@@ -1222,6 +1223,7 @@ function DownloadedFilesPanel() {
             {autoRunning && <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700 }}>⟳</span>}
           </div>
         </div>
+        </div>
       )}
 
       {/* Auto-refresh log banner */}
@@ -1243,14 +1245,14 @@ function DownloadedFilesPanel() {
           <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '16px 0', textAlign: 'center' }}>No match</div>
         )}
         {filteredFiles.length > 0 && (
-          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12, tableLayout: 'fixed' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720, fontSize: 12, tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: 28 }} />
-              <col style={{ width: '34%' }} />
+              <col style={{ width: 200 }} />
               <col style={{ width: 80 }} />
               <col style={{ width: 80 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 100 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 110 }} />
               <col style={{ width: 200 }} />
             </colgroup>
             <thead style={{ position: 'sticky', top: 0, zIndex: 3 }}>

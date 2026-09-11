@@ -776,7 +776,7 @@ export default function AppLayout() {
         </div>
       )}
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', ...(isMobile ? { overflowY: 'visible', overflowX: 'hidden' } : {}) }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', ...(isMobile ? { overflowY: 'visible', overflowX: 'auto' } : {}) }}>
         <div style={{ background: tokens.topbarBg, borderBottom: `1px solid ${tokens.topbarBorder}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, color: tokens.textSecondary, gap: 8, transition: 'background 0.2s' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {isMobile ? (
@@ -876,9 +876,9 @@ export default function AppLayout() {
           </div>
         </div>
         <div style={{
-          flex: 1, padding: isMobile ? 12 : 16, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0,
+          flex: 1, padding: isMobile ? 12 : 16, overflowY: 'auto', overflowX: 'auto', display: 'flex', flexDirection: 'column', minWidth: 0,
           background: tokens.contentBg, transition: 'background 0.2s',
-          ...(isMobile ? { overflowY: 'visible', overflowX: 'hidden', flex: 'unset' } : {}),
+          ...(isMobile ? { overflowY: 'visible', overflowX: 'auto', flex: 'unset' } : {}),
         }}>
           <Outlet />
         </div>

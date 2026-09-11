@@ -113,25 +113,46 @@ const ROLE_COLOR: Record<string, string> = {
 
 // styles are now computed dynamically via theme tokens — see mkStyles() below
 
-function NavItem({ to, label, icon, reorderMode, onUp, onDown, isFirst, isLast }: {
+function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOver, onDrop, onDragEnd }: {
   to: string; label: string; icon: string
-  reorderMode?: boolean; onUp?: () => void; onDown?: () => void
-  isFirst?: boolean; isLast?: boolean
+  reorderMode?: boolean
+  dragOver?: boolean
+  onDragStart?: () => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: () => void
+  onDragEnd?: () => void
 }) {
   const { tokens } = useTheme()
   return (
-    <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+    <div
+      draggable={reorderMode}
+      onDragStart={reorderMode ? onDragStart : undefined}
+      onDragOver={reorderMode ? onDragOver : undefined}
+      onDrop={reorderMode ? onDrop : undefined}
+      onDragEnd={reorderMode ? onDragEnd : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', position: 'relative',
+        borderTop: dragOver ? `2px solid #818cf8` : '2px solid transparent',
+        transition: 'border-color 0.1s',
+      }}
+    >
+      {reorderMode && (
+        <span
+          title="Drag to reorder"
+          style={{ padding: '0 4px 0 10px', color: '#475569', fontSize: 14, cursor: 'grab', flexShrink: 0, userSelect: 'none', lineHeight: 1 }}
+        >⠿</span>
+      )}
       <NavLink
         to={to}
         end={to === '/'}
         style={({ isActive }) => ({
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: reorderMode ? '7px 8px 7px 16px' : '9px 16px',
+          padding: reorderMode ? '7px 8px 7px 4px' : '9px 16px',
           fontSize: 13, flex: 1,
           fontWeight: isActive ? 600 : 400,
           color: isActive ? tokens.navActiveColor : tokens.navInactiveColor,
           background: isActive ? tokens.navActiveBg : 'transparent',
-          borderLeft: isActive ? `3px solid ${tokens.navActiveBar}` : '3px solid transparent',
+          borderLeft: isActive && !reorderMode ? `3px solid ${tokens.navActiveBar}` : '3px solid transparent',
           textDecoration: 'none', transition: 'all 0.15s',
           pointerEvents: reorderMode ? 'none' : 'auto',
         })}
@@ -139,20 +160,6 @@ function NavItem({ to, label, icon, reorderMode, onUp, onDown, isFirst, isLast }
         <span>{icon}</span>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       </NavLink>
-      {reorderMode && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 6px', flexShrink: 0 }}>
-          <button
-            onClick={onUp} disabled={isFirst}
-            style={{ background: 'none', border: 'none', cursor: isFirst ? 'not-allowed' : 'pointer', color: isFirst ? '#334155' : '#94a3b8', fontSize: 10, lineHeight: 1, padding: '1px 4px', borderRadius: 3 }}
-            title="Move up"
-          >▲</button>
-          <button
-            onClick={onDown} disabled={isLast}
-            style={{ background: 'none', border: 'none', cursor: isLast ? 'not-allowed' : 'pointer', color: isLast ? '#334155' : '#94a3b8', fontSize: 10, lineHeight: 1, padding: '1px 4px', borderRadius: 3 }}
-            title="Move down"
-          >▼</button>
-        </div>
-      )}
     </div>
   )
 }
@@ -484,6 +491,8 @@ export default function AppLayout() {
     try { return localStorage.getItem('app_sidebarCollapsed') === '1' } catch { return false }
   })
   const [reorderMode, setReorderMode] = useState(false)
+  const dragIdxRef = useRef<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('app_nav_order')
@@ -665,10 +674,17 @@ export default function AppLayout() {
               label={item.label}
               icon={item.icon}
               reorderMode={reorderMode}
-              isFirst={idx === 0}
-              isLast={idx === visibleNav.length - 1}
-              onUp={() => moveNavItem(idx, idx - 1)}
-              onDown={() => moveNavItem(idx, idx + 1)}
+              dragOver={dragOverIdx === idx}
+              onDragStart={() => { dragIdxRef.current = idx }}
+              onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
+              onDrop={() => {
+                if (dragIdxRef.current !== null && dragIdxRef.current !== idx) {
+                  moveNavItem(dragIdxRef.current, idx)
+                }
+                dragIdxRef.current = null
+                setDragOverIdx(null)
+              }}
+              onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null) }}
             />
           ))}
         </nav>

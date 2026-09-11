@@ -1,25 +1,27 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import http from '@/api/http'
 import { useTheme } from '@/context/ThemeContext'
 
 type Row = { [key: string]: any }
 type Agg = 'sum' | 'count' | 'avg' | 'max' | 'min'
 type SortDir = 'asc' | 'desc' | null
+type NumOp = '=' | '≠' | '>' | '>=' | '<' | '<=' | 'between'
+type ColFilter =
+  | { type: 'multi'; selected: string[] }
+  | { type: 'num'; op: NumOp; val: string; val2: string }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 function toNum(v: any): number {
   if (v === null || v === undefined || v === '') return 0
   const n = Number(String(v).replace(/,/g, ''))
   return isFinite(n) ? n : 0
 }
-
 function fmt(v: any, decimals = 2): string {
   if (v === null || v === undefined || v === '') return '—'
   if (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v))))
     return Number(v).toLocaleString('en-IN', { maximumFractionDigits: decimals })
   return String(v)
 }
-
 function aggregate(vals: number[], agg: Agg): number {
   if (!vals.length) return 0
   switch (agg) {
@@ -30,17 +32,209 @@ function aggregate(vals: number[], agg: Agg): number {
     case 'min':   return Math.min(...vals)
   }
 }
-
 function cellColor(val: number, lo: number, hi: number, enabled: boolean): string | undefined {
   if (!enabled || (!lo && !hi)) return undefined
   if (hi && val >= hi) return '#14532d'
   if (lo && val <= lo) return '#450a0a'
   return '#78350f'
 }
+function isNumericCol(col: string, rows: Row[]): boolean {
+  const sample = rows.slice(0, 50).map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '')
+  if (!sample.length) return false
+  return sample.filter(v => !isNaN(Number(v))).length / sample.length > 0.7
+}
+function applyColFilter(cellVal: any, f: ColFilter): boolean {
+  if (f.type === 'multi') {
+    if (!f.selected.length) return true
+    return f.selected.includes(String(cellVal ?? ''))
+  }
+  const n = toNum(cellVal)
+  const v = parseFloat(f.val)
+  if (isNaN(v)) return true
+  const v2 = parseFloat(f.val2)
+  switch (f.op) {
+    case '=':       return n === v
+    case '≠':       return n !== v
+    case '>':       return n > v
+    case '>=':      return n >= v
+    case '<':       return n < v
+    case '<=':      return n <= v
+    case 'between': return !isNaN(v2) ? n >= v && n <= v2 : n >= v
+  }
+}
+function activeFiltersCount(filters: Record<string, ColFilter>): number {
+  return Object.values(filters).filter(f =>
+    f.type === 'multi' ? f.selected.length > 0 : f.val !== ''
+  ).length
+}
 
 const PIVOT_DIMS = ['division','section','department','article_name','sitecode','sitealias',
   'stockpoint','attribute1','cat1','cat2','cat3','cat4','cat5','sz_grp','season','partyname','item_color','item_desc','icode']
 const PIVOT_VALS = ['stock_qty','stock_v','mrp']
+const NUM_OPS: NumOp[] = ['=','≠','>','>=','<','<=','between']
+
+// ── MultiSelectDropdown ───────────────────────────────────────────────────────
+function MultiSelectDropdown({
+  col, allValues, selected, onChange, tokens,
+}: {
+  col: string; allValues: string[]; selected: string[]; onChange: (v: string[]) => void; tokens: any
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    const list = allValues.filter(v => !q || v.toLowerCase().includes(q))
+    return list.slice(0, 300)
+  }, [allValues, search])
+
+  const toggle = (v: string) => {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+  }
+
+  const label = selected.length === 0 ? col : `${col} (${selected.length})`
+  const isActive = selected.length > 0
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', padding: '3px 7px', fontSize: 11, textAlign: 'left', cursor: 'pointer',
+          background: isActive ? '#1d4ed833' : tokens.inputBg,
+          border: `1px solid ${isActive ? '#60a5fa' : tokens.inputBorder}`,
+          borderRadius: 4, color: isActive ? '#60a5fa' : tokens.textMuted,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        <span style={{ flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 999, minWidth: 200, maxWidth: 280,
+          background: '#0f172a', border: `1px solid ${tokens.cardBorder}`, borderRadius: 6,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.6)', padding: 6,
+        }}>
+          <input
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            style={{ width: '100%', boxSizing: 'border-box', padding: '4px 8px', fontSize: 11, marginBottom: 4,
+              background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 4,
+              color: tokens.inputColor, outline: 'none' }}
+          />
+          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+            <button onClick={() => onChange(allValues)} style={{ flex: 1, fontSize: 10, padding: '2px 0', background: '#1e293b', border: '1px solid #334155', borderRadius: 3, color: '#94a3b8', cursor: 'pointer' }}>All</button>
+            <button onClick={() => onChange([])} style={{ flex: 1, fontSize: 10, padding: '2px 0', background: '#1e293b', border: '1px solid #334155', borderRadius: 3, color: '#94a3b8', cursor: 'pointer' }}>None</button>
+          </div>
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {filtered.map(v => (
+              <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 4px', cursor: 'pointer', borderRadius: 3, fontSize: 11, color: tokens.textPrimary }}>
+                <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} style={{ cursor: 'pointer' }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v || '(empty)'}</span>
+              </label>
+            ))}
+            {filtered.length === 0 && <div style={{ fontSize: 11, color: tokens.textMuted, padding: 4 }}>No match</div>}
+            {allValues.length > 300 && <div style={{ fontSize: 10, color: tokens.textMuted, padding: '4px 4px 0' }}>+{allValues.length - 300} more — refine search</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── NumericFilterInput ────────────────────────────────────────────────────────
+function NumericFilterInput({
+  col, filter, onChange, tokens,
+}: {
+  col: string; filter: { op: NumOp; val: string; val2: string }; onChange: (f: { op: NumOp; val: string; val2: string }) => void; tokens: any
+}) {
+  const isActive = filter.val !== ''
+  return (
+    <div style={{ display: 'flex', gap: 3, alignItems: 'center', width: '100%' }}>
+      <select
+        value={filter.op}
+        onChange={e => onChange({ ...filter, op: e.target.value as NumOp })}
+        style={{ fontSize: 10, padding: '3px 3px', background: isActive ? '#1d4ed833' : tokens.inputBg,
+          border: `1px solid ${isActive ? '#60a5fa' : tokens.inputBorder}`, borderRadius: 4,
+          color: isActive ? '#60a5fa' : tokens.textMuted, outline: 'none', flexShrink: 0 }}
+      >
+        {NUM_OPS.map(op => <option key={op} value={op}>{op}</option>)}
+      </select>
+      <input
+        type="number"
+        value={filter.val}
+        onChange={e => onChange({ ...filter, val: e.target.value })}
+        placeholder={col}
+        style={{ flex: 1, minWidth: 0, padding: '3px 5px', fontSize: 11,
+          background: isActive ? '#1d4ed822' : tokens.inputBg,
+          border: `1px solid ${isActive ? '#60a5fa' : tokens.inputBorder}`,
+          borderRadius: 4, color: tokens.inputColor, outline: 'none' }}
+      />
+      {filter.op === 'between' && (
+        <input
+          type="number"
+          value={filter.val2}
+          onChange={e => onChange({ ...filter, val2: e.target.value })}
+          placeholder="to"
+          style={{ flex: 1, minWidth: 0, padding: '3px 5px', fontSize: 11,
+            background: isActive ? '#1d4ed822' : tokens.inputBg,
+            border: `1px solid ${isActive ? '#60a5fa' : tokens.inputBorder}`,
+            borderRadius: 4, color: tokens.inputColor, outline: 'none' }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Smart column filter (auto-detects type) ───────────────────────────────────
+function ColFilterCell({
+  col, rows, filter, onChange, tokens,
+}: {
+  col: string; rows: Row[]; filter: ColFilter | undefined; onChange: (f: ColFilter | undefined) => void; tokens: any
+}) {
+  const isNum = useMemo(() => isNumericCol(col, rows), [col, rows])
+  const uniqueVals = useMemo(() => {
+    if (isNum) return []
+    const s = new Set(rows.map(r => String(r[col] ?? '')))
+    return Array.from(s).sort()
+  }, [col, rows, isNum])
+
+  if (isNum) {
+    const f = filter?.type === 'num' ? filter : { type: 'num' as const, op: '>' as NumOp, val: '', val2: '' }
+    return (
+      <NumericFilterInput
+        col={col}
+        filter={f}
+        onChange={nf => onChange(nf.val === '' ? undefined : { type: 'num', ...nf })}
+        tokens={tokens}
+      />
+    )
+  }
+
+  const sel = filter?.type === 'multi' ? filter.selected : []
+  return (
+    <MultiSelectDropdown
+      col={col}
+      allValues={uniqueVals}
+      selected={sel}
+      onChange={vals => onChange(vals.length ? { type: 'multi', selected: vals } : undefined)}
+      tokens={tokens}
+    />
+  )
+}
 
 // ── Pivot Component ───────────────────────────────────────────────────────────
 function PivotTable({ filters }: { filters: { warehouse: string; item_code: string; division: string } }) {
@@ -49,25 +243,25 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
   type ValSpec = { col: string; agg: string }
   const AGG_OPTIONS = ['sum', 'count', 'avg', 'max', 'min', 'pct']
 
-  const [rowDims, setRowDims]     = useState<string[]>(['division'])
-  const [colDims, setColDims]     = useState<string[]>([])
-  const [valSpecs, setValSpecs]   = useState<ValSpec[]>([{ col: 'stock_qty', agg: 'sum' }])
-  const [sortCol, setSortCol]     = useState<string>('')
-  const [sortDir, setSortDir]     = useState<SortDir>('desc')
-  const [search, setSearch]       = useState('')
+  const [rowDims, setRowDims]   = useState<string[]>(['division'])
+  const [colDims, setColDims]   = useState<string[]>([])
+  const [valSpecs, setValSpecs] = useState<ValSpec[]>([{ col: 'stock_qty', agg: 'sum' }])
+  const [sortCol, setSortCol]   = useState<string>('')
+  const [sortDir, setSortDir]   = useState<SortDir>('desc')
+  const [search, setSearch]     = useState('')
   const [condEnabled, setCondEnabled] = useState(false)
-  const [condLo, setCondLo]       = useState('')
-  const [condHi, setCondHi]       = useState('')
-  const [showTop, setShowTop]     = useState(0)
-  const [colFilters, setColFilters] = useState<{ [col: string]: string }>({})
+  const [condLo, setCondLo]     = useState('')
+  const [condHi, setCondHi]     = useState('')
+  const [showTop, setShowTop]   = useState(0)
+  const [colFilters, setColFilters] = useState<Record<string, ColFilter>>({})
 
-  const [pivotRows, setPivotRows] = useState<Row[]>([])
-  const [pivotCols, setPivotCols] = useState<string[]>([])
+  const [pivotRows, setPivotRows]   = useState<Row[]>([])
+  const [pivotCols, setPivotCols]   = useState<string[]>([])
   const [grandTotal, setGrandTotal] = useState(0)
   const [grandTotals, setGrandTotals] = useState<Record<string, number>>({})
   const [isCrossTab, setIsCrossTab] = useState(false)
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState<string | null>(null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState<string | null>(null)
   const fetchRef = useRef(0)
 
   const valSpecsStr = valSpecs.map(v => `${v.col}:${v.agg}`).join(',')
@@ -77,12 +271,7 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     const id = ++fetchRef.current
     setLoading(true); setError(null)
     try {
-      const params: any = {
-        rows: rowDims.join(','),
-        cols: colDims.join(','),
-        values: valSpecsStr,
-        ...filters,
-      }
+      const params: any = { rows: rowDims.join(','), cols: colDims.join(','), values: valSpecsStr, ...filters }
       const res = await http.get('/warehouse-inventory/pivot', { params, timeout: 60000 })
       if (id !== fetchRef.current) return
       const d = res.data?.data ?? {}
@@ -94,9 +283,7 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     } catch (e: any) {
       if (id !== fetchRef.current) return
       setError(e?.response?.data?.message || 'Pivot failed')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   useEffect(() => { runPivot() }, [rowDims.join(','), colDims.join(','), valSpecsStr, filters.warehouse, filters.item_code, filters.division]) // eslint-disable-line
@@ -109,7 +296,7 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     setRowDims(d => d.filter(x => x !== col))
     setColDims(d => d.includes(col) ? d.filter(x => x !== col) : [...d, col])
   }
-  const addValSpec = () => setValSpecs(v => [...v, { col: 'stock_qty', agg: 'sum' }])
+  const addValSpec    = () => setValSpecs(v => [...v, { col: 'stock_qty', agg: 'sum' }])
   const removeValSpec = (i: number) => setValSpecs(v => v.length > 1 ? v.filter((_, idx) => idx !== i) : v)
   const updateValSpec = (i: number, key: keyof ValSpec, val: string) =>
     setValSpecs(v => v.map((s, idx) => idx === i ? { ...s, [key]: val } : s))
@@ -119,13 +306,21 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     else { setSortCol(col); setSortDir('desc') }
   }
 
+  const setColFilter = useCallback((col: string, f: ColFilter | undefined) => {
+    setColFilters(prev => {
+      const next = { ...prev }
+      if (f === undefined) delete next[col]
+      else next[col] = f
+      return next
+    })
+  }, [])
+
   const filtered = useMemo(() => {
     let data = pivotRows
     const q = search.toLowerCase()
     if (q) data = data.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q)))
-    // column-level filters
-    for (const [col, val] of Object.entries(colFilters)) {
-      if (val) data = data.filter(r => String(r[col] ?? '').toLowerCase().includes(val.toLowerCase()))
+    for (const [col, f] of Object.entries(colFilters)) {
+      data = data.filter(r => applyColFilter(r[col], f))
     }
     if (sortCol && sortDir) {
       data = [...data].sort((a, b) => {
@@ -137,12 +332,7 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     return showTop > 0 ? data.slice(0, showTop) : data
   }, [pivotRows, search, colFilters, sortCol, sortDir, showTop])
 
-  const pivotData = { headers: pivotCols, pivotRows: filtered }
-
-  const grandTotal2 = useMemo(
-    () => grandTotal,
-    [grandTotal]
-  )
+  const activeCount = activeFiltersCount(colFilters)
 
   const S = {
     card: { background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 14 },
@@ -150,7 +340,7 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     input: { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '5px 9px', fontSize: 12, color: tokens.inputColor, outline: 'none' },
     select: { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '5px 9px', fontSize: 12, color: tokens.inputColor, outline: 'none' },
     chip: (on: boolean) => ({ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? tokens.accent : tokens.cardBorder}`, background: on ? tokens.accent + '33' : 'transparent', color: on ? tokens.accent : tokens.textMuted, margin: '2px', userSelect: 'none' as const }),
-    th: { background: tokens.sidebarBg, color: tokens.textMuted, padding: '8px 10px', textAlign: 'left' as const, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' as const, borderBottom: `2px solid ${tokens.cardBorder}`, cursor: 'pointer', userSelect: 'none' as const },
+    th: { background: tokens.sidebarBg, color: tokens.textMuted, padding: '8px 10px', textAlign: 'left' as const, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' as const, borderBottom: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', userSelect: 'none' as const },
     td: { padding: '6px 10px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, whiteSpace: 'nowrap' as const },
     tdNum: { padding: '6px 10px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const },
   }
@@ -159,8 +349,6 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
     <div>
       {/* ── Builder ── */}
       <div style={{ ...S.card, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
-
-        {/* ROW FIELDS */}
         <div>
           <div style={{ ...S.label, color: '#60a5fa' }}>📋 ROW</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 130, overflowY: 'auto' }}>
@@ -169,8 +357,6 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
             ))}
           </div>
         </div>
-
-        {/* COLUMN FIELDS */}
         <div>
           <div style={{ ...S.label, color: '#f59e0b' }}>📊 COLUMN <span style={{ fontWeight: 400, fontSize: 10 }}>(optional — cross-tab)</span></div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 130, overflowY: 'auto' }}>
@@ -179,8 +365,6 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
             ))}
           </div>
         </div>
-
-        {/* VALUE + AGG (multi) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ ...S.label, color: '#4ade80', marginBottom: 0 }}>∑ VALUES</div>
@@ -200,8 +384,6 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
             </div>
           ))}
         </div>
-
-        {/* SEARCH + OPTIONS */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div>
             <div style={S.label}>🔍 SEARCH RESULT</div>
@@ -225,55 +407,48 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
         </div>
       </div>
 
-      {loading && <div style={{ textAlign: 'center', padding: 30, color: tokens.textMuted }}>Pivot chal raha hai… (parquet data)</div>}
+      {loading && <div style={{ textAlign: 'center', padding: 30, color: tokens.textMuted }}>Pivot chal raha hai…</div>}
       {error && <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>}
-
       {!loading && !error && rowDims.length === 0 && (
         <div style={{ textAlign: 'center', padding: 40, color: tokens.textMuted }}>Row Dimension choose karo.</div>
       )}
 
-      {!loading && pivotData.pivotRows.length > 0 && (
+      {!loading && pivotRows.length > 0 && (
         <div style={{ overflowX: 'auto', borderRadius: 8, border: `1px solid ${tokens.cardBorder}` }}>
-          <div style={{ padding: '8px 12px', background: tokens.sidebarBg, borderBottom: `1px solid ${tokens.cardBorder}`, display: 'flex', gap: 12, fontSize: 11, color: tokens.textMuted, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 700, color: tokens.textPrimary }}>{pivotData.pivotRows.length.toLocaleString()} rows</span>
+          <div style={{ padding: '8px 12px', background: tokens.sidebarBg, borderBottom: `1px solid ${tokens.cardBorder}`, display: 'flex', gap: 12, fontSize: 11, color: tokens.textMuted, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, color: tokens.textPrimary }}>{filtered.length.toLocaleString()} / {pivotRows.length.toLocaleString()} rows</span>
             {isCrossTab && <span style={{ background: '#f59e0b33', color: '#f59e0b', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>CROSS-TAB</span>}
             <span>Value: <b style={{ color: tokens.accent }}>{valSpecs.map(v => `${v.col}(${v.agg})`).join(', ')}</b></span>
-            <span>Grand Total: <b style={{ color: '#4ade80' }}>{grandTotal2.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</b></span>
-            {Object.values(colFilters).some(Boolean) && (
-              <span style={{ marginLeft: 'auto', cursor: 'pointer', color: '#f87171', fontSize: 11 }} onClick={() => setColFilters({})}>✕ Clear column filters</span>
+            <span>Grand Total: <b style={{ color: '#4ade80' }}>{grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</b></span>
+            {activeCount > 0 && (
+              <span style={{ marginLeft: 'auto', cursor: 'pointer', color: '#f87171', fontSize: 11 }} onClick={() => setColFilters({})}>✕ Clear {activeCount} filter{activeCount > 1 ? 's' : ''}</span>
             )}
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {pivotData.headers.map(h => (
+                {pivotCols.map(h => (
                   <th key={h} style={S.th} onClick={() => handleSort(h)}>
                     {h.toUpperCase()} {sortCol === h ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
                   </th>
                 ))}
               </tr>
+              {/* ── Smart column filters ── */}
               <tr style={{ background: tokens.sidebarBg }}>
-                {pivotData.headers.map(h => (
-                  <th key={h} style={{ padding: '3px 6px', borderBottom: `1px solid ${tokens.cardBorder}` }}>
-                    <input
-                      value={colFilters[h] ?? ''}
-                      onChange={e => setColFilters(f => ({ ...f, [h]: e.target.value }))}
-                      placeholder={h}
-                      style={{ width: '100%', minWidth: 60, background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 4, padding: '2px 6px', fontSize: 11, color: tokens.inputColor, outline: 'none', boxSizing: 'border-box' as const }}
-                    />
+                {pivotCols.map(h => (
+                  <th key={h} style={{ padding: '3px 5px', borderBottom: `2px solid ${tokens.cardBorder}`, minWidth: 120 }}>
+                    <ColFilterCell col={h} rows={pivotRows} filter={colFilters[h]} onChange={f => setColFilter(h, f)} tokens={tokens} />
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {pivotData.pivotRows.map((row, i) => (
+              {filtered.map((row, i) => (
                 <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : tokens.sidebarBg + '44' }}>
-                  {pivotData.headers.map(h => {
+                  {pivotCols.map(h => {
                     const val = row[h]
                     const isNum = typeof val === 'number'
-                    const bg = isNum && condEnabled
-                      ? cellColor(val, Number(condLo || 0), Number(condHi || 0), condEnabled)
-                      : undefined
+                    const bg = isNum && condEnabled ? cellColor(val, Number(condLo || 0), Number(condHi || 0), condEnabled) : undefined
                     return (
                       <td key={h} style={{ ...(isNum ? S.tdNum : S.td), background: bg }}>
                         {isNum ? fmt(val) : (val ?? '—')}
@@ -285,11 +460,11 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
             </tbody>
             <tfoot>
               <tr style={{ background: tokens.sidebarBg, fontWeight: 700 }}>
-                {pivotData.headers.map((h, i) => (
+                {pivotCols.map((h, i) => (
                   <td key={h} style={{ ...S.tdNum, borderTop: `2px solid ${tokens.cardBorder}`, color: tokens.textPrimary }}>
-                    {i === 0 ? `TOTAL (${pivotData.pivotRows.length})` :
-                      typeof pivotData.pivotRows[0]?.[h] === 'number'
-                        ? fmt(pivotData.pivotRows.reduce((s, r) => s + toNum(r[h]), 0))
+                    {i === 0 ? `TOTAL (${filtered.length})` :
+                      typeof filtered[0]?.[h] === 'number'
+                        ? fmt(filtered.reduce((s, r) => s + toNum(r[h]), 0))
                         : ''}
                   </td>
                 ))}
@@ -305,26 +480,38 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
 // ── Main Data Table ───────────────────────────────────────────────────────────
 function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
   const { tokens } = useTheme()
-  const [search, setSearch] = useState('')
+  const [search, setSearch]   = useState('')
   const [sortCol, setSortCol] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
-  const [page, setPage] = useState(1)
-  const [colFilters, setColFilters] = useState<{ [col: string]: string }>({})
+  const [page, setPage]       = useState(1)
+  const [colFilters, setColFilters] = useState<Record<string, ColFilter>>({})
+  const [showFilters, setShowFilters] = useState(true)
   const PAGE_SIZE = 100
+
+  const setColFilter = useCallback((col: string, f: ColFilter | undefined) => {
+    setColFilters(prev => {
+      const next = { ...prev }
+      if (f === undefined) delete next[col]
+      else next[col] = f
+      return next
+    })
+    setPage(1)
+  }, [])
 
   const handleSort = (col: string) => {
     if (sortCol === col) {
       setSortDir(d => d === 'asc' ? 'desc' : d === 'desc' ? null : 'asc')
       if (sortDir === null) setSortCol(null)
     } else { setSortCol(col); setSortDir('asc') }
+    setPage(1)
   }
 
   const filtered = useMemo(() => {
     let data = rows
     const q = search.toLowerCase()
     if (q) data = data.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(q)))
-    for (const [col, val] of Object.entries(colFilters)) {
-      if (val) data = data.filter(r => String(r[col] ?? '').toLowerCase().includes(val.toLowerCase()))
+    for (const [col, f] of Object.entries(colFilters)) {
+      data = data.filter(r => applyColFilter(r[col], f))
     }
     if (sortCol && sortDir) {
       data = [...data].sort((a, b) => {
@@ -338,21 +525,34 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
   }, [rows, search, sortCol, sortDir, colFilters])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pageRows   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const activeCount = activeFiltersCount(colFilters)
 
   const S = {
-    input: { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '5px 9px', fontSize: 12, color: tokens.inputColor, outline: 'none' },
-    btnGhost: { padding: '5px 12px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 12, background: 'transparent', color: tokens.textMuted },
-    th: { background: tokens.sidebarBg, color: tokens.textMuted, padding: '7px 9px', textAlign: 'left' as const, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' as const, borderBottom: `2px solid ${tokens.cardBorder}`, cursor: 'pointer', userSelect: 'none' as const, position: 'sticky' as const, top: 0 },
-    td: { padding: '6px 9px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, whiteSpace: 'nowrap' as const },
+    input:   { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '5px 9px', fontSize: 12, color: tokens.inputColor, outline: 'none' },
+    btnGhost:{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 12, background: 'transparent', color: tokens.textMuted },
+    th:      { background: tokens.sidebarBg, color: tokens.textMuted, padding: '7px 9px', textAlign: 'left' as const, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' as const, borderBottom: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', userSelect: 'none' as const, position: 'sticky' as const, top: 0 },
+    thFilter:{ background: tokens.sidebarBg, padding: '3px 4px', borderBottom: `2px solid ${tokens.cardBorder}`, position: 'sticky' as const, top: 33, minWidth: 110, maxWidth: 200 },
+    td:      { padding: '6px 9px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, whiteSpace: 'nowrap' as const },
+    tdNum:   { padding: '6px 9px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const },
   }
 
   return (
     <div>
+      {/* Top bar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input style={{ ...S.input, minWidth: 240 }} placeholder="🔍 Search all columns…" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+        <button
+          style={{ ...S.btnGhost, color: showFilters ? tokens.accent : tokens.textMuted, borderColor: showFilters ? tokens.accent : tokens.cardBorder }}
+          onClick={() => setShowFilters(v => !v)}
+        >
+          🔽 Filters{activeCount > 0 ? ` (${activeCount})` : ''}
+        </button>
+        {activeCount > 0 && (
+          <button style={{ ...S.btnGhost, color: '#f87171', borderColor: '#f87171' }} onClick={() => { setColFilters({}); setPage(1) }}>✕ Clear filters</button>
+        )}
         <span style={{ fontSize: 12, color: tokens.textMuted, marginLeft: 'auto' }}>
-          {filtered.length.toLocaleString()} rows · Page {page}/{totalPages}
+          {filtered.length.toLocaleString()} / {rows.length.toLocaleString()} rows · Page {page}/{totalPages}
         </span>
         <button style={S.btnGhost} disabled={page <= 1} onClick={() => setPage(1)}>« First</button>
         <button style={S.btnGhost} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
@@ -360,22 +560,10 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
         <button style={S.btnGhost} disabled={page >= totalPages} onClick={() => setPage(totalPages)}>Last »</button>
       </div>
 
-      {/* Column filters */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-        {columns.slice(0, 8).map(col => (
-          <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 10, color: tokens.textMuted }}>{col}</span>
-            <input style={{ ...S.input, width: 110 }} placeholder="filter…" value={colFilters[col] ?? ''} onChange={e => { setColFilters(f => ({ ...f, [col]: e.target.value })); setPage(1) }} />
-          </div>
-        ))}
-        {Object.values(colFilters).some(Boolean) && (
-          <button style={{ ...S.btnGhost, alignSelf: 'flex-end' }} onClick={() => setColFilters({})}>✕ Clear</button>
-        )}
-      </div>
-
       <div style={{ overflowX: 'auto', border: `1px solid ${tokens.cardBorder}`, borderRadius: 8 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
+            {/* Sort row */}
             <tr>
               <th style={{ ...S.th, width: 36 }}>#</th>
               {columns.map(col => (
@@ -384,14 +572,35 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
                 </th>
               ))}
             </tr>
+            {/* Smart filter row */}
+            {showFilters && (
+              <tr>
+                <th style={{ ...S.thFilter, width: 36 }} />
+                {columns.map(col => (
+                  <th key={col} style={S.thFilter}>
+                    <ColFilterCell col={col} rows={rows} filter={colFilters[col]} onChange={f => setColFilter(col, f)} tokens={tokens} />
+                  </th>
+                ))}
+              </tr>
+            )}
           </thead>
           <tbody>
-            {pageRows.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : tokens.sidebarBg + '44' }}>
-                <td style={{ ...S.td, color: tokens.textMuted, textAlign: 'center' }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
-                {columns.map(col => <td key={col} style={S.td}>{row[col] === null || row[col] === undefined ? '—' : String(row[col])}</td>)}
-              </tr>
-            ))}
+            {pageRows.map((row, i) => {
+              return (
+                <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : tokens.sidebarBg + '44' }}>
+                  <td style={{ ...S.td, color: tokens.textMuted, textAlign: 'center' }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
+                  {columns.map(col => {
+                    const val = row[col]
+                    const isNum = val !== null && val !== undefined && !isNaN(Number(val)) && typeof val !== 'boolean'
+                    return (
+                      <td key={col} style={isNum ? S.tdNum : S.td}>
+                        {val === null || val === undefined ? '—' : isNum ? fmt(val) : String(val)}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -402,20 +611,18 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function WarehouseInventory() {
   const { tokens } = useTheme()
-  const [rows, setRows] = useState<Row[]>([])
-  const [columns, setColumns] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [total, setTotal] = useState(0)
+  const [rows, setRows]         = useState<Row[]>([])
+  const [columns, setColumns]   = useState<string[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [total, setTotal]       = useState(0)
   const [queryTime, setQueryTime] = useState<number | null>(null)
   const [fromCache, setFromCache] = useState(false)
-  const [tab, setTab] = useState<'data' | 'pivot'>('data')
+  const [tab, setTab]           = useState<'data' | 'pivot'>('data')
   const [accessDenied, setAccessDenied] = useState(false)
-
   const [warehouse, setWarehouse] = useState('')
-  const [itemCode, setItemCode] = useState('')
-  const [division, setDivision] = useState('')
-
+  const [itemCode, setItemCode]   = useState('')
+  const [division, setDivision]   = useState('')
   const fetchRef = useRef(0)
 
   async function fetchData(refresh = false) {
@@ -451,15 +658,15 @@ export default function WarehouseInventory() {
   }, []) // eslint-disable-line
 
   const S = {
-    page: { padding: '20px 24px', maxWidth: '100%', boxSizing: 'border-box' as const },
-    header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap' as const, gap: 10 },
-    title: { fontSize: 20, fontWeight: 800, color: tokens.textPrimary },
-    sub: { fontSize: 12, color: tokens.textMuted, marginTop: 2 },
-    card: { background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 14 },
-    input: { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '6px 10px', fontSize: 13, color: tokens.inputColor, outline: 'none', width: '100%', boxSizing: 'border-box' as const },
-    btn: (color = tokens.accent) => ({ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: color, color: '#fff' }),
-    btnGhost: { padding: '7px 14px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 12, background: 'transparent', color: tokens.textMuted },
-    tab: (on: boolean) => ({ padding: '7px 18px', borderRadius: '8px 8px 0 0', border: `1px solid ${on ? tokens.accent : tokens.cardBorder}`, borderBottom: on ? `1px solid ${tokens.cardBg}` : `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 400, background: on ? tokens.accent + '22' : 'transparent', color: on ? tokens.accent : tokens.textMuted }),
+    page:    { padding: '20px 24px', maxWidth: '100%', boxSizing: 'border-box' as const },
+    header:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap' as const, gap: 10 },
+    title:   { fontSize: 20, fontWeight: 800, color: tokens.textPrimary },
+    sub:     { fontSize: 12, color: tokens.textMuted, marginTop: 2 },
+    card:    { background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 14 },
+    input:   { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '6px 10px', fontSize: 13, color: tokens.inputColor, outline: 'none', width: '100%', boxSizing: 'border-box' as const },
+    btn:     (color = tokens.accent) => ({ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: color, color: '#fff' }),
+    btnGhost:{ padding: '7px 14px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 12, background: 'transparent', color: tokens.textMuted },
+    tab:     (on: boolean) => ({ padding: '7px 18px', borderRadius: '8px 8px 0 0', border: `1px solid ${on ? tokens.accent : tokens.cardBorder}`, borderBottom: on ? `1px solid ${tokens.cardBg}` : `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 13, fontWeight: on ? 700 : 400, background: on ? tokens.accent + '22' : 'transparent', color: on ? tokens.accent : tokens.textMuted }),
   }
 
   if (accessDenied) return (
@@ -472,7 +679,6 @@ export default function WarehouseInventory() {
 
   return (
     <div style={S.page}>
-      {/* Header */}
       <div style={S.header}>
         <div>
           <div style={S.title}>🏭 Warehouse Inventory</div>
@@ -488,7 +694,7 @@ export default function WarehouseInventory() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Top-level filters */}
       <div style={{ ...S.card, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, alignItems: 'end' }}>
         <div>
           <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 4 }}>Warehouse / Site</div>
@@ -502,35 +708,16 @@ export default function WarehouseInventory() {
           <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 4 }}>Division</div>
           <input style={S.input} placeholder="e.g. MENSWEAR" value={division} onChange={e => setDivision(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchData()} />
         </div>
-        <button style={{ ...S.btn(), alignSelf: 'flex-end' }} onClick={() => fetchData()} disabled={loading}>
-          {loading ? '…' : '🔍 Apply'}
-        </button>
-        <button style={{ ...S.btnGhost, alignSelf: 'flex-end' }} onClick={() => { setWarehouse(''); setItemCode(''); setDivision('') }}>
-          Clear
-        </button>
+        <button style={{ ...S.btn(), alignSelf: 'flex-end' }} onClick={() => fetchData()} disabled={loading}>{loading ? '…' : '🔍 Apply'}</button>
+        <button style={{ ...S.btnGhost, alignSelf: 'flex-end' }} onClick={() => { setWarehouse(''); setItemCode(''); setDivision('') }}>Clear</button>
       </div>
 
-      {error && (
-        <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>
-          ⚠ {error}
-        </div>
-      )}
-
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: tokens.textMuted, fontSize: 14 }}>
-          Oracle se data aa raha hai…
-        </div>
-      )}
-
-      {!loading && rows.length === 0 && !error && (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: tokens.textMuted, fontSize: 14 }}>
-          No data. Filters apply karo ya Refresh karo.
-        </div>
-      )}
+      {error && <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>}
+      {loading && <div style={{ textAlign: 'center', padding: '60px 20px', color: tokens.textMuted, fontSize: 14 }}>Data load ho raha hai…</div>}
+      {!loading && rows.length === 0 && !error && <div style={{ textAlign: 'center', padding: '60px 20px', color: tokens.textMuted, fontSize: 14 }}>No data. Filters apply karo ya Refresh karo.</div>}
 
       {!loading && rows.length > 0 && (
         <>
-          {/* Tabs */}
           <div style={{ display: 'flex', gap: 4, marginBottom: -1, position: 'relative', zIndex: 1 }}>
             <button style={S.tab(tab === 'data')} onClick={() => setTab('data')}>📋 Data Table</button>
             <button style={S.tab(tab === 'pivot')} onClick={() => setTab('pivot')}>📊 Pivot Analysis</button>

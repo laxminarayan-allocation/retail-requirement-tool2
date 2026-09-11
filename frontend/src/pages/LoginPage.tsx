@@ -100,6 +100,9 @@ export default function LoginPage() {
   // Forgot password result
   const [tempPw, setTempPw] = useState<string | null>(null)
   const [forgotSent, setForgotSent] = useState(false)
+  const [forgotNewPw, setForgotNewPw] = useState('')
+  const [forgotConfirmPw, setForgotConfirmPw] = useState('')
+  const [selfResetDone, setSelfResetDone] = useState(false)
 
   // Ref to capture credentials at the moment conflict dialog appears.
   // Needed because browser autofill may not update React state via onChange.
@@ -109,6 +112,7 @@ export default function LoginPage() {
 
   function switchMode(m: Mode) {
     setMode(m); setError(''); setWarnMsg(''); setTempPw(null); setForgotSent(false)
+    setForgotNewPw(''); setForgotConfirmPw(''); setSelfResetDone(false)
   }
 
   // ── Sign In ──────────────────────────────────────────────────────────────────
@@ -198,10 +202,16 @@ export default function LoginPage() {
   async function handleForgot(e: FormEvent) {
     e.preventDefault()
     if (!email || emailErr) return
+    if (forgotNewPw && forgotNewPw.length < 6) { setError('Password kam se kam 6 characters ka hona chahiye.'); return }
+    if (forgotNewPw && forgotNewPw !== forgotConfirmPw) { setError('Passwords match nahi kar rahe.'); return }
     setError(''); setLoading(true)
     try {
-      const res = await axios.post('/api/auth/forgot-password', { email })
-      if (res.data.data?.temp_password) {
+      const body: any = { email }
+      if (forgotNewPw) body.new_password = forgotNewPw
+      const res = await axios.post('/api/auth/forgot-password', body)
+      if (res.data.data?.self_reset) {
+        setSelfResetDone(true); setTempPw(null); setForgotSent(false)
+      } else if (res.data.data?.temp_password) {
         setTempPw(res.data.data.temp_password)
         setForgotSent(false)
       } else {
@@ -437,7 +447,18 @@ export default function LoginPage() {
               </div>
             )}
 
-            {!tempPw && !forgotSent && (
+            {/* Self-reset success */}
+            {selfResetDone && (
+              <div style={S.success}>
+                ✅ Password successfully changed for <strong>{email}</strong>!
+                <button style={{ ...S.btn, marginTop: 12, background: 'var(--content-bg)', border: '1px solid var(--card-border)', fontSize: 12 }}
+                  onClick={() => { switchMode('signin') }}>
+                  → Sign In with new password
+                </button>
+              </div>
+            )}
+
+            {!tempPw && !forgotSent && !selfResetDone && (
               <form onSubmit={handleForgot}>
                 <label style={S.label}>Registered Email</label>
                 <input style={{ ...S.input, ...(emailErr ? { borderColor: '#ef4444' } : {}) }}
@@ -448,8 +469,31 @@ export default function LoginPage() {
                     Only @citykart.org or @citykartstores.com addresses are allowed.
                   </div>
                 )}
-                <button type="submit" style={{ ...S.btn, ...(loading ? S.btnDisabled : {}) }} disabled={loading}>
-                  {loading ? 'Generating…' : 'Get Temporary Password'}
+
+                <div style={{ height: 1, background: 'var(--card-border)', margin: '14px 0' }} />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600 }}>
+                  🔑 Apna naya password set karo (optional)
+                </div>
+
+                <label style={S.label}>New Password</label>
+                <input style={{ ...S.input, ...(forgotNewPw && forgotNewPw.length < 6 ? { borderColor: '#ef4444' } : {}) }}
+                  type="password" placeholder="Min 6 characters"
+                  value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
+                  autoComplete="new-password" />
+
+                <label style={S.label}>Confirm New Password</label>
+                <input style={{ ...S.input, ...(forgotConfirmPw && forgotConfirmPw !== forgotNewPw ? { borderColor: '#ef4444' } : {}) }}
+                  type="password" placeholder="Repeat password"
+                  value={forgotConfirmPw} onChange={e => setForgotConfirmPw(e.target.value)}
+                  autoComplete="new-password" />
+                {forgotConfirmPw && forgotConfirmPw !== forgotNewPw && (
+                  <div style={{ fontSize: 11, color: '#f87171', marginBottom: 8 }}>Passwords match nahi kar rahe.</div>
+                )}
+
+                <button type="submit"
+                  style={{ ...S.btn, ...(loading || !!(forgotConfirmPw && forgotConfirmPw !== forgotNewPw) ? S.btnDisabled : {}) }}
+                  disabled={loading || !!(forgotConfirmPw && forgotConfirmPw !== forgotNewPw)}>
+                  {loading ? 'Processing…' : forgotNewPw ? '✅ Set New Password' : 'Get Temporary Password'}
                 </button>
               </form>
             )}

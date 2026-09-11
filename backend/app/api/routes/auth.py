@@ -205,30 +205,35 @@ async def signup(body: SignupRequest, request: Request):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+    new_password: str | None = None  # if provided, set directly instead of generating temp
 
 
 @router.post("/forgot-password", response_model=APIResponse)
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
-    """Generate a temporary password and return it (shown on screen).
-    When SMTP is configured this will email it instead."""
+    """Reset password. If new_password provided, set directly; otherwise generate a temp one."""
     user = get_user_by_email(body.email)
     if not user:
-        # Don't reveal whether email exists — generic message
         return APIResponse.ok(
-            message="If that email is registered, a temporary password has been generated.",
+            message="If that email is registered, password has been reset.",
             data={"sent": False, "temp_password": None},
         )
 
-    # Generate temp password: 3 words style e.g. Sky#482Rain
-    chars = string.ascii_letters + string.digits
-    temp_pw = (
-        random.choice(string.ascii_uppercase)
-        + ''.join(random.choices(string.ascii_lowercase, k=4))
-        + '#'
-        + ''.join(random.choices(string.digits, k=3))
-        + random.choice(string.ascii_uppercase)
-        + ''.join(random.choices(string.ascii_lowercase, k=3))
-    )
+    # Use provided password or generate temp
+    if body.new_password:
+        if len(body.new_password) < 6:
+            return APIResponse.fail(message="Password must be at least 6 characters.")
+        temp_pw = body.new_password
+        is_temp = False
+    else:
+        temp_pw = (
+            random.choice(string.ascii_uppercase)
+            + ''.join(random.choices(string.ascii_lowercase, k=4))
+            + '#'
+            + ''.join(random.choices(string.digits, k=3))
+            + random.choice(string.ascii_uppercase)
+            + ''.join(random.choices(string.ascii_lowercase, k=3))
+        )
+        is_temp = True
 
     # Update password in DB
     from app.db.sqlite import get_sqlite
@@ -266,9 +271,16 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     except Exception as exc:
         logger.warning("SMTP not configured or failed — showing temp password on screen: %s", exc)
 
+    if not is_temp:
+        log_action(user["id"], user["email"], "self_password_reset", ip=_client_ip(request))
+        return APIResponse.ok(
+            message="Password successfully changed. You can now sign in.",
+            data={"sent": False, "temp_password": None, "self_reset": True},
+        )
+
     return APIResponse.ok(
         message="Temporary password generated." if not smtp_sent else f"Temporary password sent to {body.email}.",
-        data={"sent": smtp_sent, "temp_password": None if smtp_sent else temp_pw},
+        data={"sent": smtp_sent, "temp_password": None if smtp_sent else temp_pw, "self_reset": False},
     )
 
 

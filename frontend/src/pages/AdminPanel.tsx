@@ -153,7 +153,7 @@ function SessionLimitCell({ user, onSave }: { user: User; onSave: (md: number, m
 }
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access'>('requests')
+  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access' | 'live'>('requests')
   const [requests, setRequests] = useState<RoleRequest[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [logs, setLogs] = useState<Log[]>([])
@@ -174,6 +174,10 @@ export default function AdminPanel() {
   const [expandedPageUser, setExpandedPageUser] = useState<string | null>(null)
   const [userPageAccess, setUserPageAccess] = useState<Record<string, Record<string, boolean>>>({})
   const [pageAccessSaving, setPageAccessSaving] = useState(false)
+  // Live sessions (admin)
+  const [liveSessions, setLiveSessions] = useState<any[]>([])
+  const [liveLoading, setLiveLoading] = useState(false)
+  const [liveLastRefresh, setLiveLastRefresh] = useState<Date | null>(null)
   // Password reset modal
   const [resetModal, setResetModal] = useState<{ userId: string; email: string; name: string } | null>(null)
   const [resetPw, setResetPw] = useState('')
@@ -242,12 +246,22 @@ export default function AdminPanel() {
     } finally { setLoading(false) }
   }, [])
 
+  const loadLiveSessions = useCallback(async () => {
+    setLiveLoading(true)
+    try {
+      const res = await axios.get('/api/auth/admin-sessions')
+      setLiveSessions(res.data.data?.sessions || [])
+      setLiveLastRefresh(new Date())
+    } finally { setLiveLoading(false) }
+  }, [])
+
   useEffect(() => {
     if (tab === 'requests') loadRequests()
     else if (tab === 'users') loadUsers()
     else if (tab === 'logs') loadLogs()
+    else if (tab === 'live') loadLiveSessions()
     else loadAiChats()
-  }, [tab, loadRequests, loadUsers, loadLogs])
+  }, [tab, loadRequests, loadUsers, loadLogs, loadLiveSessions])
 
   async function sendNotification(chat: AiChat) {
     if (!notifMsg.trim()) return
@@ -373,6 +387,14 @@ export default function AdminPanel() {
           )}
         </button>
         <button style={S.tab(tab === 'access')} onClick={() => setTab('access')}>🛡️ Access Matrix</button>
+        <button style={S.tab(tab === 'live')} onClick={() => setTab('live')}>
+          🟢 Live
+          {liveSessions.length > 0 && (
+            <span style={{ marginLeft: 6, background: '#22c55e', color: '#0f172a', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>
+              {liveSessions.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* ── Role Requests ── */}
@@ -791,6 +813,78 @@ export default function AdminPanel() {
               />
             </div>
           )
+      )}
+
+      {/* ── Live Sessions ── */}
+      {tab === 'live' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              {liveLastRefresh ? `Refreshed at ${liveLastRefresh.toLocaleTimeString('en-IN')}` : ''}
+            </span>
+            <button onClick={loadLiveSessions} disabled={liveLoading} style={{ fontSize: 11, padding: '4px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer' }}>
+              {liveLoading ? 'Loading…' : '↻ Refresh'}
+            </button>
+          </div>
+          {liveSessions.length === 0 ? (
+            <div style={S.empty}>{liveLoading ? 'Loading…' : 'No active sessions.'}</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: 'Total Online', value: liveSessions.length, color: '#22c55e' },
+                  { label: 'Desktop', value: liveSessions.filter(s => s.device_type === 'desktop').length, color: '#38bdf8' },
+                  { label: 'Mobile', value: liveSessions.filter(s => s.device_type === 'mobile').length, color: '#c084fc' },
+                ].map(m => (
+                  <div key={m.label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 16px', minWidth: 100 }}>
+                    <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}>{m.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: m.color, marginTop: 2 }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>User</th>
+                    <th style={S.th}>Role</th>
+                    <th style={S.th}>Device</th>
+                    <th style={S.th}>Browser / OS</th>
+                    <th style={S.th}>IP</th>
+                    <th style={S.th}>Last Seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveSessions.map((s, i) => {
+                    const secsAgo = Math.round((Date.now() / 1000) - s.last_seen)
+                    const lastSeen = secsAgo < 60 ? `${secsAgo}s ago` : `${Math.round(secsAgo / 60)}m ago`
+                    return (
+                      <tr key={i}>
+                        <td style={S.td}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: 12 }}>{s.full_name}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{s.email}</div>
+                        </td>
+                        <td style={S.td}><span style={S.badge(s.role)}>{ROLE_LABEL[s.role] || s.role}</span></td>
+                        <td style={S.td}>
+                          <span style={{ fontSize: 12, color: s.device_type === 'mobile' ? '#c084fc' : '#38bdf8' }}>
+                            {s.device_type === 'mobile' ? '📱' : '🖥️'} {s.device_name || s.device_type}
+                          </span>
+                        </td>
+                        <td style={S.td}>
+                          <div style={{ fontSize: 11, color: '#94a3b8' }}>{s.browser}</div>
+                          <div style={{ fontSize: 10, color: '#64748b' }}>{s.os}</div>
+                        </td>
+                        <td style={S.td}><span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{s.ip}</span></td>
+                        <td style={S.td}>
+                          <span style={{ fontSize: 11, color: secsAgo < 60 ? '#22c55e' : secsAgo < 180 ? '#84cc16' : '#94a3b8' }}>{lastSeen}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
       )}
 
       {/* ── Access Matrix ── */}

@@ -488,6 +488,36 @@ async def active_sessions(request: Request):
     return APIResponse.ok(data={"desktop": desktop, "mobile": mobile, "sessions": sessions_detail})
 
 
+@router.get("/admin-sessions", response_model=APIResponse)
+async def admin_sessions(request: Request):
+    """Admin-only: returns all active sessions across all users with user info."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return APIResponse.fail(message="Not authenticated.")
+    if user.get("role") not in ("admin", "temp_admin"):
+        return APIResponse.fail(message="Admin access required.")
+    _purge_expired()
+    sessions = []
+    for s in sorted(_active_sessions.values(), key=lambda x: x["ts"], reverse=True):
+        db_user = get_user_by_id(s["user_id"])
+        sessions.append({
+            "user_id": s["user_id"],
+            "email": db_user["email"] if db_user else "—",
+            "full_name": db_user["full_name"] if db_user else "—",
+            "role": db_user["role"] if db_user else "—",
+            "device_type": s["device_type"],
+            "ip": s.get("ip", "—"),
+            "last_seen": int(s["ts"]),
+            "browser": s.get("ua_info", {}).get("browser", ""),
+            "os": s.get("ua_info", {}).get("os", ""),
+            "device_name": s.get("device_name", ""),
+        })
+    total = len(sessions)
+    desktop = sum(1 for s in sessions if s["device_type"] == "desktop")
+    mobile = sum(1 for s in sessions if s["device_type"] == "mobile")
+    return APIResponse.ok(data={"total": total, "desktop": desktop, "mobile": mobile, "sessions": sessions})
+
+
 # ── Role requests (any authenticated user) ────────────────────────────────────
 
 @router.post("/request-role", response_model=APIResponse)

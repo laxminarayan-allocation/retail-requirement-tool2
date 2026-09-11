@@ -13,6 +13,7 @@ import http from '@/api/http'
 import { useAuth } from '@/context/AuthContext'
 import { DataGrid } from '@/components/DataGrid'
 import { Card } from '@/components/Card'
+import MasterData from '@/pages/MasterData'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { SchemaRow, TableRow, ViewRow, ColumnRow } from '@/types/api'
 
@@ -552,9 +553,9 @@ function ColumnPanel({
           <SearchBox value={filter} onChange={setFilter} placeholder="Filter columns…" />
           {loading && <Spinner />}
           {error && <ErrorMsg msg={error} />}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
             {!loading && (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <table style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr style={{ background: 'var(--content-bg)' }}>
                     {['#', 'COLUMN', 'TYPE', 'LEN', 'NULL', 'DEFAULT'].map(h => (
@@ -993,9 +994,9 @@ function DownloadedFilesPanel() {
 
   function loadList() {
     setLoading(true)
-    http.get('/database/output/list')
-      .then(res => { if (res.data.success) setFiles(res.data.data.files) })
-      .catch(() => null)
+    http.get('/database/output/list', { timeout: 10000 })
+      .then(res => { if (res.data.success) setFiles(res.data.data.files ?? []) })
+      .catch(() => setFiles([]))
       .finally(() => setLoading(false))
   }
 
@@ -1660,7 +1661,7 @@ export default function DatabaseExplorer() {
   const [selectedName, setSelectedName] = useState('')
   const [selectedType, setSelectedType] = useState<ObjType>('TABLE')
   const [mobilePanelTab, setMobilePanelTab] = useState(0)
-  const [mainTab, setMainTab] = useState<'explorer' | 'downloads'>('explorer')
+  const [mainTab, setMainTab] = useState<'explorer' | 'downloads' | 'masterdata'>('explorer')
 
   const handleObjectSelect = (name: string, type: ObjType) => {
     setSelectedName(name)
@@ -1712,14 +1713,20 @@ export default function DatabaseExplorer() {
         <button style={TAB_STYLE(mainTab === 'downloads')} onClick={() => setMainTab('downloads')}>
           📁 Downloaded Files
         </button>
+        <button style={TAB_STYLE(mainTab === 'masterdata')} onClick={() => setMainTab('masterdata')}>
+          📂 Master Data
+        </button>
       </div>
 
-      {/* Three-panel body — only when explorer tab active */}
-      {mainTab === 'downloads' && (
-        <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <DownloadedFilesPanel />
-        </div>
-      )}
+      {/* Downloaded Files — always mounted so it loads once, hidden when not active */}
+      <div style={{ flex: '1 1 0', minHeight: 0, display: mainTab === 'downloads' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <DownloadedFilesPanel />
+      </div>
+
+      {/* Master Data — always mounted, hidden when not active */}
+      <div style={{ flex: '1 1 0', minHeight: 0, display: mainTab === 'masterdata' ? 'flex' : 'none', flexDirection: 'column', overflowY: 'auto' }}>
+        <MasterData />
+      </div>
 
       {mainTab === 'explorer' && isMobile ? (
         // Mobile: tab switcher — Schema → Objects → Columns

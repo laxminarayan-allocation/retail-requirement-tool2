@@ -78,7 +78,7 @@ const S: Record<string, React.CSSProperties> = {
   kpiLabel: { fontSize: 10, color: 'var(--text-muted)', marginTop: 2 },
   // Compare modal
   overlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  modal: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10, width: 900, maxHeight: '85vh', overflowY: 'auto' as const, padding: 20 },
+  modal: { background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10, width: 900, maxWidth: '96vw', maxHeight: '85vh', overflowY: 'auto' as const, overflowX: 'auto' as const, padding: 20 },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

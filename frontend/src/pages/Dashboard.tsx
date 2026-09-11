@@ -933,14 +933,14 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '10px 14px' }}>
           {loading && <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: 24 }}>Loading stores…</div>}
           {err && <div style={{ color: '#f87171', fontSize: 12, textAlign: 'center', padding: 24 }}>{err}</div>}
           {!loading && !err && filtered.length === 0 && (
             <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: 24 }}>No stores found.</div>
           )}
           {!loading && !err && filtered.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <table style={{ width: '100%', minWidth: 500, borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #1e293b' }}>
                   {['Code', 'Name', 'Status', 'Grade',

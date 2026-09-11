@@ -53,11 +53,12 @@ const S: Record<string, React.CSSProperties> = {
     borderBottom: a ? '2px solid #38bdf8' : '2px solid transparent',
     cursor: 'pointer', marginBottom: -1,
   }),
-  table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: 12 },
+  table: { width: '100%', minWidth: 560, borderCollapse: 'collapse' as const, fontSize: 12 },
+  tblWrap: { overflowX: 'auto' as const },
   th: {
     textAlign: 'left' as const, padding: '8px 12px', color: 'var(--text-muted)',
     fontWeight: 600, letterSpacing: '.06em', fontSize: 10, textTransform: 'uppercase' as const,
-    borderBottom: '1px solid #1e293b',
+    borderBottom: '1px solid #1e293b', whiteSpace: 'nowrap' as const,
   },
   td: { padding: '10px 12px', borderBottom: '1px solid #0f172a', verticalAlign: 'middle' as const },
   badge: (role: string): React.CSSProperties => ({
@@ -405,6 +406,7 @@ export default function AdminPanel() {
               <p style={S.sectionHead}>
                 <span style={S.pendingDot} />Pending ({requests.filter(r => r.status === 'pending').length})
               </p>
+              <div style={S.tblWrap}>
               <table style={S.table}>
                 <thead>
                   <tr>
@@ -467,12 +469,14 @@ export default function AdminPanel() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
           <p style={{ ...S.sectionHead, marginTop: 8 }}>All requests</p>
           {requests.length === 0
             ? <div style={S.empty}>{loading ? 'Loading…' : 'No requests yet.'}</div>
             : (
+              <div style={S.tblWrap}>
               <table style={S.table}>
                 <thead>
                   <tr>
@@ -498,6 +502,7 @@ export default function AdminPanel() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )
           }
         </>
@@ -508,7 +513,8 @@ export default function AdminPanel() {
         users.length === 0
           ? <div style={S.empty}>{loading ? 'Loading…' : 'No users.'}</div>
           : (
-            <table style={S.table}>
+            <div style={S.tblWrap}>
+            <table style={{ ...S.table, minWidth: 760 }}>
               <thead>
                 <tr>
                   <th style={S.th}>User</th>
@@ -691,6 +697,7 @@ export default function AdminPanel() {
                 })}
               </tbody>
             </table>
+            </div>
           )
       )}
 
@@ -842,6 +849,7 @@ export default function AdminPanel() {
                   </div>
                 ))}
               </div>
+              <div style={S.tblWrap}>
               <table style={S.table}>
                 <thead>
                   <tr>
@@ -882,6 +890,7 @@ export default function AdminPanel() {
                   })}
                 </tbody>
               </table>
+              </div>
             </>
           )}
         </div>

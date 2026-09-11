@@ -73,6 +73,64 @@ const PIVOT_DIMS = ['division','section','department','article_name','sitecode',
 const PIVOT_VALS = ['stock_qty','stock_v','mrp']
 const NUM_OPS: NumOp[] = ['=','≠','>','>=','<','<=','between']
 
+// ── Column resize ─────────────────────────────────────────────────────────────
+const DEFAULT_WIDTH = 130
+const MIN_WIDTH = 50
+
+function loadWidths(key: string): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(key) || '{}') } catch { return {} }
+}
+function saveWidths(key: string, w: Record<string, number>) {
+  try { localStorage.setItem(key, JSON.stringify(w)) } catch {}
+}
+
+function useColResize(lsKey: string) {
+  const [widths, setWidths] = useState<Record<string, number>>(() => loadWidths(lsKey))
+  const dragging = useRef<{ col: string; startX: number; startW: number } | null>(null)
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!dragging.current) return
+      const { col, startX, startW } = dragging.current
+      const newW = Math.max(MIN_WIDTH, startW + e.clientX - startX)
+      setWidths(prev => ({ ...prev, [col]: newW }))
+    }
+    function onUp() {
+      if (!dragging.current) return
+      const { col } = dragging.current
+      dragging.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setWidths(prev => { saveWidths(lsKey, prev); return prev })
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [lsKey])
+
+  function startResize(col: string, e: React.MouseEvent, currentW: number) {
+    e.preventDefault(); e.stopPropagation()
+    dragging.current = { col, startX: e.clientX, startW: currentW }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+  function getW(col: string) { return widths[col] ?? DEFAULT_WIDTH }
+  function resetWidths() { setWidths({}); saveWidths(lsKey, {}) }
+  return { getW, startResize, resetWidths }
+}
+
+function Resizer({ col, getW, startResize }: { col: string; getW: (c: string) => number; startResize: (c: string, e: React.MouseEvent, w: number) => void }) {
+  return (
+    <div
+      onMouseDown={e => startResize(col, e, getW(col))}
+      style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize', zIndex: 10, background: 'transparent' }}
+    />
+  )
+}
+
 // ── MultiSelectDropdown ───────────────────────────────────────────────────────
 function MultiSelectDropdown({
   col, allValues, selected, onChange, tokens,
@@ -279,6 +337,7 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState<string | null>(null)
   const fetchRef = useRef(0)
+  const { getW: getPW, startResize: startPResize, resetWidths: resetPWidths } = useColResize('wh_col_widths_pivot_v1')
 
   const valSpecsStr = valSpecs.map(v => `${v.col}:${v.agg}`).join(',')
 
@@ -437,22 +496,29 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
             <span>Value: <b style={{ color: tokens.accent }}>{valSpecs.map(v => `${v.col}(${v.agg})`).join(', ')}</b></span>
             <span>Grand Total: <b style={{ color: '#4ade80' }}>{grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</b></span>
             {activeCount > 0 && (
-              <span style={{ marginLeft: 'auto', cursor: 'pointer', color: '#f87171', fontSize: 11 }} onClick={() => setColFilters({})}>✕ Clear {activeCount} filter{activeCount > 1 ? 's' : ''}</span>
+              <span style={{ cursor: 'pointer', color: '#f87171', fontSize: 11 }} onClick={() => setColFilters({})}>✕ Clear {activeCount} filter{activeCount > 1 ? 's' : ''}</span>
             )}
+            <span style={{ cursor: 'pointer', color: tokens.textMuted, fontSize: 11, marginLeft: 'auto' }} onClick={resetPWidths}>↔ Reset widths</span>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed' as const, width: 'max-content', minWidth: '100%' }}>
+            <colgroup>
+              {pivotCols.map(h => <col key={h} style={{ width: getPW(h) }} />)}
+            </colgroup>
             <thead>
               <tr>
                 {pivotCols.map(h => (
-                  <th key={h} style={S.th} onClick={() => handleSort(h)}>
-                    {h.toUpperCase()} {sortCol === h ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                  <th key={h} style={{ ...S.th, position: 'relative', width: getPW(h) }} onClick={() => handleSort(h)}>
+                    <span style={{ display: 'block', paddingRight: 8, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {h.toUpperCase()} {sortCol === h ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                    </span>
+                    <Resizer col={h} getW={getPW} startResize={startPResize} />
                   </th>
                 ))}
               </tr>
               {/* ── Smart column filters ── */}
               <tr style={{ background: tokens.sidebarBg }}>
                 {pivotCols.map(h => (
-                  <th key={h} style={{ padding: '3px 5px', borderBottom: `2px solid ${tokens.cardBorder}`, minWidth: 120 }}>
+                  <th key={h} style={{ padding: '3px 5px', borderBottom: `2px solid ${tokens.cardBorder}`, width: getPW(h) }}>
                     <ColFilterCell col={h} rows={pivotRows} filter={colFilters[h]} onChange={f => setColFilter(h, f)} tokens={tokens} />
                   </th>
                 ))}
@@ -503,6 +569,7 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
   const [colFilters, setColFilters] = useState<Record<string, ColFilter>>({})
   const [showFilters, setShowFilters] = useState(true)
   const PAGE_SIZE = 100
+  const { getW, startResize, resetWidths } = useColResize('wh_col_widths_data_v1')
 
   const setColFilter = useCallback((col: string, f: ColFilter | undefined) => {
     setColFilters(prev => {
@@ -547,9 +614,9 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
   const S = {
     input:   { background: tokens.inputBg, border: `1px solid ${tokens.inputBorder}`, borderRadius: 6, padding: '5px 9px', fontSize: 12, color: tokens.inputColor, outline: 'none' },
     btnGhost:{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', fontSize: 12, background: 'transparent', color: tokens.textMuted },
-    th:      { background: tokens.sidebarBg, color: tokens.textMuted, padding: '7px 9px', textAlign: 'left' as const, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' as const, borderBottom: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', userSelect: 'none' as const, position: 'sticky' as const, top: 0 },
-    thFilter:{ background: tokens.sidebarBg, padding: '3px 4px', borderBottom: `2px solid ${tokens.cardBorder}`, position: 'sticky' as const, top: 33, minWidth: 110, maxWidth: 200 },
-    td:      { padding: '6px 9px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, whiteSpace: 'nowrap' as const },
+    th:      { background: tokens.sidebarBg, color: tokens.textMuted, padding: '7px 9px', textAlign: 'left' as const, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' as const, borderBottom: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', userSelect: 'none' as const, position: 'sticky' as const, top: 0, overflow: 'hidden' as const },
+    thFilter:{ background: tokens.sidebarBg, padding: '3px 4px', borderBottom: `2px solid ${tokens.cardBorder}`, position: 'sticky' as const, top: 33 },
+    td:      { padding: '6px 9px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, maxWidth: 300 as const, textOverflow: 'ellipsis' as const },
     tdNum:   { padding: '6px 9px', fontSize: 12, color: tokens.textPrimary, borderBottom: `1px solid ${tokens.cardBorder}`, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const },
   }
 
@@ -567,6 +634,7 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
         {activeCount > 0 && (
           <button style={{ ...S.btnGhost, color: '#f87171', borderColor: '#f87171' }} onClick={() => { setColFilters({}); setPage(1) }}>✕ Clear filters</button>
         )}
+        <button style={S.btnGhost} onClick={resetWidths} title="Reset column widths">↔ Reset widths</button>
         <span style={{ fontSize: 12, color: tokens.textMuted, marginLeft: 'auto' }}>
           {filtered.length.toLocaleString()} / {rows.length.toLocaleString()} rows · Page {page}/{totalPages}
         </span>
@@ -577,14 +645,21 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
       </div>
 
       <div style={{ overflowX: 'auto', border: `1px solid ${tokens.cardBorder}`, borderRadius: 8 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' as const, width: 'max-content', minWidth: '100%' }}>
+          <colgroup>
+            <col style={{ width: 36 }} />
+            {columns.map(col => <col key={col} style={{ width: getW(col) }} />)}
+          </colgroup>
           <thead>
             {/* Sort row */}
             <tr>
               <th style={{ ...S.th, width: 36 }}>#</th>
               {columns.map(col => (
-                <th key={col} style={S.th} onClick={() => { handleSort(col); setPage(1) }}>
-                  {col.toUpperCase()} {sortCol === col ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                <th key={col} style={{ ...S.th, position: 'relative', width: getW(col) }} onClick={() => { handleSort(col); setPage(1) }}>
+                  <span style={{ display: 'block', paddingRight: 8, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {col.toUpperCase()} {sortCol === col ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                  <Resizer col={col} getW={getW} startResize={startResize} />
                 </th>
               ))}
             </tr>
@@ -593,7 +668,7 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
               <tr>
                 <th style={{ ...S.thFilter, width: 36 }} />
                 {columns.map(col => (
-                  <th key={col} style={S.thFilter}>
+                  <th key={col} style={{ ...S.thFilter, width: getW(col) }}>
                     <ColFilterCell col={col} rows={rows} filter={colFilters[col]} onChange={f => setColFilter(col, f)} tokens={tokens} />
                   </th>
                 ))}

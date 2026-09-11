@@ -81,51 +81,67 @@ function MultiSelectDropdown({
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    function onDown(e: MouseEvent) {
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        dropRef.current && !dropRef.current.contains(e.target as Node)
+      ) setOpen(false)
     }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase()
-    const list = allValues.filter(v => !q || v.toLowerCase().includes(q))
-    return list.slice(0, 300)
-  }, [allValues, search])
-
-  const toggle = (v: string) => {
-    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+  function openMenu() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setDropPos({ top: r.bottom + 2, left: r.left, width: Math.max(r.width, 220) })
+    }
+    setOpen(o => !o)
   }
 
-  const label = selected.length === 0 ? col : `${col} (${selected.length})`
+  const filteredVals = useMemo(() => {
+    const q = search.toLowerCase()
+    return allValues.filter(v => !q || v.toLowerCase().includes(q)).slice(0, 300)
+  }, [allValues, search])
+
+  const toggle = (v: string) =>
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+
   const isActive = selected.length > 0
+  const label = isActive ? `${col} (${selected.length})` : col
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+    <div style={{ display: 'inline-block', width: '100%' }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={openMenu}
         style={{
           width: '100%', padding: '3px 7px', fontSize: 11, textAlign: 'left', cursor: 'pointer',
           background: isActive ? '#1d4ed833' : tokens.inputBg,
           border: `1px solid ${isActive ? '#60a5fa' : tokens.inputBorder}`,
           borderRadius: 4, color: isActive ? '#60a5fa' : tokens.textMuted,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+          overflow: 'hidden',
         }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
         <span style={{ flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 999, minWidth: 200, maxWidth: 280,
-          background: '#0f172a', border: `1px solid ${tokens.cardBorder}`, borderRadius: 6,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.6)', padding: 6,
-        }}>
+      {open && dropPos && (
+        <div
+          ref={dropRef}
+          style={{
+            position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width,
+            zIndex: 9999, minWidth: 200, maxWidth: 300,
+            background: '#0f172a', border: `1px solid ${tokens.cardBorder}`, borderRadius: 6,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.7)', padding: 6,
+          }}
+        >
           <input
             autoFocus
             value={search}
@@ -140,13 +156,13 @@ function MultiSelectDropdown({
             <button onClick={() => onChange([])} style={{ flex: 1, fontSize: 10, padding: '2px 0', background: '#1e293b', border: '1px solid #334155', borderRadius: 3, color: '#94a3b8', cursor: 'pointer' }}>None</button>
           </div>
           <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-            {filtered.map(v => (
+            {filteredVals.map(v => (
               <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 4px', cursor: 'pointer', borderRadius: 3, fontSize: 11, color: tokens.textPrimary }}>
                 <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} style={{ cursor: 'pointer' }} />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v || '(empty)'}</span>
               </label>
             ))}
-            {filtered.length === 0 && <div style={{ fontSize: 11, color: tokens.textMuted, padding: 4 }}>No match</div>}
+            {filteredVals.length === 0 && <div style={{ fontSize: 11, color: tokens.textMuted, padding: 4 }}>No match</div>}
             {allValues.length > 300 && <div style={{ fontSize: 10, color: tokens.textMuted, padding: '4px 4px 0' }}>+{allValues.length - 300} more — refine search</div>}
           </div>
         </div>

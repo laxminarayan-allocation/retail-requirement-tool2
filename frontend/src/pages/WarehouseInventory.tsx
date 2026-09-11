@@ -571,6 +571,22 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
   const PAGE_SIZE = 100
   const { getW, startResize, resetWidths } = useColResize('wh_col_widths_data_v1')
 
+  function downloadCSV(data: Row[], cols: string[], filename: string) {
+    const header = cols.join(',')
+    const body = data.map(r =>
+      cols.map(c => {
+        const v = r[c] ?? ''
+        const s = String(v)
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+      }).join(',')
+    ).join('\n')
+    const blob = new Blob([header + '\n' + body], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const setColFilter = useCallback((col: string, f: ColFilter | undefined) => {
     setColFilters(prev => {
       const next = { ...prev }
@@ -635,6 +651,16 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
           <button style={{ ...S.btnGhost, color: '#f87171', borderColor: '#f87171' }} onClick={() => { setColFilters({}); setPage(1) }}>✕ Clear filters</button>
         )}
         <button style={S.btnGhost} onClick={resetWidths} title="Reset column widths">↔ Reset widths</button>
+        <button
+          style={{ ...S.btnGhost, color: '#4ade80', borderColor: '#4ade80' }}
+          onClick={() => downloadCSV(filtered, columns, `warehouse_filtered_${Date.now()}.csv`)}
+          title="Download filtered rows as CSV"
+        >⬇ CSV ({filtered.length.toLocaleString()})</button>
+        <button
+          style={S.btnGhost}
+          onClick={() => downloadCSV(rows, columns, `warehouse_all_${Date.now()}.csv`)}
+          title="Download all rows as CSV"
+        >⬇ All CSV</button>
         <span style={{ fontSize: 12, color: tokens.textMuted, marginLeft: 'auto' }}>
           {filtered.length.toLocaleString()} / {rows.length.toLocaleString()} rows · Page {page}/{totalPages}
         </span>

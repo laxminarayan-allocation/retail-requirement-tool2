@@ -540,6 +540,14 @@ export default function AdminPanel() {
                         <td style={S.td}>
                           <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{u.full_name}</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{u.email}</div>
+                          {(['viewer', 'planner'] as const).includes(u.role as any) && (
+                            <button
+                              onClick={() => setPreviewRole(previewRole === u.role as any ? null : u.role as any)}
+                              style={{ marginTop: 4, fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, border: '1px solid', background: previewRole === u.role ? '#d97706' : 'transparent', color: previewRole === u.role ? '#fff' : '#d97706', borderColor: '#d97706' }}
+                            >
+                              {previewRole === u.role ? '👁 Previewing' : '👁 View As'}
+                            </button>
+                          )}
                         </td>
                         <td style={S.td}>
                           <span style={S.badge(u.role)}>{ROLE_LABEL[u.role] || u.role}</span>
@@ -834,21 +842,6 @@ export default function AdminPanel() {
             <button onClick={loadLiveSessions} disabled={liveLoading} style={{ fontSize: 11, padding: '4px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer' }}>
               {liveLoading ? 'Loading…' : '↻ Refresh'}
             </button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '8px 14px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>👁 View As:</span>
-            {(['viewer', 'planner'] as const).map(role => (
-              <button key={role} onClick={() => setPreviewRole(previewRole === role ? null : role)}
-                style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, border: '1px solid', background: previewRole === role ? '#d97706' : '#1e293b', color: previewRole === role ? '#fff' : '#94a3b8', borderColor: previewRole === role ? '#d97706' : '#334155' }}>
-                {role}
-              </button>
-            ))}
-            {previewRole && (
-              <button onClick={() => setPreviewRole(null)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', fontWeight: 600 }}>
-                ✕ Exit
-              </button>
-            )}
-            <span style={{ fontSize: 11, color: '#475569', marginLeft: 4 }}>Nav will show what that role sees</span>
           </div>
           {liveSessions.length === 0 ? (
             <div style={S.empty}>{liveLoading ? 'Loading…' : 'No active sessions.'}</div>

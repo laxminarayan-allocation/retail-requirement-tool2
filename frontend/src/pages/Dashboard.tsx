@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import http from '@/api/http'
 import FilterableTable from '@/components/FilterableTable'
 import StaleBanner from '@/components/StaleBanner'
+import { useAuth } from '@/context/AuthContext'
 
 // ── Pinned widgets (from MasterData VizPanel) ─────────────────────────────────
 
@@ -984,8 +985,11 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isViewer = user?.role === 'viewer'
   const [drillDown, setDrillDown] = useState<DrillState | null>(null)
   const [dashTab, setDashTab] = useState<'store-network' | 'allocation'>('store-network')
+  const effectiveDashTab = isViewer ? 'store-network' : dashTab
   const [expandedCards, setExpandedCards] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('dash_expanded_cards') ?? '[]')) } catch { return new Set() }
   })
@@ -1179,20 +1183,20 @@ export default function Dashboard() {
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--card-border)', marginBottom: 0 }}>
         {([
           { key: 'store-network', label: '🏪 Store Network' },
-          { key: 'allocation',    label: '📦 Allocation Report' },
+          ...(!isViewer ? [{ key: 'allocation', label: '📦 Allocation Report' }] : []),
         ] as const).map(t => (
-          <button key={t.key} onClick={() => setDashTab(t.key)} style={{
+          <button key={t.key} onClick={() => setDashTab(t.key as any)} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            padding: '8px 18px', fontSize: 12, fontWeight: dashTab === t.key ? 700 : 400,
-            color: dashTab === t.key ? '#4ade80' : 'var(--text-muted)',
-            borderBottom: dashTab === t.key ? '2px solid #4ade80' : '2px solid transparent',
+            padding: '8px 18px', fontSize: 12, fontWeight: effectiveDashTab === t.key ? 700 : 400,
+            color: effectiveDashTab === t.key ? '#4ade80' : 'var(--text-muted)',
+            borderBottom: effectiveDashTab === t.key ? '2px solid #4ade80' : '2px solid transparent',
             marginBottom: -1, transition: 'color 0.15s',
           }}>{t.label}</button>
         ))}
       </div>
 
       {/* ── Store Network section ── */}
-      {dashTab === 'store-network' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
+      {effectiveDashTab === 'store-network' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
@@ -1313,7 +1317,7 @@ export default function Dashboard() {
 
 
       {/* ── Allocation Summary section ── */}
-      {dashTab === 'allocation' && (() => {
+      {effectiveDashTab === 'allocation' && (() => {
         // Column definitions per view
         const viewDefs: Record<'all' | 'store' | 'mc', import('@/components/FilterableTable').FTColumn[]> = {
           all: [

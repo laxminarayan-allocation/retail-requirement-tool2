@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import http from '@/api/http'
 import { useTheme } from '@/context/ThemeContext'
+import { useAuth } from '@/context/AuthContext'
 
 type Row = { [key: string]: any }
 type Agg = 'sum' | 'count' | 'avg' | 'max' | 'min'
@@ -119,7 +120,14 @@ function useColResize(lsKey: string) {
   }
   function getW(col: string) { return widths[col] ?? DEFAULT_WIDTH }
   function resetWidths() { setWidths({}); saveWidths(lsKey, {}) }
-  return { getW, startResize, resetWidths }
+  function applyWidths(w: Record<string, number>) {
+    setWidths(prev => {
+      // user-stored widths override auto-fit
+      const merged = { ...w, ...prev }
+      return merged
+    })
+  }
+  return { getW, startResize, resetWidths, applyWidths }
 }
 
 function Resizer({ col, getW, startResize }: { col: string; getW: (c: string) => number; startResize: (c: string, e: React.MouseEvent, w: number) => void }) {
@@ -337,7 +345,49 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState<string | null>(null)
   const fetchRef = useRef(0)
-  const { getW: getPW, startResize: startPResize, resetWidths: resetPWidths } = useColResize('wh_col_widths_pivot_v1')
+  const { getW: getPW, startResize: startPResize, resetWidths: resetPWidths, applyWidths: applyPWidths } = useColResize('wh_col_widths_pivot_v1')
+
+  // ── Presets (server-side) ─────────────────────────────────────────────────────
+  type PivotPreset = { name: string; rowDims: string[]; colDims: string[]; valSpecs: ValSpec[]; colFilters: Record<string, ColFilter>; search: string; showTop: number; condEnabled: boolean; condLo: string; condHi: string }
+  const [presets, setPresets] = useState<PivotPreset[]>([])
+  const [presetName, setPresetName] = useState('')
+  const [showPresetPanel, setShowPresetPanel] = useState(false)
+
+  useEffect(() => {
+    http.get('/warehouse-inventory/presets')
+      .then(r => setPresets(r.data?.data?.presets ?? []))
+      .catch(() => {})
+  }, [])
+
+  async function savePreset() {
+    const name = presetName.trim()
+    if (!name) return
+    const preset: PivotPreset = { name, rowDims, colDims, valSpecs, colFilters, search, showTop, condEnabled, condLo, condHi }
+    try {
+      const r = await http.post('/warehouse-inventory/presets', preset)
+      setPresets(r.data?.data?.presets ?? [])
+    } catch {}
+    setPresetName('')
+  }
+  function loadPreset(p: PivotPreset) {
+    setRowDims(p.rowDims)
+    setColDims(p.colDims)
+    setValSpecs(p.valSpecs)
+    setColFilters(p.colFilters ?? {})
+    setSearch(p.search ?? '')
+    setShowTop(p.showTop ?? 0)
+    setCondEnabled(p.condEnabled ?? false)
+    setCondLo(p.condLo ?? '')
+    setCondHi(p.condHi ?? '')
+    setShowPresetPanel(false)
+  }
+  async function deletePreset(name: string) {
+    try {
+      const r = await http.delete(`/warehouse-inventory/presets/${encodeURIComponent(name)}`)
+      setPresets(r.data?.data?.presets ?? [])
+    } catch {}
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const valSpecsStr = valSpecs.map(v => `${v.col}:${v.agg}`).join(',')
 
@@ -350,18 +400,31 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
       const res = await http.get('/warehouse-inventory/pivot', { params, timeout: 60000 })
       if (id !== fetchRef.current) return
       const d = res.data?.data ?? {}
-      setPivotRows(d.rows ?? [])
-      setPivotCols(d.columns ?? [])
+      const rows: Row[] = d.rows ?? []
+      const cols: string[] = d.columns ?? []
+      setPivotRows(rows)
+      setPivotCols(cols)
       setGrandTotal(d.grand_total ?? 0)
       setGrandTotals(d.grand_totals ?? {})
       setIsCrossTab((d.col_dims ?? []).length > 0)
+      // auto-fit widths from content (user overrides kept via applyWidths merge)
+      const autoW: Record<string, number> = {}
+      cols.forEach(col => {
+        const headerLen = col.length
+        const maxValLen = rows.slice(0, 60).reduce((mx, r) => Math.max(mx, String(r[col] ?? '').length), 0)
+        autoW[col] = Math.max(70, Math.min(280, Math.max(headerLen, maxValLen) * 8 + 24))
+      })
+      applyPWidths(autoW)
+      // default sort: first numeric col high→low
+      const firstNumCol = cols.find(c => rows.length > 0 && typeof rows[0][c] === 'number')
+      if (firstNumCol) { setSortCol(firstNumCol); setSortDir('desc') }
     } catch (e: any) {
       if (id !== fetchRef.current) return
       setError(e?.response?.data?.message || 'Pivot failed')
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { runPivot() }, [rowDims.join(','), colDims.join(','), valSpecsStr, filters.warehouse, filters.item_code, filters.division]) // eslint-disable-line
+  // No auto-run — user must click Run Pivot manually to avoid repeated API calls on every chip click
 
   const toggleRowDim = (col: string) => {
     setColDims(d => d.filter(x => x !== col))
@@ -423,62 +486,172 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
   return (
     <div>
       {/* ── Builder ── */}
-      <div style={{ ...S.card, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
-        <div>
-          <div style={{ ...S.label, color: '#60a5fa' }}>📋 ROW</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 130, overflowY: 'auto' }}>
-            {PIVOT_DIMS.map(c => (
-              <span key={c} style={{ ...S.chip(rowDims.includes(c)), borderColor: rowDims.includes(c) ? '#60a5fa' : tokens.cardBorder, background: rowDims.includes(c) ? '#1d4ed833' : 'transparent', color: rowDims.includes(c) ? '#60a5fa' : tokens.textMuted }} onClick={() => toggleRowDim(c)}>{c}</span>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div style={{ ...S.label, color: '#f59e0b' }}>📊 COLUMN <span style={{ fontWeight: 400, fontSize: 10 }}>(optional — cross-tab)</span></div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 130, overflowY: 'auto' }}>
-            {PIVOT_DIMS.map(c => (
-              <span key={c} style={{ ...S.chip(colDims.includes(c)), borderColor: colDims.includes(c) ? '#f59e0b' : tokens.cardBorder, background: colDims.includes(c) ? '#f59e0b33' : 'transparent', color: colDims.includes(c) ? '#f59e0b' : tokens.textMuted }} onClick={() => toggleColDim(c)}>{c}</span>
-            ))}
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ ...S.label, color: '#4ade80', marginBottom: 0 }}>∑ VALUES</div>
-            <span style={{ ...S.chip(false), fontSize: 10, padding: '2px 8px', cursor: 'pointer' }} onClick={addValSpec}>+ Add</span>
-          </div>
-          {valSpecs.map((vs, i) => (
-            <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <select style={{ ...S.select, flex: 1 }} value={vs.col} onChange={e => updateValSpec(i, 'col', e.target.value)}>
-                {PIVOT_VALS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select style={{ ...S.select, width: 70 }} value={vs.agg} onChange={e => updateValSpec(i, 'agg', e.target.value)}>
-                {AGG_OPTIONS.map(a => <option key={a} value={a}>{a === 'pct' ? 'cont%' : a.toUpperCase()}</option>)}
-              </select>
-              {valSpecs.length > 1 && (
-                <span style={{ cursor: 'pointer', color: '#f87171', fontSize: 14, padding: '0 4px' }} onClick={() => removeValSpec(i)}>✕</span>
-              )}
+      <div style={{ ...S.card, padding: 16 }}>
+        {/* Header row with Run button + Presets */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary }}>Pivot Builder</div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Preset save input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                value={presetName}
+                onChange={e => setPresetName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && savePreset()}
+                placeholder="Preset naam…"
+                style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid ${tokens.inputBorder}`, background: tokens.inputBg, color: tokens.inputColor, fontSize: 12, width: 130, outline: 'none' }}
+              />
+              <button
+                onClick={savePreset}
+                disabled={!presetName.trim()}
+                title="Current setup save karo"
+                style={{ padding: '5px 10px', borderRadius: 6, border: `1px solid #4ade8066`, background: presetName.trim() ? '#4ade8022' : 'transparent', color: presetName.trim() ? '#4ade80' : tokens.textMuted, fontWeight: 700, fontSize: 12, cursor: presetName.trim() ? 'pointer' : 'default' }}
+              >💾 Save</button>
             </div>
-          ))}
+
+            {/* Load preset dropdown */}
+            {presets.length > 0 && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowPresetPanel(v => !v)}
+                  style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${tokens.cardBorder}`, background: showPresetPanel ? tokens.accent + '22' : tokens.inputBg, color: tokens.textPrimary, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                >
+                  📂 Presets <span style={{ background: '#4f46e5', color: '#fff', borderRadius: 10, fontSize: 10, padding: '0 5px', fontWeight: 700 }}>{presets.length}</span>
+                </button>
+                {showPresetPanel && (
+                  <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 200, background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8, minWidth: 200, boxShadow: '0 8px 24px #0006', overflow: 'hidden' }}>
+                    {presets.map(p => (
+                      <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: `1px solid ${tokens.cardBorder}` }}>
+                        <span
+                          onClick={() => loadPreset(p)}
+                          style={{ flex: 1, cursor: 'pointer', fontSize: 12, color: tokens.textPrimary, fontWeight: 600 }}
+                          title={`Rows: ${p.rowDims.join(', ')} | Cols: ${p.colDims.join(', ') || 'none'} | Values: ${p.valSpecs.map(v => `${v.col}(${v.agg})`).join(', ')}`}
+                        >
+                          {p.name}
+                        </span>
+                        <span style={{ fontSize: 10, color: tokens.textMuted }}>{p.rowDims.join('+')}</span>
+                        <span
+                          onClick={() => deletePreset(p.name)}
+                          style={{ cursor: 'pointer', color: '#f87171', fontSize: 13, padding: '0 2px', flexShrink: 0 }}
+                          title="Delete"
+                        >✕</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={runPivot}
+              disabled={loading}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 20px', borderRadius: 8, border: 'none',
+                background: loading ? '#374151' : '#4f46e5',
+                color: loading ? tokens.textMuted : '#fff',
+                fontWeight: 700, fontSize: 13, cursor: loading ? 'not-allowed' : 'pointer',
+                boxShadow: loading ? 'none' : '0 2px 8px #4f46e566',
+                transition: 'background 0.15s',
+              }}
+            >
+              {loading ? '⏳ Running…' : '▶ Run Pivot'}
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+        {/* Dimensions + Values row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          {/* ROW dims */}
+          <div style={{ background: '#1d4ed811', border: '1px solid #1d4ed844', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ background: '#1d4ed833', borderRadius: 4, padding: '1px 6px' }}>ROW</span>
+              <span style={{ fontSize: 10, fontWeight: 400, color: tokens.textMuted }}>dimension</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, maxHeight: 110, overflowY: 'auto' }}>
+              {PIVOT_DIMS.map(c => (
+                <span key={c} onClick={() => toggleRowDim(c)} style={{
+                  display: 'inline-flex', alignItems: 'center', padding: '3px 8px', borderRadius: 20,
+                  fontSize: 11, fontWeight: rowDims.includes(c) ? 700 : 400, cursor: 'pointer',
+                  border: `1px solid ${rowDims.includes(c) ? '#60a5fa' : tokens.cardBorder}`,
+                  background: rowDims.includes(c) ? '#1d4ed833' : 'transparent',
+                  color: rowDims.includes(c) ? '#60a5fa' : tokens.textMuted,
+                  userSelect: 'none',
+                }}>{c}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* COLUMN dims */}
+          <div style={{ background: '#f59e0b0d', border: '1px solid #f59e0b33', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ background: '#f59e0b22', borderRadius: 4, padding: '1px 6px' }}>COLUMN</span>
+              <span style={{ fontSize: 10, fontWeight: 400, color: tokens.textMuted }}>cross-tab (optional)</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, maxHeight: 110, overflowY: 'auto' }}>
+              {PIVOT_DIMS.map(c => (
+                <span key={c} onClick={() => toggleColDim(c)} style={{
+                  display: 'inline-flex', alignItems: 'center', padding: '3px 8px', borderRadius: 20,
+                  fontSize: 11, fontWeight: colDims.includes(c) ? 700 : 400, cursor: 'pointer',
+                  border: `1px solid ${colDims.includes(c) ? '#f59e0b' : tokens.cardBorder}`,
+                  background: colDims.includes(c) ? '#f59e0b22' : 'transparent',
+                  color: colDims.includes(c) ? '#f59e0b' : tokens.textMuted,
+                  userSelect: 'none',
+                }}>{c}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* VALUES */}
+          <div style={{ background: '#4ade800d', border: '1px solid #4ade8033', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ background: '#4ade8022', borderRadius: 4, padding: '1px 6px' }}>VALUES</span>
+              <span onClick={addValSpec} style={{ fontSize: 10, fontWeight: 600, cursor: 'pointer', color: '#4ade80', border: '1px solid #4ade8044', borderRadius: 10, padding: '1px 8px', marginLeft: 'auto' }}>+ Add</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {valSpecs.map((vs, i) => (
+                <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <select style={{ ...S.select, flex: 1, fontSize: 11 }} value={vs.col} onChange={e => updateValSpec(i, 'col', e.target.value)}>
+                    {PIVOT_VALS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select style={{ ...S.select, width: 65, fontSize: 11 }} value={vs.agg} onChange={e => updateValSpec(i, 'agg', e.target.value)}>
+                    {AGG_OPTIONS.map(a => <option key={a} value={a}>{a === 'pct' ? 'cont%' : a.toUpperCase()}</option>)}
+                  </select>
+                  {valSpecs.length > 1 && (
+                    <span style={{ cursor: 'pointer', color: '#f87171', fontSize: 13, padding: '0 3px' }} onClick={() => removeValSpec(i)}>✕</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Options row */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', paddingTop: 10, borderTop: `1px solid ${tokens.cardBorder}` }}>
           <div>
-            <div style={S.label}>🔍 SEARCH RESULT</div>
-            <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' as const }} placeholder="Filter rows…" value={search} onChange={e => setSearch(e.target.value)} />
+            <div style={{ ...S.label, marginBottom: 4 }}>Search result</div>
+            <input style={{ ...S.input, width: 160 }} placeholder="Filter rows…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div>
-            <div style={S.label}>🔢 TOP N (0=all)</div>
-            <input type="number" style={{ ...S.input, width: 80 }} min={0} value={showTop} onChange={e => setShowTop(Number(e.target.value))} />
+            <div style={{ ...S.label, marginBottom: 4 }}>Top N <span style={{ fontWeight: 400 }}>(0=all)</span></div>
+            <input type="number" style={{ ...S.input, width: 70 }} min={0} value={showTop} onChange={e => setShowTop(Number(e.target.value))} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={S.label}>🎨 COND COLOR</div>
-            <span style={S.chip(condEnabled)} onClick={() => setCondEnabled(v => !v)}>{condEnabled ? 'ON' : 'OFF'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ ...S.label, marginBottom: 0 }}>Cond color</div>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20,
+              fontSize: 11, fontWeight: 600, cursor: 'pointer', userSelect: 'none',
+              border: `1px solid ${condEnabled ? tokens.accent : tokens.cardBorder}`,
+              background: condEnabled ? tokens.accent + '33' : 'transparent',
+              color: condEnabled ? tokens.accent : tokens.textMuted,
+            }} onClick={() => setCondEnabled(v => !v)}>{condEnabled ? 'ON' : 'OFF'}</span>
           </div>
           {condEnabled && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div><div style={{ fontSize: 10, color: '#f87171', marginBottom: 3 }}>🔴 ≤</div><input type="number" style={{ ...S.input, width: 80 }} value={condLo} onChange={e => setCondLo(e.target.value)} placeholder="100" /></div>
-              <div><div style={{ fontSize: 10, color: '#4ade80', marginBottom: 3 }}>🟢 ≥</div><input type="number" style={{ ...S.input, width: 80 }} value={condHi} onChange={e => setCondHi(e.target.value)} placeholder="1000" /></div>
-            </div>
+            <>
+              <div><div style={{ fontSize: 10, color: '#f87171', marginBottom: 3 }}>Red ≤</div><input type="number" style={{ ...S.input, width: 70 }} value={condLo} onChange={e => setCondLo(e.target.value)} placeholder="100" /></div>
+              <div><div style={{ fontSize: 10, color: '#4ade80', marginBottom: 3 }}>Green ≥</div><input type="number" style={{ ...S.input, width: 70 }} value={condHi} onChange={e => setCondHi(e.target.value)} placeholder="1000" /></div>
+            </>
           )}
-          <button style={{ ...S.chip(false), padding: '5px 12px', fontSize: 12 } as any} onClick={runPivot}>↺ Re-run</button>
         </div>
       </div>
 
@@ -530,9 +703,10 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
                   {pivotCols.map(h => {
                     const val = row[h]
                     const isNum = typeof val === 'number'
+                    const isNeg = isNum && val < 0
                     const bg = isNum && condEnabled ? cellColor(val, Number(condLo || 0), Number(condHi || 0), condEnabled) : undefined
                     return (
-                      <td key={h} style={{ ...(isNum ? S.tdNum : S.td), background: bg }}>
+                      <td key={h} style={{ ...(isNum ? S.tdNum : S.td), background: bg, color: isNeg ? '#f87171' : undefined }}>
                         {isNum ? fmt(val) : (val ?? '—')}
                       </td>
                     )
@@ -542,14 +716,14 @@ function PivotTable({ filters }: { filters: { warehouse: string; item_code: stri
             </tbody>
             <tfoot>
               <tr style={{ background: tokens.sidebarBg, fontWeight: 700 }}>
-                {pivotCols.map((h, i) => (
-                  <td key={h} style={{ ...S.tdNum, borderTop: `2px solid ${tokens.cardBorder}`, color: tokens.textPrimary }}>
-                    {i === 0 ? `TOTAL (${filtered.length})` :
-                      typeof filtered[0]?.[h] === 'number'
-                        ? fmt(filtered.reduce((s, r) => s + toNum(r[h]), 0))
-                        : ''}
-                  </td>
-                ))}
+                {pivotCols.map((h, i) => {
+                  const total = i === 0 ? null : typeof filtered[0]?.[h] === 'number' ? filtered.reduce((s, r) => s + toNum(r[h]), 0) : null
+                  return (
+                    <td key={h} style={{ ...S.tdNum, borderTop: `2px solid ${tokens.cardBorder}`, color: total !== null && total < 0 ? '#f87171' : tokens.textPrimary }}>
+                      {i === 0 ? `TOTAL (${filtered.length})` : total !== null ? fmt(total) : ''}
+                    </td>
+                  )
+                })}
               </tr>
             </tfoot>
           </table>
@@ -728,6 +902,8 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function WarehouseInventory() {
   const { tokens } = useTheme()
+  const { user } = useAuth()
+  const isViewer = user?.role === 'viewer'
   const [rows, setRows]         = useState<Row[]>([])
   const [columns, setColumns]   = useState<string[]>([])
   const [loading, setLoading]   = useState(false)
@@ -737,6 +913,7 @@ export default function WarehouseInventory() {
   const [queryTime, setQueryTime] = useState<number | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [tab, setTab]           = useState<'data' | 'pivot'>('data')
+  const effectiveTab = isViewer ? 'pivot' : tab
   const [accessDenied, setAccessDenied] = useState(false)
   const [warehouse, setWarehouse] = useState('')
   const [itemCode, setItemCode]   = useState('')
@@ -843,12 +1020,12 @@ export default function WarehouseInventory() {
       {!loading && rows.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: 4, marginBottom: -1, position: 'relative', zIndex: 1 }}>
-            <button style={S.tab(tab === 'data')} onClick={() => setTab('data')}>📋 Data Table</button>
-            <button style={S.tab(tab === 'pivot')} onClick={() => setTab('pivot')}>📊 Pivot Analysis</button>
+            {!isViewer && <button style={S.tab(effectiveTab === 'data')} onClick={() => setTab('data')}>📋 Data Table</button>}
+            <button style={S.tab(effectiveTab === 'pivot')} onClick={() => setTab('pivot')}>📊 Pivot Analysis</button>
           </div>
           <div style={{ ...S.card, borderRadius: '0 10px 10px 10px', marginBottom: 0 }}>
-            {tab === 'data' && <DataTable rows={rows} columns={columns} />}
-            {tab === 'pivot' && <PivotTable filters={{ warehouse, item_code: itemCode, division }} />}
+            {effectiveTab === 'data' && <DataTable rows={rows} columns={columns} />}
+            {effectiveTab === 'pivot' && <PivotTable filters={{ warehouse, item_code: itemCode, division }} />}
           </div>
         </>
       )}

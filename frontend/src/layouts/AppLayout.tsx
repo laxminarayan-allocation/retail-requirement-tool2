@@ -1,6 +1,6 @@
 ﻿import { NavLink, Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { useAuth, hasRole, type Role } from '@/context/AuthContext'
+import { useAuth, hasRole, ROLE_LEVEL, type Role } from '@/context/AuthContext'
 import { useTheme, type ThemeName, THEME_LABELS } from '@/context/ThemeContext'
 import { useDisplay, FONT_LABELS, type FontFamily } from '@/context/DisplayContext'
 import axios from 'axios'
@@ -379,7 +379,7 @@ function ZoomPill() {
 }
 
 export default function AppLayout() {
-  const { user, token, loading, signout, pageAccess } = useAuth()
+  const { user, token, loading, signout, pageAccess, previewRole, setPreviewRole } = useAuth()
   const { tokens, theme } = useTheme()
   const { isRunning: oracleRunning } = useOracleRefresh()
   const realIsMobile = useIsMobile()
@@ -561,8 +561,12 @@ export default function AppLayout() {
     ? user.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
     : user.email[0].toUpperCase()
 
+  const effectiveRole = previewRole ?? user.role
   const visibleNav = (() => {
     const filtered = NAV_ITEMS.filter(item => {
+      if (previewRole) {
+        return ROLE_LEVEL[effectiveRole] >= ROLE_LEVEL[item.minRole]
+      }
       if (item.to in pageAccess) return pageAccess[item.to]
       return hasRole(user, item.minRole)
     })
@@ -777,6 +781,12 @@ export default function AppLayout() {
       )}
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', ...(isMobile ? { overflowY: 'visible', overflowX: 'auto' } : {}) }}>
+        {previewRole && (
+          <div style={{ background: '#d97706', color: '#fff', padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, gap: 8, flexShrink: 0 }}>
+            <span>👁 Previewing as <strong>{previewRole}</strong> — nav shows what this role sees</span>
+            <button onClick={() => setPreviewRole(null)} style={{ background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>Exit Preview</button>
+          </div>
+        )}
         <div style={{ background: tokens.topbarBg, borderBottom: `1px solid ${tokens.topbarBorder}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, color: tokens.textSecondary, gap: 8, transition: 'background 0.2s' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {isMobile ? (

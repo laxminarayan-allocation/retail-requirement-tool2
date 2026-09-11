@@ -22,6 +22,8 @@ interface AuthContextValue extends AuthState {
   signin: (token: string) => Promise<void>
   signout: () => void
   refreshMe: () => Promise<void>
+  previewRole: Role | null
+  setPreviewRole: (role: Role | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -55,6 +57,7 @@ function setAxiosToken(token: string | null) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, token: null, loading: true, pageAccess: {} })
+  const [previewRole, setPreviewRole] = useState<Role | null>(null)
 
   const applyToken = useCallback(async (token: string) => {
     const user = parseToken(token)
@@ -133,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ ...state, signin, signout, refreshMe }}>
+    <AuthContext.Provider value={{ ...state, signin, signout, refreshMe, previewRole, setPreviewRole }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useCallback, Fragment } from 'react'
 import axios from 'axios'
 import { DataGrid } from '@/components/DataGrid'
+import { useAuth } from '@/context/AuthContext'
 
 type RoleRequest = {
   id: string; user_email: string; user_name: string;
@@ -154,6 +155,7 @@ function SessionLimitCell({ user, onSave }: { user: User; onSave: (md: number, m
 }
 
 export default function AdminPanel() {
+  const { previewRole, setPreviewRole } = useAuth()
   const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access' | 'live'>('requests')
   const [requests, setRequests] = useState<RoleRequest[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -825,13 +827,28 @@ export default function AdminPanel() {
       {/* ── Live Sessions ── */}
       {tab === 'live' && (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: '#64748b' }}>
               {liveLastRefresh ? `Refreshed at ${liveLastRefresh.toLocaleTimeString('en-IN')}` : ''}
             </span>
             <button onClick={loadLiveSessions} disabled={liveLoading} style={{ fontSize: 11, padding: '4px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer' }}>
               {liveLoading ? 'Loading…' : '↻ Refresh'}
             </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '8px 14px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>👁 View As:</span>
+            {(['viewer', 'planner'] as const).map(role => (
+              <button key={role} onClick={() => setPreviewRole(previewRole === role ? null : role)}
+                style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, border: '1px solid', background: previewRole === role ? '#d97706' : '#1e293b', color: previewRole === role ? '#fff' : '#94a3b8', borderColor: previewRole === role ? '#d97706' : '#334155' }}>
+                {role}
+              </button>
+            ))}
+            {previewRole && (
+              <button onClick={() => setPreviewRole(null)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', fontWeight: 600 }}>
+                ✕ Exit
+              </button>
+            )}
+            <span style={{ fontSize: 11, color: '#475569', marginLeft: 4 }}>Nav will show what that role sees</span>
           </div>
           {liveSessions.length === 0 ? (
             <div style={S.empty}>{liveLoading ? 'Loading…' : 'No active sessions.'}</div>

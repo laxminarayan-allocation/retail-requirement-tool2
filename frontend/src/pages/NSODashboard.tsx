@@ -963,7 +963,7 @@ export default function NSODashboard() {
                 background: effectiveTab === t ? '#0ea5e9' : '#0f172a',
                 color: effectiveTab === t ? '#fff' : '#64748b',
               }}>
-                {t === 'store' ? '📊 Store' : '📋 Articles'}
+                {t === 'store' ? '📊 Store' : '📋 Data Table'}
               </button>
             ))}
             <button onClick={() => setFilterDrawerOpen(true)} style={{
@@ -1160,7 +1160,7 @@ export default function NSODashboard() {
                 color: effectiveTab === t ? '#fff' : C.text2,
                 fontWeight: effectiveTab === t ? 700 : 400,
               }}>
-                {t === 'store' ? '📊 Store View' : '📋 Article Detail'}
+                {t === 'store' ? '📊 Store View' : '📋 Data Table'}
               </button>
             ))}
             {/* NSO / All Chain pill — visible on both tabs */}

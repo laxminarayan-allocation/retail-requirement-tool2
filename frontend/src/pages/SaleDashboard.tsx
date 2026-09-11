@@ -273,9 +273,12 @@ export default function SaleDashboard() {
   const activeFilterCount = [selCluster, selRegion, selStatus, ...selAttrs, ...selDivisions, dateFrom || dateTo ? '1' : '', customLY ? '1' : ''].filter(Boolean).length
 
   // ── Tab state ───────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'summary' | 'daily' | 'comparison'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'daily' | 'comparison' | 'table'>('summary')
   const [dailyRows, setDailyRows] = useState<Row[]>([])
   const [dailyLoading, setDailyLoading] = useState(false)
+  // Data Table tab state
+  const [tblSearch, setTblSearch] = useState('')
+  const [tblSelCols, setTblSelCols] = useState<string[] | null>(null) // null = all
 
   const loadDailyData = useCallback(async () => {
     setDailyLoading(true)
@@ -737,6 +740,7 @@ export default function SaleDashboard() {
             { key: 'summary',    label: 'Store Summary' },
             { key: 'daily',      label: 'Daily Trend' },
             { key: 'comparison', label: 'TY vs LY' },
+            { key: 'table',      label: '📋 Data Table' },
           ] as const).map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
               padding: '5px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
@@ -991,8 +995,92 @@ export default function SaleDashboard() {
         </div>
       ))}
 
+      {/* ── Data Table Tab ───────────────────────────────────────────────────── */}
+      {activeTab === 'table' && (() => {
+        const allCols = rows.length > 0 ? Object.keys(rows[0]) : []
+        const selCols = tblSelCols ?? allCols
+        const tblFiltered = tblSearch.trim()
+          ? rows.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(tblSearch.toLowerCase())))
+          : rows
+        const TBL_PAGE = 100
+        const tblPages = Math.ceil(tblFiltered.length / TBL_PAGE)
+        const tblPaged = tblFiltered.slice((page - 1) * TBL_PAGE, page * TBL_PAGE)
+
+        function tblExportCsv() {
+          if (!tblFiltered.length) return
+          const lines = [selCols.join(','), ...tblFiltered.map(r => selCols.map(c => JSON.stringify(r[c] ?? '')).join(','))]
+          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `sale_data_${new Date().toISOString().slice(0,10)}.csv`; a.click()
+        }
+
+        return (
+          <div>
+            {/* Toolbar */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' as const }}>
+              <input
+                placeholder="Search all columns…"
+                value={tblSearch}
+                onChange={e => { setTblSearch(e.target.value); setPage(1) }}
+                style={{ flex: 1, minWidth: 200, maxWidth: 320, background: '#0f1724', border: '1px solid #2a3a55', borderRadius: 6, padding: '5px 10px', color: 'inherit', fontSize: 12 }}
+              />
+              <span style={{ fontSize: 11, opacity: .5 }}>{tblFiltered.length.toLocaleString()} rows</span>
+              <button className="btn" onClick={tblExportCsv} disabled={!tblFiltered.length}>⬇ CSV</button>
+              {/* Column picker */}
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                <span style={{ fontSize: 10, opacity: .5 }}>Cols:</span>
+                <button className="btn" style={{ fontSize: 10, padding: '2px 8px', color: tblSelCols === null ? '#0ea5e9' : 'inherit' }} onClick={() => setTblSelCols(null)}>All</button>
+                {allCols.map(c => (
+                  <button key={c} className="btn" onClick={() => {
+                    const cur = tblSelCols ?? allCols
+                    if (cur.includes(c) && cur.length > 1) setTblSelCols(cur.filter(x => x !== c))
+                    else if (!cur.includes(c)) setTblSelCols([...cur, c])
+                  }} style={{ fontSize: 10, padding: '2px 8px', background: selCols.includes(c) ? '#1e3a5f' : '#0f1724', color: selCols.includes(c) ? '#7dd3fc' : '#475569', border: `1px solid ${selCols.includes(c) ? '#3b82f6' : '#2a3a55'}` }}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Table */}
+            <div className="tbl-scroll">
+              <table className="sale-table">
+                <thead>
+                  <tr>
+                    {selCols.map(c => <th key={c} style={{ textAlign: 'right' }}>{c}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tblPaged.length === 0 && (
+                    <tr><td colSpan={selCols.length} style={{ textAlign: 'center', opacity: .4, padding: 30 }}>
+                      {rows.length === 0 ? 'No data — click Refresh' : 'No rows match search'}
+                    </td></tr>
+                  )}
+                  {tblPaged.map((r, i) => (
+                    <tr key={i}>
+                      {selCols.map(c => {
+                        const v = r[c]
+                        const n = Number(v)
+                        const isN = v !== null && v !== '' && !isNaN(n)
+                        return <td key={c} style={{ textAlign: isN ? 'right' : 'left', fontVariantNumeric: 'tabular-nums' }}>{v == null || v === '' ? '—' : isN ? fmt(v, 2) : String(v)}</td>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {tblPages > 1 && (
+              <div className="pagination">
+                <button disabled={page === 1} onClick={() => setPage(1)}>«</button>
+                <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
+                <span>{page} / {tblPages}</span>
+                <button disabled={page === tblPages} onClick={() => setPage(p => p + 1)}>›</button>
+                <button disabled={page === tblPages} onClick={() => setPage(tblPages)}>»</button>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Pagination */}
-      {totalPages > 1 && (
+      {totalPages > 1 && activeTab !== 'table' && (
         <div className="pagination">
           <button disabled={page === 1} onClick={() => setPage(1)}>«</button>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>

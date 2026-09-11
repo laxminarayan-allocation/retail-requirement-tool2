@@ -53,24 +53,15 @@ def _load_df(refresh: bool = False) -> pd.DataFrame:
     return df
 
 
+_MAX_ROWS = 50_000  # browser pe itna hi bhejo
+
 def _df_to_rows(df: pd.DataFrame) -> list[dict]:
-    df = df.where(df.notna(), other=None)
-    rows = []
-    for rec in df.to_dict(orient="records"):
-        clean = {}
-        for k, v in rec.items():
-            if v is None:
-                clean[k] = None
-            elif hasattr(v, "isoformat"):
-                clean[k] = v.isoformat()
-            elif isinstance(v, float) and math.isnan(v):
-                clean[k] = None
-            elif isinstance(v, (int, float)):
-                clean[k] = v
-            else:
-                clean[k] = str(v)
-        rows.append(clean)
-    return rows
+    # Convert datetime cols to ISO string (vectorized)
+    df = df.copy()
+    for col in df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns:
+        df[col] = df[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
+    # Replace NaN/NaT with None — vectorized, no Python loop
+    return df.where(df.notna(), other=None).to_dict(orient="records")
 
 
 @router.get("", response_model=APIResponse)
@@ -85,6 +76,7 @@ async def get_warehouse_inventory(
     try:
         t0 = time.time()
         df = _load_df(refresh=refresh)
+        total_before_filter = len(df)
 
         # Apply filters
         if warehouse:
@@ -94,12 +86,19 @@ async def get_warehouse_inventory(
         if division:
             df = df[df["division"].astype(str).str.upper() == division.strip().upper()]
 
+        total_filtered = len(df)
+        truncated = total_filtered > _MAX_ROWS
+        if truncated:
+            df = df.head(_MAX_ROWS)
+
         rows = _df_to_rows(df)
         elapsed = round(time.time() - t0, 2)
         return APIResponse.ok(data={
             "columns": list(df.columns),
             "rows": rows,
-            "total": len(rows),
+            "total": total_filtered,
+            "returned": len(rows),
+            "truncated": truncated,
             "from_cache": True,
             "query_s": elapsed,
         })

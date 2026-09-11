@@ -733,6 +733,7 @@ export default function WarehouseInventory() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [total, setTotal]       = useState(0)
+  const [truncated, setTruncated] = useState(false)
   const [queryTime, setQueryTime] = useState<number | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [tab, setTab]           = useState<'data' | 'pivot'>('data')
@@ -756,6 +757,7 @@ export default function WarehouseInventory() {
       setRows(d.rows ?? [])
       setColumns(d.columns ?? [])
       setTotal(d.total ?? 0)
+      setTruncated(d.truncated ?? false)
       setQueryTime(d.query_s ?? null)
       setFromCache(d.from_cache ?? false)
     } catch (e: any) {
@@ -829,6 +831,11 @@ export default function WarehouseInventory() {
         <button style={{ ...S.btnGhost, alignSelf: 'flex-end' }} onClick={() => { setWarehouse(''); setItemCode(''); setDivision('') }}>Clear</button>
       </div>
 
+      {truncated && (
+        <div style={{ background: '#78350f', border: '1px solid #f59e0b', borderRadius: 8, padding: '8px 14px', color: '#fde68a', fontSize: 12, marginBottom: 10 }}>
+          ⚠ Data bahut zyada hai — sirf pehle 50,000 rows dikh rahe hain (total: {total.toLocaleString()})। Filter lagao ya CSV download karo poora data lene ke liye.
+        </div>
+      )}
       {error && <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>}
       {loading && <div style={{ textAlign: 'center', padding: '60px 20px', color: tokens.textMuted, fontSize: 14 }}>Data load ho raha hai…</div>}
       {!loading && rows.length === 0 && !error && <div style={{ textAlign: 'center', padding: '60px 20px', color: tokens.textMuted, fontSize: 14 }}>No data. Filters apply karo ya Refresh karo.</div>}

@@ -795,9 +795,15 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function NSODashboard() {
-  const { user } = useAuth()
+  const { user, pageAccess } = useAuth()
   const isViewer = !hasRole(user, 'planner')
   const isMobile = useIsMobile()
+  // Tab-level access: explicit pageAccess override beats role default
+  function canSeeNSOTab(key: string, roleDefault: boolean) {
+    if (key in pageAccess) return pageAccess[key]
+    return roleDefault
+  }
+  const showArticle = canSeeNSOTab('nso#article', !isViewer)
 
   const [filters, setFilters] = useState<NSOFilters>({
     attribute1: [], store_status: [], division: [], cluster_type: [], region_type: [], store_tag: []
@@ -814,7 +820,7 @@ export default function NSODashboard() {
 
   const [tab, setTab]           = useState<'store' | 'article'>('store')
   // viewers are locked to store tab
-  const effectiveTab = isViewer ? 'store' : tab
+  const effectiveTab = (!showArticle && tab === 'article') ? 'store' : tab
   const [source, setSource]     = useState<'nso' | 'all'>('nso')
   const [data, setData]         = useState<NSOData | null>(null)
   const [loading, setLoading]   = useState(false)
@@ -957,7 +963,7 @@ export default function NSODashboard() {
           </div>
           {/* Tab + Filter row */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {(['store', ...(!isViewer ? ['article'] : [])] as const).map(t => (
+            {(['store', ...(showArticle ? ['article'] : [])] as const).map(t => (
               <button key={t} onClick={() => setTab(t as 'store' | 'article')} style={{
                 flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 background: effectiveTab === t ? '#0ea5e9' : '#0f172a',
@@ -1153,7 +1159,7 @@ export default function NSODashboard() {
           </div>
           <div style={S.filterRow}>
             {/* Tab switcher */}
-            {(['store', ...(!isViewer ? ['article'] : [])] as const).map(t => (
+            {(['store', ...(showArticle ? ['article'] : [])] as const).map(t => (
               <button key={t} onClick={() => setTab(t as 'store' | 'article')} style={{
                 ...S.btnSm,
                 background: effectiveTab === t ? C.blue : 'transparent',

@@ -205,6 +205,16 @@ export default function AdminPanel() {
     { path: '/warehouse', label: 'Warehouse Inventory', minRole: 'planner' },
   ] as const
 
+  // Tab-level access keys — override per-user tab visibility (default = role-based)
+  const ALL_TABS = [
+    { path: 'dashboard#store-network', label: 'Dashboard → Store Network', page: 'Dashboard', roleDefault: 'viewer' },
+    { path: 'dashboard#allocation',    label: 'Dashboard → Allocation Report', page: 'Dashboard', roleDefault: 'planner' },
+    { path: 'nso#store',               label: 'NSO Dashboard → Store View', page: 'NSO', roleDefault: 'viewer' },
+    { path: 'nso#article',             label: 'NSO Dashboard → Article View', page: 'NSO', roleDefault: 'planner' },
+    { path: 'warehouse#pivot',         label: 'Warehouse → Pivot Analysis', page: 'Warehouse', roleDefault: 'viewer' },
+    { path: 'warehouse#data',          label: 'Warehouse → Data Table', page: 'Warehouse', roleDefault: 'planner' },
+  ]
+
   useEffect(() => {
     axios.get('/api/assistant/status').then(r => {
       if (!r.data.data?.configured) {
@@ -697,6 +707,50 @@ export default function AdminPanel() {
                                     </div>
                                   )
                                 })}
+                              </div>
+
+                              {/* ── Tab-level access ── */}
+                              <div style={{ marginTop: 14, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+                                  Tab / Section Access <span style={{ fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>(override role default per user)</span>
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                  {ALL_TABS.map(t => {
+                                    const override = pa?.[t.path]
+                                    const isAllowed = override === true
+                                    const isDenied = override === false
+                                    const isDefault = override === undefined
+                                    return (
+                                      <div key={t.path} style={{
+                                        background: isDenied ? 'rgba(248,113,113,.08)' : isAllowed ? 'rgba(99,102,241,.1)' : '#0a0f1e',
+                                        border: '1px solid ' + (isDenied ? '#991b1b' : isAllowed ? '#4338ca' : '#1e2d3d'),
+                                        borderRadius: 6, padding: '6px 10px', minWidth: 200,
+                                      }}>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: isDenied ? '#f87171' : isAllowed ? '#818cf8' : '#64748b', marginBottom: 5 }}>
+                                          {t.label}
+                                          <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--text-muted)' }}>[default: {t.roleDefault}+]</span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 4 }}>
+                                          <button disabled={pageAccessSaving} onClick={() => setPageAccess(u.id, t.path, isAllowed ? null : true)}
+                                            style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: 'none', cursor: 'pointer', opacity: pageAccessSaving ? 0.5 : 1, background: isAllowed ? '#312e81' : '#1e293b', color: isAllowed ? '#818cf8' : '#475569', fontWeight: isAllowed ? 700 : 400 }}>
+                                            ✓ Allow
+                                          </button>
+                                          <button disabled={pageAccessSaving} onClick={() => setPageAccess(u.id, t.path, isDenied ? null : false)}
+                                            style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: 'none', cursor: 'pointer', opacity: pageAccessSaving ? 0.5 : 1, background: isDenied ? '#7f1d1d' : '#1e293b', color: isDenied ? '#f87171' : '#475569', fontWeight: isDenied ? 700 : 400 }}>
+                                            ✕ Deny
+                                          </button>
+                                          {!isDefault && (
+                                            <button disabled={pageAccessSaving} onClick={() => setPageAccess(u.id, t.path, null)}
+                                              style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: 'none', cursor: 'pointer', opacity: pageAccessSaving ? 0.5 : 1, background: 'var(--card-bg)', color: 'var(--text-muted)' }}
+                                              title="Remove override — revert to role-based default">
+                                              ↺ Default
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
                               </div>
                             </div>
                           </td>

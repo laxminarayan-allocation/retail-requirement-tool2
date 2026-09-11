@@ -902,8 +902,9 @@ function DataTable({ rows, columns }: { rows: Row[]; columns: string[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function WarehouseInventory() {
   const { tokens } = useTheme()
-  const { user } = useAuth()
+  const { user, pageAccess } = useAuth()
   const isViewer = user?.role === 'viewer'
+  const showDataTable = ('warehouse#data' in pageAccess) ? pageAccess['warehouse#data'] : !isViewer
   const [rows, setRows]         = useState<Row[]>([])
   const [columns, setColumns]   = useState<string[]>([])
   const [loading, setLoading]   = useState(false)
@@ -913,7 +914,7 @@ export default function WarehouseInventory() {
   const [queryTime, setQueryTime] = useState<number | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [tab, setTab]           = useState<'data' | 'pivot'>('data')
-  const effectiveTab = isViewer ? 'pivot' : tab
+  const effectiveTab = (!showDataTable && tab === 'data') ? 'pivot' : tab
   const [accessDenied, setAccessDenied] = useState(false)
   const [warehouse, setWarehouse] = useState('')
   const [itemCode, setItemCode]   = useState('')
@@ -1020,7 +1021,7 @@ export default function WarehouseInventory() {
       {!loading && rows.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: 4, marginBottom: -1, position: 'relative', zIndex: 1 }}>
-            {!isViewer && <button style={S.tab(effectiveTab === 'data')} onClick={() => setTab('data')}>📋 Data Table</button>}
+            {showDataTable && <button style={S.tab(effectiveTab === 'data')} onClick={() => setTab('data')}>📋 Data Table</button>}
             <button style={S.tab(effectiveTab === 'pivot')} onClick={() => setTab('pivot')}>📊 Pivot Analysis</button>
           </div>
           <div style={{ ...S.card, borderRadius: '0 10px 10px 10px', marginBottom: 0 }}>

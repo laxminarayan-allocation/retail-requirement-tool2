@@ -985,11 +985,12 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, pageAccess } = useAuth()
   const isViewer = user?.role === 'viewer'
+  const showAllocation = ('dashboard#allocation' in pageAccess) ? pageAccess['dashboard#allocation'] : !isViewer
   const [drillDown, setDrillDown] = useState<DrillState | null>(null)
   const [dashTab, setDashTab] = useState<'store-network' | 'allocation'>('store-network')
-  const effectiveDashTab = isViewer ? 'store-network' : dashTab
+  const effectiveDashTab = (!showAllocation && dashTab === 'allocation') ? 'store-network' : dashTab
   const [expandedCards, setExpandedCards] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('dash_expanded_cards') ?? '[]')) } catch { return new Set() }
   })
@@ -1183,7 +1184,7 @@ export default function Dashboard() {
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--card-border)', marginBottom: 0 }}>
         {([
           { key: 'store-network', label: '🏪 Store Network' },
-          ...(!isViewer ? [{ key: 'allocation', label: '📦 Allocation Report' }] : []),
+          ...(showAllocation ? [{ key: 'allocation', label: '📦 Allocation Report' }] : []),
         ] as const).map(t => (
           <button key={t.key} onClick={() => setDashTab(t.key as any)} style={{
             background: 'none', border: 'none', cursor: 'pointer',

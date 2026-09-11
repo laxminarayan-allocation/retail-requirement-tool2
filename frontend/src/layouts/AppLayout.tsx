@@ -24,20 +24,17 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
   { to: '/database',   label: 'Database Explorer',icon: '🗄️', minRole: 'planner' },
   { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'planner' },
-  { to: '/master-data',label: 'Master Data',      icon: '📂', minRole: 'planner' },
-  { to: '/factors',    label: 'Calc Factors',     icon: '⚙️', minRole: 'planner' },
   { to: '/calculation',label: 'Calculation',      icon: '▶️', minRole: 'planner' },
   { to: '/req',          label: 'Requirements',      icon: '📝', minRole: 'planner' },
   { to: '/distribution', label: 'Distribution',      icon: '🔀', minRole: 'planner' },
-  { to: '/option-listing', label: 'Option Listing', icon: '📋', minRole: 'planner' },
+  { to: '/simulation',   label: 'Simulation',        icon: '🧮', minRole: 'planner' },
+  { to: '/option-listing', label: 'Option Listing', icon: '🗂️', minRole: 'planner' },
   { to: '/results',    label: 'Results',          icon: '📋', minRole: 'viewer'  },
-  { to: '/history',    label: 'History',          icon: '🕑', minRole: 'viewer'  },
   { to: '/warehouse',  label: 'Warehouse Inventory', icon: '🏭', minRole: 'viewer'  },
   { to: '/nso',        label: 'NSO Dashboard',    icon: '🏪', minRole: 'viewer'  },
   { to: '/sale',       label: 'Sale Dashboard',   icon: '📊', minRole: 'viewer'  },
   { to: '/settings',   label: 'Settings',         icon: '🔧', minRole: 'planner' },
   { to: '/admin',      label: 'Admin Panel',      icon: '🛡️', minRole: 'admin'   },
-  { to: '/procedures',label: 'Procedures',        icon: '📋', minRole: 'admin'   },
   { to: '/manual',    label: 'User Manual',      icon: '📖', minRole: 'viewer'  },
 ]
 
@@ -717,7 +714,7 @@ export default function AppLayout() {
             </span>
             <button style={{ background: 'none', border: `1px solid ${tokens.sidebarBorder}`, borderRadius: 4, color: tokens.textSecondary, fontSize: 11, padding: '4px 8px', cursor: 'pointer', textAlign: 'left', width: '100%' }} onClick={handleSignout}>Sign out</button>
           </div>
-          {/* Role upgrade request — visible for viewer and planner */}
+          {/* Role upgrade request — button only; opens modal */}
           {upgradeTarget && (
             <div>
               {submitDone && !pendingRequest ? (
@@ -725,37 +722,6 @@ export default function AppLayout() {
               ) : pendingRequest ? (
                 <div style={{ fontSize: 9, color: '#fcd34d', lineHeight: 1.4 }}>
                   ⏳ {pendingRequest.requested_role === 'temp_admin' ? 'Temp Admin' : 'Planner'} request pending…
-                </div>
-              ) : roleRequestOpen ? (
-                <div style={{ background: 'var(--content-bg)', borderRadius: 6, padding: 8, border: '1px solid var(--card-border)', marginTop: 2 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 600 }}>
-                    Request: {upgradeTarget === 'temp_admin' ? 'Temp Admin access' : 'Planner role'}
-                  </div>
-                  <textarea
-                    rows={2}
-                    placeholder="Reason (optional)…"
-                    value={roleReason}
-                    onChange={e => setRoleReason(e.target.value)}
-                    style={{ width: '100%', fontSize: 10, background: 'var(--card-bg)', border: '1px solid var(--card-border)', color: 'var(--text-primary)', borderRadius: 4, padding: 4, resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }}
-                  />
-                  {upgradeTarget === 'temp_admin' && (
-                    <div style={{ display: 'flex', gap: 3, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' as const }}>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Duration:</span>
-                      {([{h:1,l:'1h'},{h:3,l:'3h'},{h:24,l:'1d'},{h:72,l:'3d'},{h:168,l:'7d'}]).map(o => (
-                        <button key={o.h} onClick={() => setTempDays(o.h)} style={{ fontSize: 9, padding: '2px 6px', background: tempDays === o.h ? '#1d4ed8' : '#1e293b', color: tempDays === o.h ? '#fff' : '#64748b', border: '1px solid var(--card-border)', borderRadius: 3, cursor: 'pointer' }}>
-                          {o.l}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                    <button onClick={submitRoleRequest} disabled={submitting} style={{ fontSize: 10, padding: '3px 10px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', opacity: submitting ? 0.6 : 1 }}>
-                      {submitting ? '…' : 'Submit'}
-                    </button>
-                    <button onClick={() => setRoleRequestOpen(false)} style={{ fontSize: 10, padding: '3px 8px', background: 'none', color: 'var(--text-muted)', border: '1px solid var(--card-border)', borderRadius: 3, cursor: 'pointer' }}>
-                      Cancel
-                    </button>
-                  </div>
                 </div>
               ) : (
                 <button onClick={() => setRoleRequestOpen(true)} style={{ fontSize: 9, color: '#38bdf8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' as const }}>
@@ -766,6 +732,49 @@ export default function AppLayout() {
           )}
         </div>
       </aside>
+
+      {/* Role upgrade modal */}
+      {roleRequestOpen && upgradeTarget && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setRoleRequestOpen(false) }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }} />
+          <div style={{ position: 'relative', background: tokens.shellBg, border: `1px solid ${tokens.sidebarBorder}`, borderRadius: 10, padding: 24, width: 360, maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary, marginBottom: 4 }}>
+              Request Role Upgrade
+            </div>
+            <div style={{ fontSize: 12, color: tokens.textSecondary, marginBottom: 16 }}>
+              Requesting: <strong>{upgradeTarget === 'temp_admin' ? 'Temporary Admin access' : 'Planner role'}</strong>
+            </div>
+            <textarea
+              rows={3}
+              placeholder="Reason (optional)…"
+              value={roleReason}
+              onChange={e => setRoleReason(e.target.value)}
+              style={{ width: '100%', fontSize: 12, background: tokens.cardBg, border: `1px solid ${tokens.sidebarBorder}`, color: tokens.textPrimary, borderRadius: 6, padding: '8px 10px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none', marginBottom: 12 }}
+            />
+            {upgradeTarget === 'temp_admin' && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 6 }}>Duration:</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                  {([{h:1,l:'1 hour'},{h:3,l:'3 hours'},{h:24,l:'1 day'},{h:72,l:'3 days'},{h:168,l:'7 days'}]).map(o => (
+                    <button key={o.h} onClick={() => setTempDays(o.h)} style={{ fontSize: 11, padding: '4px 10px', background: tempDays === o.h ? '#1d4ed8' : 'transparent', color: tempDays === o.h ? '#fff' : tokens.textSecondary, border: `1px solid ${tempDays === o.h ? '#1d4ed8' : tokens.sidebarBorder}`, borderRadius: 5, cursor: 'pointer' }}>
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setRoleRequestOpen(false); setRoleReason('') }} style={{ fontSize: 12, padding: '6px 14px', background: 'none', color: tokens.textSecondary, border: `1px solid ${tokens.sidebarBorder}`, borderRadius: 6, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={submitRoleRequest} disabled={submitting} style={{ fontSize: 12, padding: '6px 16px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', opacity: submitting ? 0.6 : 1, fontWeight: 600 }}>
+                {submitting ? 'Submitting…' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', ...(isMobile ? { overflowY: 'visible', overflowX: 'hidden' } : {}) }}>
         <div style={{ background: tokens.topbarBg, borderBottom: `1px solid ${tokens.topbarBorder}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, color: tokens.textSecondary, gap: 8, transition: 'background 0.2s' }}>

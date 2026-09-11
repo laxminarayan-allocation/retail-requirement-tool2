@@ -278,9 +278,16 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
             data={"sent": False, "temp_password": None, "self_reset": True},
         )
 
+    if not smtp_sent:
+        # Log temp password server-side only — admins can see it in logs/admin panel
+        logger.warning("SMTP not configured. Temp password for %s: %s", user["email"], temp_pw)
+
     return APIResponse.ok(
-        message="Temporary password generated." if not smtp_sent else f"Temporary password sent to {body.email}.",
-        data={"sent": smtp_sent, "temp_password": None if smtp_sent else temp_pw, "self_reset": False},
+        message=(
+            f"Temporary password sent to {body.email}." if smtp_sent
+            else "Temporary password generated. An admin can retrieve it from the server logs or admin panel."
+        ),
+        data={"sent": smtp_sent, "temp_password": None, "self_reset": False},
     )
 
 

@@ -217,6 +217,7 @@ export default function DistributionModel() {
   const [distLoading,   setDistLoading]   = useState(false)
   const [distResult,    setDistResult]    = useState<DistResult | null>(null)
   const [distMsg,       setDistMsg]       = useState<string | null>(null)
+  const [fetchError,    setFetchError]    = useState<string | null>(null)
 
   // ── Hold Rules ─────────────────────────────────────────────────────────────
   type HoldRule =
@@ -262,14 +263,18 @@ export default function DistributionModel() {
     try {
       const d = await apiFetch<ItemMasterStatus>('GET', '/distribution/item-master/status')
       setImStatus(d)
-    } catch { /* silent */ }
+    } catch (e: any) {
+      setFetchError(e?.response?.data?.message || 'Item master status fetch failed')
+    }
   }, [])
 
   const fetchOlStatus = useCallback(async () => {
     try {
       const d = await apiFetch<{ready: boolean; rows: number; cached_at?: string}>('GET', '/distribution/option-listing/status')
       setOlStatus(d)
-    } catch { /* silent */ }
+    } catch (e: any) {
+      setFetchError(e?.response?.data?.message || 'Option listing status fetch failed')
+    }
   }, [])
 
   useEffect(() => {
@@ -277,7 +282,7 @@ export default function DistributionModel() {
     fetchOlStatus()
     apiFetch<{ready: boolean}>('GET', '/distribution/base/status')
       .then(d => setBaseCacheReady(d.ready))
-      .catch(() => {})
+      .catch((e: any) => setFetchError(e?.response?.data?.message || 'Backend unreachable'))
   }, [fetchImStatus, fetchOlStatus])
 
   useEffect(() => { ssSave({ applyOL }) }, [applyOL])
@@ -499,6 +504,12 @@ export default function DistributionModel() {
     <div style={S.page}>
       <ExportModal />
       <StaleBanner />
+      {fetchError && (
+        <div style={{ background: '#7f1d1d', border: '1px solid #b91c1c', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>⚠ {fetchError}</span>
+          <button onClick={() => setFetchError(null)} style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
+        </div>
+      )}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: '-0.5px' }}>🔀 Distribution Model</h1>

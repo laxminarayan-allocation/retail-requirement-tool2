@@ -398,8 +398,9 @@ def sale_store_summary():
             })
 
     store_df = StoreRepository().get_all_stores(active_only=False)
-    if "site_id" in store_df.columns:
-        store_df["_sid"] = store_df["site_id"].astype(str).str.strip()
+    # store_name col = SITE_CODE (numeric int) — same type as sale_raw SITECODE
+    if "store_name" in store_df.columns:
+        store_df["_sid"] = store_df["store_name"].astype(str).str.strip()
         store_map = store_df.drop_duplicates("_sid").set_index("_sid").to_dict("index")
     else:
         store_map = {}

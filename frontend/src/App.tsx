@@ -13,6 +13,7 @@ import AdminPanel from '@/pages/AdminPanel'
 import UserManual from '@/pages/UserManual'
 import NSODashboard from '@/pages/NSODashboard'
 import SaleDashboard from '@/pages/SaleDashboard'
+import SaleWeekly from '@/pages/SaleWeekly'
 import ReqDashboard from '@/pages/ReqDashboard'
 import DistributionModel from '@/pages/DistributionModel'
 import Simulation from '@/pages/Simulation'
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="nso" element={<NSODashboard />} />
             <Route path="warehouse" element={<WarehouseInventory />} />
             <Route path="sale" element={<SaleDashboard />} />
+            <Route path="sale-weekly" element={<SaleWeekly />} />
             <Route path="req" element={<ReqDashboard />} />
             <Route path="distribution" element={<DistributionModel />} />
             <Route path="simulation" element={<Navigate to="/calculation?tab=simulation" replace />} />

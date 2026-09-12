@@ -24,10 +24,12 @@ _CACHE_LOCK = threading.Lock()
 # Parquet column → expected name mapping (lowercase after read).
 # Applied simultaneously by pandas rename — no collision risk.
 _COL_ALIASES = {
-    "site_code":   "store_name",    # SITE_CODE = store code identifier used everywhere
-    "store_name":  "store_name_f",  # STORE_NAME = full display name
-    "city_name":   "city",
-    "state":       "state_name",
+    "site_code":      "store_name",      # SITE_CODE = alphanumeric store code
+    "store_name":     "store_name_f",    # STORE_NAME (T_STORE_OPENING_DATE) = full display name
+    "vm_store_name":  "store_name_short",# STORE_NAME (V_STORE_MASTER) = short code e.g. SIDDHI-SDH
+    "city_name":      "city",
+    "state":          "state_name",
+    "location":       "site_id",         # numeric Oracle LOCATION = matches sale_raw SITECODE
 }
 
 

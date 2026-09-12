@@ -349,6 +349,98 @@ async def get_sale_filters():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/weekly-summary", response_model=APIResponse)
+def sale_weekly_summary():
+    """
+    2-year store × week pivot using TY + LY parquet cache.
+    Weeks grouped by month for collapse UI.
+    Returns both sl_v and sl_q per store per week.
+    """
+    try:
+        from app.core.parquet_cache import has_output, read_cache
+
+        if not (has_output(*_CACHE_TY) and has_output(*_CACHE_LY)):
+            return APIResponse.ok(data={"loading": True, "message": "Cache not ready — trigger from Sale Dashboard first."})
+
+        df_ty = read_cache(*_CACHE_TY)
+        df_ly = read_cache(*_CACHE_LY)
+
+        def _prep(df, year_label):
+            d = df.copy()
+            d["sale_date"] = pd.to_datetime(d["sale_date"], errors="coerce")
+            d = d.dropna(subset=["sale_date"])
+            d["iso_year"]  = d["sale_date"].dt.isocalendar().year.astype(int)
+            d["iso_week"]  = d["sale_date"].dt.isocalendar().week.astype(int)
+            d["week_key"]  = d["sale_date"].dt.strftime("%G-W%V")   # e.g. "2026-W09"
+            d["month_key"] = d["sale_date"].dt.strftime("%Y-%m")     # e.g. "2026-03"
+            d["week_start"] = d["sale_date"] - pd.to_timedelta(d["sale_date"].dt.dayofweek, unit="D")
+            d["year_label"] = year_label
+            return d
+
+        ty = _prep(df_ty, "TY")
+        ly = _prep(df_ly, "LY")
+        combined = pd.concat([ty, ly], ignore_index=True)
+
+        # Aggregate to store × week
+        agg = combined.groupby(["store_name", "week_key", "month_key"], as_index=False).agg(
+            val=("sl_v",   "sum"),
+            qty=("sl_qty", "sum"),
+            week_start=("week_start", "min"),
+        )
+
+        # Build month → weeks metadata (newest month first)
+        month_week_map: dict = {}
+        for _, row in agg[["month_key","week_key","week_start"]].drop_duplicates().iterrows():
+            mk = row["month_key"]
+            wk = row["week_key"]
+            ws = str(row["week_start"].date())
+            if mk not in month_week_map:
+                month_week_map[mk] = {}
+            if wk not in month_week_map[mk]:
+                month_week_map[mk][wk] = ws
+
+        all_months_sorted = sorted(month_week_map.keys(), reverse=True)  # newest first
+        months_meta = []
+        for mk in all_months_sorted:
+            wks = sorted(month_week_map[mk].keys(), reverse=True)        # newest week first
+            dt  = pd.to_datetime(mk + "-01")
+            months_meta.append({
+                "key":   mk,
+                "label": dt.strftime("%b-%y"),   # "Sep-26"
+                "weeks": [{"key": w, "start": month_week_map[mk][w]} for w in wks],
+            })
+
+        # Build per-store rows
+        store_agg = agg.groupby("store_name")
+        rows = []
+        for store, grp in store_agg:
+            wk_val = grp.set_index("week_key")["val"].to_dict()
+            wk_qty = grp.set_index("week_key")["qty"].to_dict()
+            mn_val = grp.groupby("month_key")["val"].sum().to_dict()
+            mn_qty = grp.groupby("month_key")["qty"].sum().to_dict()
+            total_val = round(float(grp["val"].sum()), 2)
+            total_qty = int(grp["qty"].sum())
+            rows.append({
+                "store_name": str(store),
+                "total_val":  total_val,
+                "total_qty":  total_qty,
+                "month_val":  {k: round(float(v), 2) for k, v in mn_val.items()},
+                "month_qty":  {k: int(v) for k, v in mn_qty.items()},
+                "week_val":   {k: round(float(v), 2) for k, v in wk_val.items()},
+                "week_qty":   {k: int(v) for k, v in wk_qty.items()},
+            })
+
+        rows.sort(key=lambda x: -x["total_val"])
+        return APIResponse.ok(data={
+            "rows":   rows,
+            "count":  len(rows),
+            "months": months_meta,
+        })
+    except Exception as exc:
+        logger.error("weekly-summary error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/store-summary", response_model=APIResponse)
 def sale_store_summary():
     """

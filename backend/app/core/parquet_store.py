@@ -39,7 +39,7 @@ SOURCES: list[dict] = [
             SELECT s.SITE_CODE, s.STORE_NAME, s.STORE_GRADE, s.STORE_TAG,
                    s.CITY_NAME, s.STATE, s.DISTRICT, s.CLUSTER_TYPE,
                    s.OPENING_DATE, s.STORE_STATUS,
-                   v.ZONE
+                   v.ZONE, v.LOCATION, v.STORE_NAME AS VM_STORE_NAME
             FROM MISRETAIL.T_STORE_OPENING_DATE s
             LEFT JOIN CK_A2166.V_STORE_MASTER v ON v.SITECODE = s.SITE_CODE
         """,

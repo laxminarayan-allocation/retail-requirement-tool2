@@ -413,6 +413,44 @@ function StoreSummary({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const storeNumFilter = useNumFilter()
 
+  // ── Column drag-and-drop reorder ──────────────────────────────────────────
+  const STORAGE_KEY = 'nso_col_order_v1'
+  function loadColOrder() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (!saved) return STORE_COLS
+      const keys: string[] = JSON.parse(saved)
+      const keySet = new Set(keys)
+      const savedCols = keys.map(k => STORE_COLS.find(c => c.key === k)).filter(Boolean) as typeof STORE_COLS
+      const newCols = STORE_COLS.filter(c => !keySet.has(c.key))
+      return [...savedCols, ...newCols]
+    } catch { return STORE_COLS }
+  }
+  const [colOrder, setColOrder] = useState(loadColOrder)
+  const dragCol = useRef<string | null>(null)
+  const dragOverCol = useRef<string | null>(null)
+
+  function onDragStart(key: string) { dragCol.current = key }
+  function onDragOver(e: React.DragEvent, key: string) { e.preventDefault(); dragOverCol.current = key }
+  function onDrop() {
+    const from = dragCol.current; const to = dragOverCol.current
+    if (!from || !to || from === to) return
+    setColOrder(prev => {
+      const arr = [...prev]
+      const fi = arr.findIndex(c => c.key === from)
+      const ti = arr.findIndex(c => c.key === to)
+      const [col] = arr.splice(fi, 1)
+      arr.splice(ti, 0, col)
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.map(c => c.key))) } catch {}
+      return arr
+    })
+    dragCol.current = null; dragOverCol.current = null
+  }
+  function resetColOrder() {
+    setColOrder(STORE_COLS)
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+  }
+
   function load(src?: 'nso' | 'all') {
     setLoading(true); setError(null)
     const params: Record<string, string> = {}
@@ -501,7 +539,7 @@ function StoreSummary({
     return (
       <>
         <tr>
-          <td colSpan={STORE_COLS.length} style={{
+          <td colSpan={colOrder.length} style={{
             background: title.startsWith('Active') ? '#052e16' : '#0c1a2e',
             color, fontWeight: 700, fontSize: 11, padding: '6px 10px',
             letterSpacing: 0.5,
@@ -511,7 +549,7 @@ function StoreSummary({
         </tr>
         {rows.map((row, i) => (
           <tr key={row.store_name + i} style={{ background: i % 2 === 0 ? C.surf2 : C.surf1 }}>
-            {STORE_COLS.map(col => {
+            {colOrder.map(col => {
               const v = row[col.key]
               if (col.type === 'pct') {
                 const n = Number(v)
@@ -681,14 +719,19 @@ function StoreSummary({
             <table style={{ ...S.tbl, minWidth: 1600 }}>
               <thead>
                 <tr>
-                  {STORE_COLS.map(col => {
+                  {colOrder.map(col => {
                     const isNumCol = col.type !== 'text' && col.type !== 'date'
                     return (
                       <th key={col.key}
+                        draggable
+                        onDragStart={() => onDragStart(col.key)}
+                        onDragOver={e => onDragOver(e, col.key)}
+                        onDrop={onDrop}
                         onClick={() => handleSort(col.key)}
+                        title="Drag to reorder column"
                         style={{
                           ...(isNumCol ? S.thNum : S.th),
-                          cursor: 'pointer', userSelect: 'none',
+                          cursor: 'grab', userSelect: 'none',
                           background: sortCol === col.key ? '#1e3a5f' : storeNumFilter.numFilters[col.key] ? '#1a2e1a' : C.bg,
                           color: sortCol === col.key ? '#7dd3fc' : undefined,
                           whiteSpace: 'nowrap',
@@ -705,13 +748,18 @@ function StoreSummary({
                 {active.length > 0 && <StoreTable rows={active} title="Active Stores" />}
                 {upcoming.length > 0 && <StoreTable rows={upcoming} title="Upcoming Stores" />}
                 {stores.length === 0 && (
-                  <tr><td colSpan={STORE_COLS.length} style={S.empty}>No stores found.</td></tr>
+                  <tr><td colSpan={colOrder.length} style={S.empty}>No stores found.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div style={{ padding: '6px 14px', borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.text3 }}>
-            {stores.length} stores · {data.elapsed_ms} ms · V_NSO article aggregation · MTD sale = NSO-plan articles only
+          <div style={{ padding: '6px 14px', borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.text3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{stores.length} stores · {data.elapsed_ms} ms · V_NSO article aggregation · MTD sale = NSO-plan articles only</span>
+            <span title="Reset column order to default" onClick={resetColOrder}
+              style={{ cursor: 'pointer', color: '#475569', fontSize: 10, padding: '2px 8px', borderRadius: 4,
+                border: '1px solid #334155', background: '#0f172a' }}>
+              ↺ Reset Columns
+            </span>
           </div>
         </div>
       )}

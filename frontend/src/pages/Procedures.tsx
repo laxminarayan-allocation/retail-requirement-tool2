@@ -44,8 +44,8 @@ interface DataTable {
   updated_at: string
 }
 
-interface ColDef { col: string; type: string; desc: string; is_pk: boolean; is_fk: boolean }
-interface RelDef { table: string; key: string; rel_type: string }
+interface ColDef { col: string; type: string; desc: string; is_pk: boolean; is_fk: boolean; nullable?: boolean; sample?: string }
+interface RelDef { table: string; key: string; rel_type: string; from_col?: string; to_col?: string }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -345,7 +345,7 @@ function StepsPanel({
       </div>
 
       {/* Steps list */}
-      {steps.map((s, i) => (
+      {steps.map((s, _i) => (
         <div key={s.id} style={{
           display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8,
           padding: 10, background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)',
@@ -616,6 +616,78 @@ function NewDocForm({ defaultCategory, onSaved, onCancel }: {
   )
 }
 
+// ── Table type helpers ────────────────────────────────────────────────────────
+
+const TABLE_TYPE_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+  MAIN:    { bg: '#1d4ed820', color: '#60a5fa', border: '#1d4ed8' },
+  SUB:     { bg: '#7c3aed20', color: '#c4b5fd', border: '#7c3aed' },
+  VIEW:    { bg: '#05260e20', color: '#34d399', border: '#059669' },
+  PARQUET: { bg: '#78350f20', color: '#fbbf24', border: '#d97706' },
+  CACHE:   { bg: '#4c1d9520', color: '#a78bfa', border: '#7c3aed' },
+}
+
+const TABLE_TYPES = ['MAIN','SUB','VIEW','PARQUET','CACHE']
+
+function TypeBadge({ type }: { type: string }) {
+  const s = TABLE_TYPE_STYLE[type] || TABLE_TYPE_STYLE.MAIN
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: s.bg, color: s.color, border: `1px solid ${s.border}`, letterSpacing: '.04em' }}>
+      {type}
+    </span>
+  )
+}
+
+// ── ER mini diagram ───────────────────────────────────────────────────────────
+
+function ERDiagram({ table, rels }: { table: DataTable; rels: RelDef[] }) {
+  if (!rels.length) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '30px 0', background: 'var(--content-bg)', borderRadius: 7, border: '1px solid var(--card-border)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#38bdf8', fontWeight: 700, padding: '8px 16px', border: '1px solid #38bdf840', borderRadius: 6, display: 'inline-block', marginBottom: 8 }}>{table.table_name}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No relationships defined</div>
+        </div>
+      </div>
+    )
+  }
+
+  const nodeW = 150, nodeH = 38, gap = 90, startX = 10
+  const totalH = rels.length * (nodeH + 18) + 50
+  const mainY = totalH / 2 - nodeH / 2
+  const relNodes = rels.map((r, i) => ({ x: startX + nodeW + gap, y: 25 + i * (nodeH + 18), name: r.table, key: r.key, rel_type: r.rel_type }))
+  const svgW = startX + nodeW + gap + nodeW + 10
+  const svgH = totalH
+
+  return (
+    <div style={{ background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 7, padding: 10, overflowX: 'auto', marginBottom: 4 }}>
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} width="100%" height={svgH} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+        {relNodes.map((rn, i) => {
+          const x1 = startX + nodeW, y1 = mainY + nodeH / 2
+          const x2 = rn.x, y2 = rn.y + nodeH / 2
+          return (
+            <g key={i}>
+              <path d={`M${x1},${y1} C${x1+gap/2},${y1} ${x2-gap/2},${y2} ${x2},${y2}`} stroke="#38bdf840" strokeWidth="1.5" fill="none" />
+              <text x={(x1+x2)/2} y={(y1+y2)/2-4} textAnchor="middle" fontSize="9" fill="#475569" fontFamily="monospace">{rn.rel_type}</text>
+            </g>
+          )
+        })}
+        {/* Main node */}
+        <rect x={startX} y={mainY} width={nodeW} height={nodeH} rx="5" fill="#0c4a6e20" stroke="#38bdf860" />
+        <text x={startX+8} y={mainY+13} fontSize="8" fill="#38bdf8" fontFamily="monospace" fontWeight="700">MAIN</text>
+        <text x={startX+8} y={mainY+28} fontSize="11" fill="#e2e8f0" fontFamily="monospace" fontWeight="600">{table.table_name.length > 17 ? table.table_name.substring(0,15)+'…' : table.table_name}</text>
+        {/* Related nodes */}
+        {relNodes.map((rn, i) => (
+          <g key={i}>
+            <rect x={rn.x} y={rn.y} width={nodeW} height={nodeH} rx="5" fill="#2e106520" stroke="#818cf860" />
+            <text x={rn.x+8} y={rn.y+13} fontSize="8" fill="#a78bfa" fontFamily="monospace">ON {rn.key.length > 14 ? rn.key.substring(0,12)+'…' : rn.key}</text>
+            <text x={rn.x+8} y={rn.y+28} fontSize="10" fill="#c4b5fd" fontFamily="monospace">{rn.name.length > 18 ? rn.name.substring(0,16)+'…' : rn.name}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
 // ── Data Table Detail ─────────────────────────────────────────────────────────
 
 function TableDetail({
@@ -627,6 +699,7 @@ function TableDetail({
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<DataTable>>({ ...table })
   const [saving, setSaving] = useState(false)
+  const [dTab, setDTab] = useState<'overview'|'columns'|'relations'|'er'|'subs'>('overview')
 
   const f = <K extends keyof DataTable>(k: K) => (v: DataTable[K]) => setForm(p => ({ ...p, [k]: v }))
 
@@ -634,6 +707,8 @@ function TableDetail({
   const subTables  = allTables.filter(t => t.parent_id === table.id)
   const cols = parseCols(table.columns_json)
   const rels = parseRels(table.relations_json)
+  const pks  = cols.filter(c => c.is_pk).length
+  const fks  = cols.filter(c => c.is_fk).length
 
   async function save() {
     setSaving(true)
@@ -650,104 +725,173 @@ function TableDetail({
     onDeleted()
   }
 
+  const DETAIL_TABS: { key: typeof dTab; label: string; count?: number }[] = [
+    { key: 'overview',   label: 'Overview' },
+    { key: 'columns',    label: 'Columns',   count: cols.length },
+    { key: 'relations',  label: 'Relations', count: rels.length },
+    { key: 'er',         label: 'ER Diagram' },
+    { key: 'subs',       label: 'Sub-tables', count: subTables.length },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
-              background: table.table_type === 'MAIN' ? '#1d4ed820' : '#7c3aed20',
-              color: table.table_type === 'MAIN' ? '#60a5fa' : '#c4b5fd',
-              border: `1px solid ${table.table_type === 'MAIN' ? '#1d4ed8' : '#7c3aed'}`,
-            }}>{table.table_type}</span>
-            {table.schema_owner && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{table.schema_owner}</span>}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <TypeBadge type={table.table_type} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{table.table_name}</span>
+              {table.schema_owner && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{table.schema_owner}</span>}
+            </div>
+            {table.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{table.description}</div>}
+            {/* Stats strip */}
+            <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span><b style={{ color: 'var(--text-primary)' }}>{cols.length}</b> cols</span>
+              <span><b style={{ color: '#38bdf8' }}>{pks}</b> PK</span>
+              <span><b style={{ color: '#c4b5fd' }}>{fks}</b> FK</span>
+              <span><b style={{ color: 'var(--text-primary)' }}>{rels.length}</b> relations</span>
+              {subTables.length > 0 && <span><b style={{ color: '#fbbf24' }}>{subTables.length}</b> sub-tables</span>}
+            </div>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{table.table_name}</div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 10 }}>
+            {isAdmin && !editing && <Btn small onClick={() => { setForm({ ...table }); setEditing(true) }}>✏️ Edit</Btn>}
+            {isAdmin && !editing && <Btn small variant="danger" onClick={del}>🗑</Btn>}
+            <Btn small variant="ghost" onClick={onClose}>✕</Btn>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {isAdmin && !editing && <Btn small onClick={() => { setForm({ ...table }); setEditing(true) }}>✏️ Edit</Btn>}
-          {isAdmin && !editing && <Btn small variant="danger" onClick={del}>🗑</Btn>}
-          <Btn small variant="ghost" onClick={onClose}>✕</Btn>
-        </div>
+        {/* Detail sub-tabs (view mode only) */}
+        {!editing && (
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--card-border)', marginBottom: -1, marginTop: 4 }}>
+            {DETAIL_TABS.map(dt => (
+              <button key={dt.key} onClick={() => setDTab(dt.key)}
+                style={{
+                  padding: '5px 12px', background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: dTab === dt.key ? 700 : 400,
+                  color: dTab === dt.key ? '#38bdf8' : 'var(--text-muted)',
+                  borderBottom: dTab === dt.key ? '2px solid #38bdf8' : '2px solid transparent',
+                  marginBottom: -1,
+                }}>
+                {dt.label}{dt.count !== undefined ? ` (${dt.count})` : ''}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
         {!editing ? (
           <>
-            {table.description && <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--text-secondary)' }}>{table.description}</div>}
-            {table.purpose && (
-              <div style={{ marginBottom: 14, padding: 10, background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>PURPOSE</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{table.purpose}</div>
-              </div>
-            )}
-            {table.table_type === 'SUB' && table.parent_id && (
-              <div style={{ marginBottom: 10 }}>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Parent Main Table: </span>
-                <span style={{ fontSize: 11, color: '#38bdf8', fontFamily: 'monospace' }}>
-                  {allTables.find(t => t.id === table.parent_id)?.table_name || '—'}
-                </span>
-              </div>
-            )}
-
-            {/* Columns */}
-            {cols.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>COLUMNS ({cols.length})</div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <thead>
-                      <tr style={{ background: 'var(--content-bg)' }}>
-                        {['Column', 'Type', 'PK', 'FK', 'Description'].map(h => (
-                          <th key={h} style={{ padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #1e293b' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cols.map((c, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
-                          <td style={{ padding: '4px 8px', fontFamily: 'monospace', color: c.is_pk ? '#38bdf8' : '#e2e8f0' }}>{c.col}</td>
-                          <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{c.type}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'center' }}>{c.is_pk ? '🔑' : ''}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'center' }}>{c.is_fk ? '🔗' : ''}</td>
-                          <td style={{ padding: '4px 8px', color: 'var(--text-muted)' }}>{c.desc}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* Overview tab */}
+            {dTab === 'overview' && (
+              <>
+                {table.purpose && (
+                  <div style={{ marginBottom: 14, padding: 10, background: 'var(--content-bg)', borderRadius: 6, border: '1px solid var(--card-border)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>PURPOSE</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{table.purpose}</div>
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  {[
+                    { label: 'Table Name', value: table.table_name, mono: true },
+                    { label: 'Schema / Owner', value: table.schema_owner || '—', mono: true },
+                    { label: 'Type', value: table.table_type },
+                    { label: 'Parent Table', value: table.parent_id ? (allTables.find(t => t.id === table.parent_id)?.table_name || '—') : '— none —', mono: true },
+                  ].map(item => (
+                    <div key={item.label} style={{ padding: '8px 10px', background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>{item.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: item.mono ? 'monospace' : undefined }}>{item.value}</div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+                <div style={{ marginTop: 10, fontSize: 10, color: 'var(--text-muted)' }}>
+                  Created: {fmtDate(table.created_at)} by {table.created_by}
+                  {table.updated_at && <span style={{ marginLeft: 12 }}>Updated: {fmtDate(table.updated_at)}</span>}
+                </div>
+              </>
             )}
 
-            {/* Relationships */}
-            {rels.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>RELATIONSHIPS</div>
+            {/* Columns tab */}
+            {dTab === 'columns' && (
+              <>
+                {cols.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '20px 0' }}>No columns defined. Edit to add columns.</div>}
+                {cols.length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: 'var(--content-bg)' }}>
+                          {['Column', 'Type', 'PK', 'FK', 'Description'].map(h => (
+                            <th key={h} style={{ padding: '5px 8px', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'left', borderBottom: '1px solid #1e293b', fontSize: 10, letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cols.map((c, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
+                            <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontWeight: 600, color: c.is_pk ? '#38bdf8' : c.is_fk ? '#c4b5fd' : '#e2e8f0' }}>{c.col}</td>
+                            <td style={{ padding: '5px 8px' }}>
+                              <span style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 10, background: '#1e293b', padding: '2px 6px', borderRadius: 4 }}>{c.type}</span>
+                            </td>
+                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+                              {c.is_pk && <span style={{ fontSize: 9, fontWeight: 700, background: '#0c4a6e', color: '#38bdf8', borderRadius: 4, padding: '1px 5px' }}>PK</span>}
+                            </td>
+                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+                              {c.is_fk && <span style={{ fontSize: 9, fontWeight: 700, background: '#2e1065', color: '#c4b5fd', borderRadius: 4, padding: '1px 5px' }}>FK</span>}
+                            </td>
+                            <td style={{ padding: '5px 8px', color: 'var(--text-muted)' }}>{c.desc}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Relations tab */}
+            {dTab === 'relations' && (
+              <>
+                {rels.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '20px 0' }}>No relationships defined. Edit to add relations.</div>}
                 {rels.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: 'var(--content-bg)', borderRadius: 5, marginBottom: 4, fontSize: 11 }}>
-                    <span style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{table.table_name}</span>
-                    <span style={{ color: '#f59e0b', fontSize: 10, fontWeight: 700 }}>{r.rel_type}</span>
-                    <span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{r.table}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>ON {r.key}</span>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--content-bg)', borderRadius: 7, marginBottom: 8, border: '1px solid var(--card-border)', flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 2 }}>FROM</div>
+                      <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>{table.table_name}{r.from_col ? `.${r.from_col}` : ''}</span>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: '#0c4a6e20', color: '#38bdf8', border: '1px solid #0c4a6e60', flexShrink: 0, fontFamily: 'monospace' }}>{r.rel_type}</span>
+                    <div>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 2 }}>TO</div>
+                      <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#c4b5fd' }}>{r.table}{r.to_col ? `.${r.to_col}` : r.key ? ` ON ${r.key}` : ''}</span>
+                    </div>
                   </div>
                 ))}
-              </div>
+              </>
             )}
 
-            {/* Sub-tables (for MAIN) */}
-            {table.table_type === 'MAIN' && subTables.length > 0 && (
-              <div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>LINKED SUB TABLES ({subTables.length})</div>
+            {/* ER tab */}
+            {dTab === 'er' && (
+              <>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Mini ER — this table and its direct relationships</div>
+                <ERDiagram table={table} rels={rels} />
+              </>
+            )}
+
+            {/* Sub-tables tab */}
+            {dTab === 'subs' && (
+              <>
+                {subTables.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '20px 0' }}>No sub-tables linked to this table.</div>}
                 {subTables.map(st => (
-                  <div key={st.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: 'var(--content-bg)', borderRadius: 5, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: '#c4b5fd', fontFamily: 'monospace' }}>↳ {st.table_name}</span>
-                    {st.schema_owner && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{st.schema_owner}</span>}
-                    {st.description && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>— {st.description}</span>}
+                  <div key={st.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'var(--content-bg)', borderRadius: 7, marginBottom: 8, border: '1px solid var(--card-border)' }}>
+                    <TypeBadge type={st.table_type} />
+                    <div>
+                      <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 600 }}>{st.table_name}</div>
+                      {st.schema_owner && <div style={{ fontSize: 10, color: '#38bdf8', fontFamily: 'monospace', marginTop: 2 }}>{st.schema_owner}</div>}
+                      {st.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{st.description}</div>}
+                    </div>
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>{parseCols(st.columns_json).length} cols</span>
                   </div>
                 ))}
-              </div>
+              </>
             )}
           </>
         ) : (
@@ -765,11 +909,11 @@ function TableDetail({
               <div>
                 <label style={S.label}>Type</label>
                 <Select value={form.table_type || 'MAIN'} onChange={f('table_type')}
-                  options={['MAIN','SUB'].map(t => ({ value: t, label: t }))} />
+                  options={TABLE_TYPES.map(t => ({ value: t, label: t }))} />
               </div>
             </div>
 
-            {form.table_type === 'SUB' && (
+            {(form.table_type === 'SUB') && (
               <div>
                 <label style={S.label}>Parent Main Table</label>
                 <Select value={form.parent_id || ''} onChange={f('parent_id')}
@@ -840,7 +984,7 @@ function NewTableForm({ mainTables, onSaved, onCancel }: {
         <div>
           <label style={S.label}>Type</label>
           <Select value={form.table_type || 'MAIN'} onChange={f('table_type')}
-            options={['MAIN','SUB'].map(t => ({ value: t, label: t }))} />
+            options={TABLE_TYPES.map(t => ({ value: t, label: t }))} />
         </div>
       </div>
       {form.table_type === 'SUB' && (
@@ -902,6 +1046,8 @@ export default function Procedures() {
   const [tablesLoading, setTablesLoading] = useState(false)
   const [selectedTable, setSelectedTable] = useState<DataTable | null>(null)
   const [newTable, setNewTable] = useState(false)
+  const [tableSearch, setTableSearch] = useState('')
+  const [schemaFilter, setSchemaFilter] = useState('ALL')
 
   const loadDocs = useCallback(async () => {
     setDocsLoading(true)
@@ -1080,7 +1226,36 @@ export default function Procedures() {
         <div style={{ display: 'flex', gap: 10, flex: '1 1 0', minHeight: 0 }}>
 
           {/* Table tree */}
-          <Card title="🏗️ Table Catalog" style={{ width: 280, flexShrink: 0, overflowY: 'auto' }}>
+          <Card style={{ width: 280, flexShrink: 0, overflowY: 'auto' }}>
+            {/* Search + schema filter */}
+            <div style={{ padding: '8px 8px 6px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--content-bg)', border: '1px solid var(--card-border)', borderRadius: 6, padding: '5px 9px', marginBottom: 6 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="Search tables…"
+                  style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 12, flex: 1, fontFamily: 'inherit' }} />
+                {tableSearch && <button onClick={() => setTableSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>}
+              </div>
+              {/* Schema chips */}
+              {(() => {
+                const schemas = ['ALL', ...Array.from(new Set(tables.map(t => t.schema_owner).filter(Boolean)))]
+                return (
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {schemas.map(s => (
+                      <button key={s} onClick={() => setSchemaFilter(s)}
+                        style={{
+                          padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700,
+                          cursor: 'pointer', border: '1px solid',
+                          fontFamily: 'monospace', letterSpacing: '.03em',
+                          borderColor: schemaFilter === s ? '#38bdf8' : '#334155',
+                          color: schemaFilter === s ? '#38bdf8' : '#64748b',
+                          background: schemaFilter === s ? '#38bdf815' : 'transparent',
+                        }}>{s}</button>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+
             <div style={{ padding: 8, flex: 1, overflowY: 'auto' }}>
               {tablesLoading && <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>}
               {!tablesLoading && tables.length === 0 && (
@@ -1090,59 +1265,74 @@ export default function Procedures() {
               )}
 
               {/* MAIN tables + their SUB children */}
-              {mainTables.map(mt => {
-                const subs = tables.filter(t => t.parent_id === mt.id)
-                const activeMain = selectedTable?.id === mt.id
-                return (
-                  <div key={mt.id} style={{ marginBottom: 4 }}>
-                    <button onClick={() => { setSelectedTable(mt); setNewTable(false) }}
+              {mainTables
+                .filter(mt => {
+                  const q = tableSearch.toLowerCase()
+                  const schOk = schemaFilter === 'ALL' || mt.schema_owner === schemaFilter
+                  const qOk = !q || mt.table_name.toLowerCase().includes(q) || mt.schema_owner?.toLowerCase().includes(q)
+                  return schOk && qOk
+                })
+                .map(mt => {
+                  const subs = tables.filter(t => t.parent_id === mt.id)
+                  const activeMain = selectedTable?.id === mt.id
+                  return (
+                    <div key={mt.id} style={{ marginBottom: 4 }}>
+                      <button onClick={() => { setSelectedTable(mt); setNewTable(false) }}
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6,
+                          background: activeMain ? '#0f172a' : 'transparent',
+                          border: activeMain ? '1px solid #1d4ed840' : '1px solid transparent',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                        <TypeBadge type={mt.table_type} />
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{mt.table_name}</span>
+                        {subs.length > 0 && <span style={{ fontSize: 9, color: 'var(--text-muted)', background: 'var(--card-border)', borderRadius: 8, padding: '1px 5px' }}>{subs.length}</span>}
+                      </button>
+                      {/* Sub-tables */}
+                      {subs.map(st => {
+                        const activeSub = selectedTable?.id === st.id
+                        return (
+                          <button key={st.id} onClick={() => { setSelectedTable(st); setNewTable(false) }}
+                            style={{
+                              width: '100%', textAlign: 'left', padding: '6px 10px 6px 28px', borderRadius: 6,
+                              background: activeSub ? '#0f172a' : 'transparent',
+                              border: activeSub ? '1px solid #7c3aed40' : '1px solid transparent',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                            }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>↳</span>
+                            <TypeBadge type={st.table_type} />
+                            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.table_name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+
+              {/* Tables not MAIN (VIEW, PARQUET, CACHE, unlinked SUB) */}
+              {tables
+                .filter(t => t.table_type !== 'MAIN' && !t.parent_id)
+                .filter(t => {
+                  const q = tableSearch.toLowerCase()
+                  const schOk = schemaFilter === 'ALL' || t.schema_owner === schemaFilter
+                  const qOk = !q || t.table_name.toLowerCase().includes(q)
+                  return schOk && qOk
+                })
+                .map(st => {
+                  const active = selectedTable?.id === st.id
+                  return (
+                    <button key={st.id} onClick={() => { setSelectedTable(st); setNewTable(false) }}
                       style={{
-                        width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6,
-                        background: activeMain ? '#0f172a' : 'transparent',
-                        border: activeMain ? '1px solid #1d4ed840' : '1px solid transparent',
+                        width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, marginBottom: 2,
+                        background: active ? '#0f172a' : 'transparent',
+                        border: active ? '1px solid #7c3aed40' : '1px solid transparent',
                         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                       }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', background: '#1d4ed820', padding: '1px 6px', borderRadius: 4 }}>MAIN</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{mt.table_name}</span>
+                      <TypeBadge type={st.table_type} />
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.table_name}</span>
                     </button>
-                    {/* Sub-tables */}
-                    {subs.map(st => {
-                      const activeSub = selectedTable?.id === st.id
-                      return (
-                        <button key={st.id} onClick={() => { setSelectedTable(st); setNewTable(false) }}
-                          style={{
-                            width: '100%', textAlign: 'left', padding: '6px 10px 6px 28px', borderRadius: 6,
-                            background: activeSub ? '#0f172a' : 'transparent',
-                            border: activeSub ? '1px solid #7c3aed40' : '1px solid transparent',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                          }}>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>↳</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#c4b5fd', background: '#7c3aed20', padding: '1px 5px', borderRadius: 4 }}>SUB</span>
-                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.table_name}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-
-              {/* Standalone SUB tables (no parent) */}
-              {tables.filter(t => t.table_type === 'SUB' && !t.parent_id).map(st => {
-                const active = selectedTable?.id === st.id
-                return (
-                  <button key={st.id} onClick={() => { setSelectedTable(st); setNewTable(false) }}
-                    style={{
-                      width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, marginBottom: 2,
-                      background: active ? '#0f172a' : 'transparent',
-                      border: active ? '1px solid #7c3aed40' : '1px solid transparent',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                    }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#c4b5fd', background: '#7c3aed20', padding: '1px 6px', borderRadius: 4 }}>SUB</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{st.table_name}</span>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>(unlinked)</span>
-                  </button>
-                )
-              })}
+                  )
+                })}
             </div>
 
             {/* Stats footer */}

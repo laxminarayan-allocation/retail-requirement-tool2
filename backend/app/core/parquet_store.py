@@ -89,14 +89,8 @@ SOURCES: list[dict] = [
             SELECT TRUNC(BILLDATE,'DD') SALE_DATE, SITECODE, BARCODE AS ICODE,
                    SUM(CUSTOM_SL_Q) AS SALE_QTY, SUM(CUSTOM_SL_V) AS SALE_NETAMT
             FROM MISRETAIL.T_CUSTOM_COGS
-            WHERE TRUNC(BILLDATE,'DD') >= TRUNC(SYSDATE) - 365
+            WHERE TRUNC(BILLDATE,'DD') >= TRUNC(SYSDATE) - 730
               AND TRUNC(BILLDATE,'DD') <= TRUNC(SYSDATE) - 1
-              AND BARCODE IN (
-                  SELECT DISTINCT ICODE FROM REPORT.V_ITEM_MASTER
-                  WHERE SUBSTR(SEASON,1,4) IN ('AW26','SS26')
-                    AND DIVISION IN ('KIDS','LADIES','MENS')
-                    AND ATTRIBUTE1 IN ('LT WINTER','PREWINTER')
-              )
             GROUP BY TRUNC(BILLDATE,'DD'), SITECODE, BARCODE
         """,
     },

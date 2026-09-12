@@ -461,9 +461,9 @@ export default function SaleDashboard() {
                   <td style={{ ...tdL, color: 'var(--text-muted)', fontSize: 10 }}>{i + 1}</td>
                   <td style={tdL}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>
-                      {r.store_name_short || r.store_name}
+                      {r.store_name_f || r.store_name_short || r.store_name}
                     </div>
-                    {r.store_name_short && (
+                    {(r.store_name_f || r.store_name_short) && (
                       <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>#{r.store_name}</div>
                     )}
                   </td>

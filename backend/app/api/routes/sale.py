@@ -497,6 +497,20 @@ def sale_store_summary():
     else:
         store_map = {}
 
+    # Build NSO store_f_name map from STORE_MASTER_NSO (keyed by site_code numeric)
+    nso_fname_map: dict = {}
+    try:
+        from app.core.parquet_cache import has_output, read_cache as _rc
+        if has_output("CK_A2166", "STORE_MASTER_NSO"):
+            nso_df = _rc("CK_A2166", "STORE_MASTER_NSO")
+            if nso_df is not None and "site_code" in nso_df.columns and "store_f_name" in nso_df.columns:
+                nso_fname_map = dict(zip(
+                    nso_df["site_code"].astype(str).str.strip(),
+                    nso_df["store_f_name"].fillna("").astype(str)
+                ))
+    except Exception:
+        pass
+
     # MTD and LM ranges
     mtd_start = t1_date.replace(day=1)
     import calendar
@@ -528,10 +542,11 @@ def sale_store_summary():
         # Per-week sums (for frontend top-N max computation)
         week_sums = [round(sum(dvals.get(d, 0) for d in wk["dates"]), 2) for wk in weeks]
 
+        nso_fname = nso_fname_map.get(sid, "") or str(sm.get("store_name_f", ""))
         rows.append({
             "store_name":       sid,
             "store_name_short": str(sm.get("store_name_short", "")),
-            "store_name_f":     str(sm.get("store_name_f", "")),
+            "store_name_f":     nso_fname,
             "zone":             str(sm.get("zone", "")),
             "state":            str(sm.get("state_name", "")),
             "grade":            str(sm.get("store_grade", "")),

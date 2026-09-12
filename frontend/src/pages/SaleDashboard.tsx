@@ -21,8 +21,8 @@ interface Summary {
 }
 
 // ── 2Y Weekly types ───────────────────────────────────────────────────────────
-interface WeekMeta  { key: string; start: string }
-interface MonthMeta { key: string; label: string; weeks: WeekMeta[] }
+interface WeekMeta  { key: string; start: string; store_count?: number }
+interface MonthMeta { key: string; label: string; store_count?: number; weeks: WeekMeta[] }
 interface WRow {
   store_name: string; total_val: number; total_qty: number
   month_val: Record<string, number>; month_qty: Record<string, number>
@@ -482,24 +482,30 @@ export default function SaleDashboard() {
                       })}
                       <td style={{ ...td, fontWeight: 800, color: '#34d399', borderLeft: '2px solid #34d39926' }}>{wFmt(wRows.reduce((s, r) => s + (wMode === 'val' ? r.total_val : r.total_qty), 0))}</td>
                     </tr>
-                    {/* Store count row */}
+                    {/* Store count row — denominator = active stores that period (from opening_date) */}
                     {(() => {
-                      const t = wRows.length
-                      const cntBadge = (n: number) => {
-                        const pct = t > 0 ? n / t : 0
+                      const cntBadge = (n: number, total: number) => {
+                        const pct = total > 0 ? n / total : 0
                         const color = pct >= 0.9 ? '#34d399' : pct >= 0.7 ? '#f59e0b' : '#f87171'
                         return <span style={{ color, fontWeight: 700, fontSize: 10 }}>{n}</span>
                       }
+                      const totalEver = wRows.length
                       return (
                         <tr style={{ background: '#080d18', borderTop: '1px dashed #1e293b' }}>
                           <td style={{ ...tdL, fontSize: 9 }}></td>
                           <td style={{ ...tdL, fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>stores &gt;0</td>
                           {months.map(m => {
                             const isCollapsed = wCollapsed.has(m.key)
-                            if (isCollapsed) return <td key={m.key} style={{ ...td, fontSize: 10, borderLeft: '2px solid #818cf826', background: '#080d18' }}>{cntBadge(wRows.filter(r => wVal(r, m.key, 'month') > 0).length)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span></td>
-                            return m.weeks.map((wk, wi) => <td key={wk.key} style={{ ...td, fontSize: 10, borderLeft: wi === 0 ? '2px solid #818cf826' : undefined }}>{cntBadge(wRows.filter(r => wVal(r, wk.key, 'week') > 0).length)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span></td>)
+                            if (isCollapsed) {
+                              const denom = m.store_count ?? totalEver
+                              return <td key={m.key} style={{ ...td, fontSize: 10, borderLeft: '2px solid #818cf826', background: '#080d18' }}>{cntBadge(wRows.filter(r => wVal(r, m.key, 'month') > 0).length, denom)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{denom}</span></td>
+                            }
+                            return m.weeks.map((wk, wi) => {
+                              const denom = wk.store_count ?? totalEver
+                              return <td key={wk.key} style={{ ...td, fontSize: 10, borderLeft: wi === 0 ? '2px solid #818cf826' : undefined }}>{cntBadge(wRows.filter(r => wVal(r, wk.key, 'week') > 0).length, denom)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{denom}</span></td>
+                            })
                           })}
-                          <td style={{ ...td, fontSize: 10, borderLeft: '2px solid #34d39926' }}>{cntBadge(wRows.filter(r => (wMode === 'val' ? r.total_val : r.total_qty) > 0).length)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span></td>
+                          <td style={{ ...td, fontSize: 10, borderLeft: '2px solid #34d39926' }}>{cntBadge(wRows.filter(r => (wMode === 'val' ? r.total_val : r.total_qty) > 0).length, totalEver)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{totalEver}</span></td>
                         </tr>
                       )
                     })()}

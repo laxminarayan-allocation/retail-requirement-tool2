@@ -388,6 +388,30 @@ def sale_weekly_summary():
             week_start=("week_start", "min"),
         )
 
+        # Build opening-date map for active store count per period
+        import calendar as _cal
+        from app.repositories.store_repository import StoreRepository
+        sm_df = StoreRepository().get_all_stores(active_only=False)
+        sm_df.columns = [c.lower() for c in sm_df.columns]
+        opening_dates: list = []
+        if "opening_date" in sm_df.columns and "location" in sm_df.columns:
+            stores_only = sm_df[sm_df["location"].astype(str).str.upper() == "STORE"]
+            od = pd.to_datetime(stores_only["opening_date"], errors="coerce").dropna()
+            opening_dates = sorted(od.tolist())
+        total_stores_ever = len(opening_dates)
+
+        def active_count_on(end_date: pd.Timestamp) -> int:
+            return sum(1 for d in opening_dates if d <= end_date)
+
+        # Build week_end_map: week_key → last date in that week from sale data
+        week_end_map: dict = {}
+        for _, row in agg[["week_key","week_start"]].drop_duplicates().iterrows():
+            ws = row["week_start"]
+            we = ws + pd.Timedelta(days=6)
+            wk = row["week_key"]
+            if wk not in week_end_map or we > week_end_map[wk]:
+                week_end_map[wk] = we
+
         # Build month → weeks metadata (newest month first)
         month_week_map: dict = {}
         for _, row in agg[["month_key","week_key","week_start"]].drop_duplicates().iterrows():
@@ -404,10 +428,18 @@ def sale_weekly_summary():
         for mk in all_months_sorted:
             wks = sorted(month_week_map[mk].keys(), reverse=True)        # newest week first
             dt  = pd.to_datetime(mk + "-01")
+            month_end = dt.replace(day=_cal.monthrange(dt.year, dt.month)[1])
+            m_store_cnt = active_count_on(month_end) if opening_dates else total_stores_ever
+            weeks_list = []
+            for w in wks:
+                we = week_end_map.get(w, month_end)
+                w_store_cnt = active_count_on(we) if opening_dates else total_stores_ever
+                weeks_list.append({"key": w, "start": month_week_map[mk][w], "store_count": w_store_cnt})
             months_meta.append({
-                "key":   mk,
-                "label": dt.strftime("%b-%y"),   # "Sep-26"
-                "weeks": [{"key": w, "start": month_week_map[mk][w]} for w in wks],
+                "key":         mk,
+                "label":       dt.strftime("%b-%y"),
+                "store_count": m_store_cnt,
+                "weeks":       weeks_list,
             })
 
         # Build per-store rows

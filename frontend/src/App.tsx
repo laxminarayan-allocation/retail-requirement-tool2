@@ -19,6 +19,7 @@ import Simulation from '@/pages/Simulation'
 import OptionListing from '@/pages/OptionListing'
 import OracleRefreshPage from '@/pages/OracleRefreshPage'
 import WarehouseInventory from '@/pages/WarehouseInventory'
+import DataStore from '@/pages/DataStore'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="simulation" element={<Navigate to="/calculation?tab=simulation" replace />} />
             <Route path="option-listing" element={<OptionListing />} />
             <Route path="oracle-refresh" element={<OracleRefreshPage />} />
+            <Route path="data-store" element={<DataStore />} />
           </Route>
         </Routes>
       </BrowserRouter>

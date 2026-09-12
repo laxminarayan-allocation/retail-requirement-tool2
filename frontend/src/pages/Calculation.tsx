@@ -11,6 +11,8 @@ import ExportPanel from '@/components/ExportPanel'
 import http from '@/api/http'
 import { DataGrid } from '@/components/DataGrid'
 import Simulation from '@/pages/Simulation'
+import Factors from '@/pages/Factors'
+import Results from '@/pages/Results'
 
 async function apiFetch<T>(method: string, url: string, data?: unknown): Promise<T> {
   const res = await http.request<{ success: boolean; data: T; message: string | null }>({ method, url, data })
@@ -361,8 +363,11 @@ function ExceptionsPanel({ runId }: { runId: string }) {
 export default function Calculation() {
   const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [pageTab, setPageTab] = useState<'calculation' | 'simulation'>(
-    searchParams.get('tab') === 'simulation' ? 'simulation' : 'calculation'
+  const [pageTab, setPageTab] = useState<'calculation' | 'simulation' | 'factors' | 'results'>(
+    searchParams.get('tab') === 'simulation' ? 'simulation'
+    : searchParams.get('tab') === 'factors' ? 'factors'
+    : searchParams.get('tab') === 'results' ? 'results'
+    : 'calculation'
   )
   const [factorSets, setFactorSets] = useState<FactorSetMeta[]>([])
   const [selectedFs, setSelectedFs] = useState(searchParams.get('factor_set_id') ?? '')
@@ -474,6 +479,8 @@ export default function Calculation() {
       {([
         { key: 'calculation', label: '▶ Calculation' },
         { key: 'simulation',  label: '🧮 Simulation' },
+        { key: 'results',     label: '📋 Results' },
+        { key: 'factors',     label: '⚙️ Calc Factors' },
       ] as const).map(({ key, label }) => (
         <button key={key} onClick={() => setPageTab(key)} style={{
           background: pageTab === key ? '#1e293b' : 'transparent',
@@ -492,6 +499,28 @@ export default function Calculation() {
         {tabBar}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <Simulation />
+        </div>
+      </div>
+    )
+  }
+
+  if (pageTab === 'results') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+        {tabBar}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <Results />
+        </div>
+      </div>
+    )
+  }
+
+  if (pageTab === 'factors') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+        {tabBar}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <Factors />
         </div>
       </div>
     )

@@ -6,15 +6,11 @@ import AppLayout from '@/layouts/AppLayout'
 import LoginPage from '@/pages/LoginPage'
 import Dashboard from '@/pages/Dashboard'
 import DatabaseExplorer from '@/pages/DatabaseExplorer'
-import MasterData from '@/pages/MasterData'
-import Factors from '@/pages/Factors'
 import Calculation from '@/pages/Calculation'
-import History from '@/pages/History'
 import Results from '@/pages/Results'
 import Settings from '@/pages/Settings'
 import AdminPanel from '@/pages/AdminPanel'
 import UserManual from '@/pages/UserManual'
-import Procedures from '@/pages/Procedures'
 import NSODashboard from '@/pages/NSODashboard'
 import SaleDashboard from '@/pages/SaleDashboard'
 import ReqDashboard from '@/pages/ReqDashboard'
@@ -39,15 +35,14 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="database" element={<DatabaseExplorer />} />
-            <Route path="master-data" element={<MasterData />} />
-            <Route path="factors" element={<Factors />} />
+            <Route path="factors" element={<Navigate to="/calculation?tab=factors" replace />} />
             <Route path="calculation" element={<Calculation />} />
-            <Route path="results" element={<Results />} />
-            <Route path="history" element={<History />} />
+            <Route path="results" element={<Navigate to="/simulation?tab=results" replace />} />
+            <Route path="history" element={<Navigate to="/simulation?tab=results&tab2=history" replace />} />
             <Route path="settings" element={<Settings />} />
             <Route path="admin" element={<AdminPanel />} />
             <Route path="manual" element={<UserManual />} />
-            <Route path="procedures" element={<Procedures />} />
+            <Route path="procedures" element={<Navigate to="/settings?tab=procedures" replace />} />
             <Route path="nso" element={<NSODashboard />} />
             <Route path="warehouse" element={<WarehouseInventory />} />
             <Route path="sale" element={<SaleDashboard />} />

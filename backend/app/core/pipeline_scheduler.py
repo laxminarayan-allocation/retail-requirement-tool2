@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-PIPELINE_ALL_STEPS = ["00", "02", "03", "07", "08", "04", "05", "06"]
+PIPELINE_ALL_STEPS = ["mc", "00", "02", "03", "07", "08", "04", "05", "06"]
 IST = timezone(timedelta(hours=5, minutes=30))
 
 
@@ -22,16 +22,6 @@ def _seconds_until_9am_ist() -> float:
     if now_ist >= target:
         target += timedelta(days=1)
     return (target - now_ist).total_seconds()
-
-
-def _load_oracle_candidates() -> None:
-    """Call new_dept_search so Oracle MC articles are refreshed before pipeline."""
-    try:
-        from app.api.routes.option_listing import new_dept_search
-        rows = new_dept_search()
-        logger.info("pipeline_scheduler: Load from Oracle done — %d MC articles fetched", len(rows))
-    except Exception as exc:
-        logger.warning("pipeline_scheduler: Load from Oracle skipped (Oracle unavailable?) — %s", exc)
 
 
 def _trigger_pipeline() -> None:
@@ -50,9 +40,7 @@ def _scheduler_loop() -> None:
         next_run = (datetime.now(IST) + timedelta(seconds=wait)).strftime("%Y-%m-%d %H:%M IST")
         logger.info("pipeline_scheduler: next auto-run in %.0f seconds (at %s)", wait, next_run)
         time.sleep(wait)
-        logger.info("pipeline_scheduler: 09:00 IST — step 1: Load from Oracle (New MC Search)")
-        _load_oracle_candidates()
-        logger.info("pipeline_scheduler: step 2: starting all 8 pipeline steps")
+        logger.info("pipeline_scheduler: 09:00 IST — starting 9-step pipeline (mc + 8 steps)")
         _trigger_pipeline()
         time.sleep(60)  # prevent double-fire within same minute
 

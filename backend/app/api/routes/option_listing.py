@@ -33,6 +33,7 @@ QUERIES_FILE = HERE / "option_listing_queries.json"
 CODES_DIR    = Path(r"D:\Prewinter Color Option Listing New Repeat\Codes")
 
 PIPELINE_SCRIPTS = {
+    "mc": None,  # Oracle MC Search — handled inline, no script file
     "00": "00_DOWNLOAD_ALL.py",
     "02": "02_PROCESS_GRC.py",
     "03": "03_PROCESS_REQ.py",
@@ -42,8 +43,9 @@ PIPELINE_SCRIPTS = {
     "05": "05_SUMMARY_EXCEL.py",
     "06": "06_AUDIT.py",
 }
-PIPELINE_ORDER = ["00", "02", "03", "07", "08", "04", "05", "06"]
+PIPELINE_ORDER = ["mc", "00", "02", "03", "07", "08", "04", "05", "06"]
 STEP_LABELS = {
+    "mc": "Load from Oracle — New MC Search (REPORT.T_GRID × V_ITEM_MASTER)",
     "00": "Download GRC / REQ / SALE / ART_GRID / MC_REQ / COLOR_FAMILY from Oracle",
     "02": "Process GRC + PPO → dispatch/hold split",
     "03": "Process REQ + sale-floor adjustment",
@@ -280,6 +282,30 @@ def run_pipeline(body: PipelineRun):
 
         for step in steps:
             script = PIPELINE_SCRIPTS[step]
+
+            # ── Step MC: Load from Oracle (New MC Search) — inline, no subprocess ──
+            if step == "mc":
+                try:
+                    pool = get_pool()
+                    with pool.acquire() as conn:
+                        with conn.cursor() as cur:
+                            cur.arraysize = 1000
+                            cur.execute(_ITEMS_SQL)
+                            rows = cur.fetchall()
+                    count = len(rows)
+                    entry = {"step": step, "script": "Oracle: REPORT.T_GRID × V_ITEM_MASTER",
+                             "ok": True, "log": f"Load from Oracle OK — {count} MC articles fetched",
+                             "ts": datetime.now().isoformat()}
+                except Exception as exc:
+                    entry = {"step": step, "script": "Oracle: REPORT.T_GRID × V_ITEM_MASTER",
+                             "ok": False, "log": str(exc), "ts": datetime.now().isoformat()}
+                with _run_lock:
+                    _run_log[0]["entries"].append(entry)
+                    if not entry["ok"]:
+                        _run_log[0]["status"] = "failed"
+                        break
+                continue
+
             cmd = [sys.executable, str(CODES_DIR / script)]
             if step == "00":
                 cmd += body.dl_args + filter_args

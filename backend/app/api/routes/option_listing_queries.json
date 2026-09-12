@@ -1,4 +1,10 @@
 {
+  "MC_SEARCH": {
+    "description": "New MC Search — AW26/PREWINTER articles for New Department Launch (Step MC)",
+    "table": "REPORT.T_GRID",
+    "dynamic_params": {},
+    "sql": "SELECT\n    g.DEPARTMENT,\n    g.DISPLAY_TYPE,\n    g.ARTICLE_NAME,\n    MIN(v.MRP) AS MRP\nFROM REPORT.T_GRID g\nLEFT JOIN REPORT.V_ITEM_MASTER v\n    ON  g.DEPARTMENT   = v.DEPARTMENT\n    AND g.DISPLAY_TYPE = v.DISPLAY_TYPE\n    AND g.ARTICLE_NAME = v.ARTICLE_NAME\n    AND v.ATTRIBUTE1   IN ('LT WINTER', 'PREWINTER')\nWHERE g.ATTRIBUTE1 IN ('LT WINTER', 'PREWINTER')\nGROUP BY g.DEPARTMENT, g.DISPLAY_TYPE, g.ARTICLE_NAME\nORDER BY g.DEPARTMENT, g.ARTICLE_NAME"
+  },
   "GRC_RAW": {
     "description": "Main goods receipt — MISRETAIL.CUBE$PURCHASE joined to REPORT.V_ITEM_MASTER",
     "table": "MISRETAIL.CUBE$PURCHASE",

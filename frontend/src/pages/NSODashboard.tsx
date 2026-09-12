@@ -415,6 +415,8 @@ function StoreSummary({
 
   // ── Column drag-and-drop reorder (global — saved to backend per user) ────────
   const PREF_KEY = 'nso_col_order_v1'
+  const [pendingColOrder, setPendingColOrder] = useState<typeof STORE_COLS | null>(null)
+  const [savedColOrder, setSavedColOrder] = useState<typeof STORE_COLS | null>(null)
 
   function applyKeys(keys: string[]): typeof STORE_COLS {
     const keySet = new Set(keys)
@@ -431,11 +433,19 @@ function StoreSummary({
       `/preferences/${PREF_KEY}`
     ).then(res => {
       const val = res.data?.data?.value
-      if (val) setColOrder(applyKeys(JSON.parse(val)))
+      if (val) {
+        const order = applyKeys(JSON.parse(val))
+        setColOrder(order)
+        setSavedColOrder(order)
+      }
     }).catch(() => {
       try {
         const saved = localStorage.getItem(PREF_KEY)
-        if (saved) setColOrder(applyKeys(JSON.parse(saved)))
+        if (saved) {
+          const order = applyKeys(JSON.parse(saved))
+          setColOrder(order)
+          setSavedColOrder(order)
+        }
       } catch { /* ignore */ }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -443,13 +453,22 @@ function StoreSummary({
 
   function saveColOrder(keys: string[]) {
     const json = JSON.stringify(keys)
-    // save to backend (global)
     http.put(`/preferences/${PREF_KEY}`, { value: json }).catch(() => {
-      // fallback: at least save locally
       try { localStorage.setItem(PREF_KEY, json) } catch { /* ignore */ }
     })
-    // also keep localStorage in sync for instant next load
     try { localStorage.setItem(PREF_KEY, json) } catch { /* ignore */ }
+  }
+
+  function confirmSave() {
+    if (!pendingColOrder) return
+    saveColOrder(pendingColOrder.map(c => c.key))
+    setSavedColOrder(pendingColOrder)
+    setPendingColOrder(null)
+  }
+
+  function cancelSave() {
+    if (savedColOrder) setColOrder(savedColOrder)
+    setPendingColOrder(null)
   }
 
   const dragCol = useRef<string | null>(null)
@@ -466,14 +485,15 @@ function StoreSummary({
       const ti = arr.findIndex(c => c.key === to)
       const [col] = arr.splice(fi, 1)
       arr.splice(ti, 0, col)
-      saveColOrder(arr.map(c => c.key))
+      // don't auto-save — ask user first
+      setPendingColOrder(arr)
       return arr
     })
     dragCol.current = null; dragOverCol.current = null
   }
   function resetColOrder() {
     setColOrder(STORE_COLS)
-    saveColOrder(STORE_COLS.map(c => c.key))
+    setPendingColOrder(STORE_COLS)
   }
 
   function load(src?: 'nso' | 'all') {
@@ -623,6 +643,26 @@ function StoreSummary({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: 10 }}>
+      {/* Column order save confirmation bar */}
+      {pendingColOrder && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: '#1e3a5f', border: '1px solid #3b82f6',
+          borderRadius: 8, padding: '8px 16px', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 13, color: '#93c5fd', flex: 1 }}>
+            Column order changed. Save this layout for all sessions?
+          </span>
+          <button onClick={confirmSave} style={{
+            background: '#2563eb', color: '#fff', border: 'none',
+            borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}>Yes, Save</button>
+          <button onClick={cancelSave} style={{
+            background: 'transparent', color: '#94a3b8', border: '1px solid #475569',
+            borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13,
+          }}>Cancel</button>
+        </div>
+      )}
       {/* Store KPI row */}
       {data && (
         <div style={{ ...S.card, flexShrink: 0 }}>

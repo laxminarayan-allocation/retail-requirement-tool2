@@ -22,13 +22,13 @@ function useIsMobile() {
 
 const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = [
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
-  { to: '/database',   label: 'Database Explorer',icon: '🗄️', minRole: 'planner' },
-  { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'planner' },
+  { to: '/database',   label: 'Database Explorer',icon: '🗄️', minRole: 'admin'   },
+  { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'admin'   },
   { to: '/req',          label: 'Requirements',      icon: '📝', minRole: 'planner' },
   { to: '/distribution', label: 'Distribution',      icon: '🔀', minRole: 'planner' },
   { to: '/calculation?tab=simulation', label: 'Simulation',        icon: '🧮', minRole: 'planner' },
   { to: '/option-listing', label: 'Option Listing', icon: '🗂️', minRole: 'planner' },
-  { to: '/data-store',    label: 'Data Store',     icon: '💾', minRole: 'planner' },
+  { to: '/data-store',    label: 'Data Store',     icon: '💾', minRole: 'admin'   },
   { to: '/warehouse',  label: 'Warehouse Inventory', icon: '🏭', minRole: 'viewer'  },
   { to: '/nso',        label: 'NSO Dashboard',    icon: '🏪', minRole: 'viewer'  },
   { to: '/sale',       label: 'Sale Dashboard',   icon: '📊', minRole: 'admin'   },

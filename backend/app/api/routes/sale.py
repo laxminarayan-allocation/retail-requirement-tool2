@@ -5,17 +5,143 @@ T_DAILY_SALE_AMT_TY and T_DAILY_SALE_AMT_LY are the data source.
 A background thread aggregates both to STORE × DATE level (~18s), writes
 two Parquet files, and the frontend polls until ready (typically <30s).
 """
+import json
 import logging
 import threading
 import time
-from typing import Optional
+from pathlib import Path
+from typing import Any, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Query, HTTPException
+from pydantic import BaseModel
 
 from app.models.response_models import APIResponse
 from app.db.connection import get_connection
 from app.core.config import settings
+
+# ── Sale Pivot preset storage ─────────────────────────────────────────────────
+_SALE_PRESETS_FILE = Path(__file__).resolve().parents[3] / "data" / "sale_pivot_presets.json"
+
+def _load_sale_presets() -> list[dict]:
+    try:
+        if _SALE_PRESETS_FILE.exists():
+            return json.loads(_SALE_PRESETS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+def _save_sale_presets(presets: list[dict]) -> None:
+    _SALE_PRESETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _SALE_PRESETS_FILE.write_text(json.dumps(presets, ensure_ascii=False, indent=2), encoding="utf-8")
+
+class SalePivotPreset(BaseModel):
+    name: str
+    rowDims: list[str]
+    colDims: list[str]
+    valSpecs: list[dict[str, Any]]
+    colFilters: dict[str, Any] = {}
+    search: str = ""
+    showTop: int = 0
+    condEnabled: bool = False
+    condLo: str = ""
+    condHi: str = ""
+
+# ── Sale pivot merged DataFrame cache ────────────────────────────────────────
+_SALE_DF_CACHE: "pd.DataFrame | None" = None
+_SALE_DF_CACHE_TS: float = 0.0
+_SALE_DF_CACHE_TTL = 1800  # 30 min
+
+_SALE_PIVOT_DIMS = {
+    "division", "section", "department", "article_name", "icode",
+    "attribute1", "color", "cat1", "season", "sz_grp",
+    "sitecode", "store_name", "store_name_f", "city_name", "state", "cluster_type", "zone",
+    "sale_year", "sale_month", "sale_month_label", "sale_week",
+}
+_SALE_VALUE_COLS = {"sale_qty", "sale_netamt"}
+_AGG_MAP = {"sum": "sum", "count": "count", "avg": "mean", "max": "max", "min": "min"}
+
+
+def _load_sale_pivot_df(refresh: bool = False) -> "pd.DataFrame":
+    global _SALE_DF_CACHE, _SALE_DF_CACHE_TS
+    age = time.time() - _SALE_DF_CACHE_TS
+    if not refresh and _SALE_DF_CACHE is not None and age < _SALE_DF_CACHE_TTL:
+        return _SALE_DF_CACHE
+
+    from app.core.parquet_store import read_parquet
+    from app.repositories.store_repository import StoreRepository
+
+    sale = read_parquet("sale_raw")
+    sale.columns = [c.lower() for c in sale.columns]
+    sale["sale_date"] = pd.to_datetime(sale["sale_date"], errors="coerce")
+    sale = sale.dropna(subset=["sale_date"])
+    sale["sale_qty"] = pd.to_numeric(sale["sale_qty"], errors="coerce").fillna(0)
+    sale["sale_netamt"] = pd.to_numeric(sale["sale_netamt"], errors="coerce").fillna(0)
+    sale["sale_year"]  = sale["sale_date"].dt.year.astype(str)
+    sale["sale_month"] = sale["sale_date"].dt.strftime("%Y-%m")
+    sale["sale_month_label"] = sale["sale_date"].dt.strftime("%b-%y")
+    sale["sale_week"]  = sale["sale_date"].dt.strftime("%G-W%V")
+    sale["sitecode"]   = sale["sitecode"].astype(str).str.strip()
+
+    # join item_master
+    try:
+        item = read_parquet("item_master")
+        item.columns = [c.lower() for c in item.columns]
+        icode_col = "icode" if "icode" in item.columns else item.columns[0]
+        keep_item = [c for c in ["icode", "division", "section", "department",
+                                  "article_name", "attribute1", "color", "cat1",
+                                  "season", "sz_grp", "mrp"] if c in item.columns]
+        item = item[keep_item].drop_duplicates(subset=[icode_col])
+        item[icode_col] = item[icode_col].astype(str).str.strip()
+        sale["icode"] = sale["icode"].astype(str).str.strip()
+        sale = sale.merge(item, on="icode", how="left")
+    except Exception as e:
+        logger.warning("sale_pivot: item_master join failed — %s", e)
+
+    # join store_master (NSO names)
+    try:
+        sm_df = StoreRepository().get_all_stores(active_only=False)
+        sm_df.columns = [c.lower() for c in sm_df.columns]
+        sid_col = "store_name" if "store_name" in sm_df.columns else sm_df.columns[0]
+        sm_df["_sid"] = sm_df[sid_col].astype(str).str.strip()
+        keep_sm = {c: c for c in ["store_name_short", "store_grade", "city_name",
+                                   "state_name", "cluster_type", "zone"] if c in sm_df.columns}
+        sm_small = sm_df[["_sid"] + list(keep_sm.keys())].drop_duplicates("_sid")
+        sm_small = sm_small.rename(columns={"state_name": "state"})
+        sale = sale.merge(sm_small.rename(columns={"_sid": "sitecode"}), on="sitecode", how="left")
+        # NSO fname
+        nso_fname_map: dict = {}
+        try:
+            from app.core.parquet_cache import has_output, read_cache as _rc
+            if has_output("CK_A2166", "STORE_MASTER_NSO"):
+                nso_df = _rc("CK_A2166", "STORE_MASTER_NSO")
+                if nso_df is not None and "site_code" in nso_df.columns and "store_f_name" in nso_df.columns:
+                    nso_fname_map = dict(zip(
+                        nso_df["site_code"].astype(str).str.strip(),
+                        nso_df["store_f_name"].fillna("").astype(str)
+                    ))
+        except Exception:
+            pass
+        sale["store_name_f"] = sale["sitecode"].map(nso_fname_map).fillna("")
+        if "store_name_short" in sale.columns:
+            sale["store_name"] = sale["store_name_f"].where(sale["store_name_f"] != "", sale["store_name_short"])
+        else:
+            sale["store_name"] = sale["store_name_f"].where(sale["store_name_f"] != "", sale["sitecode"])
+    except Exception as e:
+        logger.warning("sale_pivot: store_master join failed — %s", e)
+        sale["store_name"] = sale["sitecode"]
+        sale["store_name_f"] = ""
+
+    _SALE_DF_CACHE = sale
+    _SALE_DF_CACHE_TS = time.time()
+    return sale
+
+
+def _df_to_rows_safe(df: "pd.DataFrame") -> list[dict]:
+    df = df.copy()
+    for col in df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns:
+        df[col] = df[col].dt.strftime("%Y-%m-%d")
+    return df.where(df.notna(), other=None).to_dict(orient="records")
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sale", tags=["Sale Dashboard"])
@@ -604,3 +730,135 @@ def sale_store_summary():
         "dates":        dates,
         "weeks":        weeks,
     })
+
+
+# ── Sale Pivot ────────────────────────────────────────────────────────────────
+
+@router.get("/pivot", response_model=APIResponse)
+def sale_pivot(
+    rows: str = "division",
+    cols: str = "",
+    values: str = "sale_netamt:sum",
+    division: str = "",
+    season: str = "",
+    attribute1: str = "",
+    year_from: str = "",
+    year_to: str = "",
+    refresh: bool = False,
+):
+    try:
+        row_dims = [c.strip().lower() for c in rows.split(",") if c.strip().lower() in _SALE_PIVOT_DIMS]
+        col_dims = [c.strip().lower() for c in cols.split(",") if c.strip().lower() in _SALE_PIVOT_DIMS] if cols.strip() else []
+
+        val_specs: list[tuple[str, str]] = []
+        for part in values.split(","):
+            part = part.strip()
+            vc, ag = (part.split(":", 1) if ":" in part else (part, "sum"))
+            vc = vc.strip().lower(); ag = ag.strip().lower()
+            if vc in _SALE_VALUE_COLS and (ag in _AGG_MAP or ag == "pct"):
+                val_specs.append((vc, ag))
+        if not val_specs:
+            val_specs = [("sale_netamt", "sum")]
+        if not row_dims:
+            return APIResponse.fail(f"Valid row dims: {sorted(_SALE_PIVOT_DIMS)}")
+
+        df = _load_sale_pivot_df(refresh=refresh)
+        if division:
+            df = df[df["division"].astype(str).str.upper() == division.strip().upper()]
+        if season:
+            df = df[df["season"].astype(str).str.upper().str.contains(season.strip().upper(), na=False)]
+        if attribute1:
+            df = df[df["attribute1"].astype(str).str.upper().str.contains(attribute1.strip().upper(), na=False)]
+        if year_from:
+            df = df[df["sale_year"] >= year_from.strip()]
+        if year_to:
+            df = df[df["sale_year"] <= year_to.strip()]
+
+        for vc, _ in val_specs:
+            df[vc] = pd.to_numeric(df[vc], errors="coerce")
+
+        all_dims = row_dims + col_dims
+        base_specs = [(vc, ag) for vc, ag in val_specs if ag != "pct"]
+        agg_dict: dict[str, list] = {}
+        for vc, ag in base_specs:
+            agg_dict.setdefault(vc, [])
+            if _AGG_MAP[ag] not in agg_dict[vc]:
+                agg_dict[vc].append(_AGG_MAP[ag])
+        if not agg_dict:
+            base_vc = val_specs[0][0]
+            agg_dict = {base_vc: ["sum"]}
+
+        grouped = df.groupby(all_dims, dropna=False).agg(agg_dict).reset_index()
+        if isinstance(grouped.columns, pd.MultiIndex):
+            grouped.columns = [f"{c[0]}_{c[1]}" if c[1] else c[0] for c in grouped.columns]
+
+        for vc, ag in val_specs:
+            if ag == "pct":
+                src_col = f"{vc}_sum" if f"{vc}_sum" in grouped.columns else vc
+                if src_col in grouped.columns:
+                    total = grouped[src_col].sum()
+                    grouped[f"{vc}_pct%"] = (grouped[src_col] / total * 100).round(2) if total else 0
+
+        num_cols = [c for c in grouped.columns if c not in all_dims]
+        grand_totals: dict[str, float] = {}
+        for nc in num_cols:
+            try:
+                grand_totals[nc] = float(grouped[nc].sum())
+            except Exception:
+                grand_totals[nc] = 0
+
+        if col_dims:
+            val_cols_in_grouped = [c for c in grouped.columns if c not in all_dims]
+            pivot_df = grouped.pivot_table(index=row_dims, columns=col_dims, values=val_cols_in_grouped, fill_value=0)
+            if isinstance(pivot_df.columns, pd.MultiIndex):
+                pivot_df.columns = [" | ".join(str(x) for x in col if x) for col in pivot_df.columns]
+            else:
+                pivot_df.columns = [str(c) for c in pivot_df.columns]
+            pivot_df["__rt__"] = pivot_df.select_dtypes("number").sum(axis=1)
+            pivot_df = pivot_df.sort_values("__rt__", ascending=False).drop(columns="__rt__").reset_index()
+            col_headers = list(pivot_df.columns)
+            out_rows = _df_to_rows_safe(pivot_df.head(500))
+        else:
+            sort_col = num_cols[0] if num_cols else None
+            if sort_col:
+                grouped = grouped.sort_values(sort_col, ascending=False)
+            grouped = grouped.head(3000)
+            col_headers = list(grouped.columns)
+            out_rows = _df_to_rows_safe(grouped)
+
+        return APIResponse.ok(data={
+            "columns": col_headers,
+            "rows": out_rows,
+            "total": len(out_rows),
+            "grand_totals": grand_totals,
+            "grand_total": list(grand_totals.values())[0] if grand_totals else 0,
+            "row_dims": row_dims,
+            "col_dims": col_dims,
+            "val_specs": [{"col": vc, "agg": ag} for vc, ag in val_specs],
+        })
+    except Exception as exc:
+        logger.exception("sale_pivot failed")
+        return APIResponse.fail(f"Pivot failed: {str(exc)[:300]}")
+
+
+# ── Sale Pivot presets ────────────────────────────────────────────────────────
+
+@router.get("/pivot/presets", response_model=APIResponse)
+def sale_pivot_presets_get():
+    return APIResponse.ok(data={"presets": _load_sale_presets()})
+
+
+@router.post("/pivot/presets", response_model=APIResponse)
+def sale_pivot_presets_save(preset: SalePivotPreset):
+    presets = _load_sale_presets()
+    presets = [p for p in presets if p.get("name") != preset.name]
+    presets.append(preset.model_dump())
+    _save_sale_presets(presets)
+    return APIResponse.ok(data={"presets": presets})
+
+
+@router.delete("/pivot/presets/{name}", response_model=APIResponse)
+def sale_pivot_presets_delete(name: str):
+    presets = [p for p in _load_sale_presets() if p.get("name") != name]
+    _save_sale_presets(presets)
+    return APIResponse.ok(data={"presets": presets})

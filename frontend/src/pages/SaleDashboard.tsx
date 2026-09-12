@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import http from '@/api/http'
 
 // ── 8-Week types ──────────────────────────────────────────────────────────────
@@ -49,8 +49,296 @@ const wkLabel = (k: string) => k.split('-')[1] ?? k
 type SortKey8 = 'store_name' | 'yesterday_val' | 'six_w_val' | 'max_week_val' | 'mtd_val' | 'lm_val' | string
 type SortKeyW = 'store_name' | 'total_val' | string
 
+// ── Sale Pivot Component ──────────────────────────────────────────────────────
+type PivotRow = { [key: string]: any }
+type PivotAgg = 'sum' | 'count' | 'avg' | 'max' | 'min' | 'pct'
+type PivotValSpec = { col: string; agg: string }
+type PivotPreset = {
+  name: string; rowDims: string[]; colDims: string[]; valSpecs: PivotValSpec[]
+  colFilters: Record<string, any>; search: string; showTop: number
+  condEnabled: boolean; condLo: string; condHi: string
+}
+
+const SALE_PIVOT_DIMS = [
+  'division','section','department','article_name','attribute1','color','cat1','season','sz_grp',
+  'sitecode','store_name','store_name_f','city_name','state','cluster_type','zone',
+  'sale_year','sale_month','sale_month_label','sale_week','icode',
+]
+const SALE_PIVOT_VALS = ['sale_netamt','sale_qty']
+const PIVOT_AGG_OPTIONS: PivotAgg[] = ['sum','count','avg','max','min','pct']
+
+function toNumP(v: any): number {
+  if (v === null || v === undefined || v === '') return 0
+  const n = Number(String(v).replace(/,/g, ''))
+  return isFinite(n) ? n : 0
+}
+function fmtP(v: any): string {
+  if (v === null || v === undefined || v === '') return '—'
+  if (typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v))))
+    return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+  return String(v)
+}
+
+function SalePivot() {
+  const [rowDims,   setRowDims]   = useState<string[]>(['division'])
+  const [colDims,   setColDims]   = useState<string[]>([])
+  const [valSpecs,  setValSpecs]  = useState<PivotValSpec[]>([{ col: 'sale_netamt', agg: 'sum' }])
+  const [sortCol,   setSortCol]   = useState('')
+  const [sortDir,   setSortDir]   = useState<'asc'|'desc'>('desc')
+  const [search,    setSearch]    = useState('')
+  const [showTop,   setShowTop]   = useState(0)
+  const [condEnabled, setCondEnabled] = useState(false)
+  const [condLo,    setCondLo]    = useState('')
+  const [condHi,    setCondHi]    = useState('')
+
+  // filters
+  const [divFilter, setDivFilter] = useState('')
+  const [seasonFilter, setSeasonFilter] = useState('')
+  const [attr1Filter, setAttr1Filter] = useState('')
+  const [yearFrom, setYearFrom] = useState('')
+  const [yearTo, setYearTo] = useState('')
+
+  const [pivotRows, setPivotRows] = useState<PivotRow[]>([])
+  const [pivotCols, setPivotCols] = useState<string[]>([])
+  const [grandTotal, setGrandTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fetchRef = useRef(0)
+
+  // Presets
+  const [presets, setPresets] = useState<PivotPreset[]>([])
+  const [presetName, setPresetName] = useState('')
+  const [showPresets, setShowPresets] = useState(false)
+
+  useEffect(() => {
+    http.get('/sale/pivot/presets').then(r => setPresets(r.data?.data?.presets ?? [])).catch(() => {})
+  }, [])
+
+  async function savePreset() {
+    const name = presetName.trim(); if (!name) return
+    const preset: PivotPreset = { name, rowDims, colDims, valSpecs, colFilters: {}, search, showTop, condEnabled, condLo, condHi }
+    try { const r = await http.post('/sale/pivot/presets', preset); setPresets(r.data?.data?.presets ?? []) } catch {}
+    setPresetName('')
+  }
+  function loadPreset(p: PivotPreset) {
+    setRowDims(p.rowDims); setColDims(p.colDims); setValSpecs(p.valSpecs)
+    setSearch(p.search ?? ''); setShowTop(p.showTop ?? 0)
+    setCondEnabled(p.condEnabled ?? false); setCondLo(p.condLo ?? ''); setCondHi(p.condHi ?? '')
+    setShowPresets(false)
+  }
+  async function deletePreset(name: string) {
+    try { const r = await http.delete(`/sale/pivot/presets/${encodeURIComponent(name)}`); setPresets(r.data?.data?.presets ?? []) } catch {}
+  }
+
+  const valSpecsStr = valSpecs.map(v => `${v.col}:${v.agg}`).join(',')
+
+  async function runPivot() {
+    if (!rowDims.length) return
+    const id = ++fetchRef.current
+    setLoading(true); setError(null)
+    try {
+      const params: any = {
+        rows: rowDims.join(','), cols: colDims.join(','), values: valSpecsStr,
+        division: divFilter, season: seasonFilter, attribute1: attr1Filter,
+        year_from: yearFrom, year_to: yearTo,
+      }
+      const res = await http.get('/sale/pivot', { params, timeout: 120000 })
+      if (id !== fetchRef.current) return
+      const d = res.data?.data ?? {}
+      setPivotRows(d.rows ?? [])
+      setPivotCols(d.columns ?? [])
+      setGrandTotal(d.grand_total ?? 0)
+      const firstNum = (d.columns ?? []).find((c: string) => (d.rows ?? []).length > 0 && typeof (d.rows ?? [])[0][c] === 'number')
+      if (firstNum) { setSortCol(firstNum); setSortDir('desc') }
+    } catch (e: any) {
+      if (id !== fetchRef.current) return
+      setError(e?.response?.data?.message || 'Pivot failed')
+    } finally { if (id === fetchRef.current) setLoading(false) }
+  }
+
+  const toggleRowDim = (c: string) => { setColDims(d => d.filter(x => x !== c)); setRowDims(d => d.includes(c) ? d.filter(x => x !== c) : [...d, c]) }
+  const toggleColDim = (c: string) => { setRowDims(d => d.filter(x => x !== c)); setColDims(d => d.includes(c) ? d.filter(x => x !== c) : [...d, c]) }
+
+  const filtered = useMemo(() => {
+    let data = pivotRows
+    if (search) data = data.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
+    if (sortCol) {
+      data = [...data].sort((a, b) => {
+        const av = a[sortCol], bv = b[sortCol]
+        if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av
+        return sortDir === 'asc' ? String(av ?? '').localeCompare(String(bv ?? '')) : String(bv ?? '').localeCompare(String(av ?? ''))
+      })
+    }
+    return showTop > 0 ? data.slice(0, showTop) : data
+  }, [pivotRows, search, sortCol, sortDir, showTop])
+
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('desc') }
+  }
+
+  const pth: React.CSSProperties = {
+    padding: '7px 8px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+    borderBottom: '1px solid var(--card-border)', background: 'var(--card-bg)',
+    cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', textAlign: 'right',
+  }
+  const ptd: React.CSSProperties = { padding: '5px 8px', fontSize: 11, borderBottom: '1px solid var(--card-border)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+  const ptdL: React.CSSProperties = { ...ptd, textAlign: 'left' }
+  const inp: React.CSSProperties = { background: 'var(--input-bg)', border: '1px solid var(--input-border)', borderRadius: 6, padding: '5px 9px', fontSize: 12, color: 'var(--input-color)', outline: 'none' }
+  const chip = (on: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', padding: '3px 9px', borderRadius: 20,
+    fontSize: 11, fontWeight: on ? 700 : 400, cursor: 'pointer', userSelect: 'none',
+    border: `1px solid ${on ? '#818cf8' : 'var(--card-border)'}`,
+    background: on ? '#818cf833' : 'transparent', color: on ? '#818cf8' : 'var(--text-muted)', margin: 2,
+  })
+  const chipC = (on: boolean): React.CSSProperties => ({
+    ...chip(on), border: `1px solid ${on ? '#f59e0b' : 'var(--card-border)'}`,
+    background: on ? '#f59e0b22' : 'transparent', color: on ? '#f59e0b' : 'var(--text-muted)',
+  })
+
+  return (
+    <div>
+      {/* ── Builder ── */}
+      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16, marginBottom: 14 }}>
+        {/* Top row: title + preset + run */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Sale Pivot Builder &nbsp;<span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>T_CUSTOM_COGS × V_ITEM_MASTER</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <input value={presetName} onChange={e => setPresetName(e.target.value)} onKeyDown={e => e.key === 'Enter' && savePreset()} placeholder="Preset naam…" style={{ ...inp, width: 130 }} />
+            <button onClick={savePreset} disabled={!presetName.trim()} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #4ade8066', background: presetName.trim() ? '#4ade8022' : 'transparent', color: presetName.trim() ? '#4ade80' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: presetName.trim() ? 'pointer' : 'default' }}>💾 Save</button>
+            {presets.length > 0 && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setShowPresets(v => !v)} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--card-border)', background: showPresets ? '#4f46e522' : 'var(--input-bg)', color: 'var(--text-primary)', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  📂 Presets <span style={{ background: '#4f46e5', color: '#fff', borderRadius: 10, fontSize: 10, padding: '0 5px', fontWeight: 700 }}>{presets.length}</span>
+                </button>
+                {showPresets && (
+                  <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 200, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, minWidth: 200, boxShadow: '0 8px 24px #0006', overflow: 'hidden' }}>
+                    {presets.map(p => (
+                      <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--card-border)' }}>
+                        <span onClick={() => loadPreset(p)} style={{ flex: 1, cursor: 'pointer', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }} title={`Rows: ${p.rowDims.join(', ')}`}>{p.name}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{p.rowDims.join('+')}</span>
+                        <span onClick={() => deletePreset(p.name)} style={{ cursor: 'pointer', color: '#f87171', fontSize: 13, padding: '0 2px' }}>✕</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <button onClick={runPivot} disabled={loading} style={{ padding: '7px 20px', borderRadius: 8, border: 'none', background: loading ? '#374151' : '#4f46e5', color: loading ? 'var(--text-muted)' : '#fff', fontWeight: 700, fontSize: 13, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : '0 2px 8px #4f46e566' }}>
+              {loading ? '⏳ Running…' : '▶ Run Pivot'}
+            </button>
+          </div>
+        </div>
+
+        {/* Dims + values */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ background: '#1d4ed811', border: '1px solid #1d4ed844', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', marginBottom: 6 }}><span style={{ background: '#1d4ed833', borderRadius: 4, padding: '1px 6px' }}>ROW</span> <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>dimension</span></div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', maxHeight: 110, overflowY: 'auto' }}>
+              {SALE_PIVOT_DIMS.map(c => <span key={c} onClick={() => toggleRowDim(c)} style={chip(rowDims.includes(c))}>{c}</span>)}
+            </div>
+          </div>
+          <div style={{ background: '#f59e0b0d', border: '1px solid #f59e0b33', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', marginBottom: 6 }}><span style={{ background: '#f59e0b22', borderRadius: 4, padding: '1px 6px' }}>COLUMN</span> <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>cross-tab (optional)</span></div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', maxHeight: 110, overflowY: 'auto' }}>
+              {SALE_PIVOT_DIMS.map(c => <span key={c} onClick={() => toggleColDim(c)} style={chipC(colDims.includes(c))}>{c}</span>)}
+            </div>
+          </div>
+          <div style={{ background: '#4ade800d', border: '1px solid #4ade8033', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ background: '#4ade8022', borderRadius: 4, padding: '1px 6px' }}>VALUES</span>
+              <span onClick={() => setValSpecs(v => [...v, { col: 'sale_netamt', agg: 'sum' }])} style={{ fontSize: 10, fontWeight: 600, cursor: 'pointer', color: '#4ade80', border: '1px solid #4ade8044', borderRadius: 10, padding: '1px 8px', marginLeft: 'auto' }}>+ Add</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {valSpecs.map((vs, i) => (
+                <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <select style={{ ...inp, flex: 1, fontSize: 11 }} value={vs.col} onChange={e => setValSpecs(v => v.map((s, idx) => idx === i ? { ...s, col: e.target.value } : s))}>
+                    {SALE_PIVOT_VALS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select style={{ ...inp, width: 70, fontSize: 11 }} value={vs.agg} onChange={e => setValSpecs(v => v.map((s, idx) => idx === i ? { ...s, agg: e.target.value } : s))}>
+                    {PIVOT_AGG_OPTIONS.map(a => <option key={a} value={a}>{a === 'pct' ? 'cont%' : a.toUpperCase()}</option>)}
+                  </select>
+                  {valSpecs.length > 1 && <span onClick={() => setValSpecs(v => v.filter((_, idx) => idx !== i))} style={{ cursor: 'pointer', color: '#f87171', fontSize: 13 }}>✕</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Pre-filters */}
+        <div style={{ borderTop: '1px solid var(--card-border)', paddingTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Division</div><input style={{ ...inp, width: 120 }} placeholder="e.g. KIDS" value={divFilter} onChange={e => setDivFilter(e.target.value)} /></div>
+          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Season (contains)</div><input style={{ ...inp, width: 100 }} placeholder="e.g. SS26" value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)} /></div>
+          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Attribute1</div><input style={{ ...inp, width: 110 }} placeholder="PREWINTER" value={attr1Filter} onChange={e => setAttr1Filter(e.target.value)} /></div>
+          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Year from</div><input style={{ ...inp, width: 70 }} placeholder="2024" value={yearFrom} onChange={e => setYearFrom(e.target.value)} /></div>
+          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Year to</div><input style={{ ...inp, width: 70 }} placeholder="2026" value={yearTo} onChange={e => setYearTo(e.target.value)} /></div>
+          <div style={{ borderLeft: '1px solid var(--card-border)', paddingLeft: 10, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Search result</div><input style={{ ...inp, width: 140 }} placeholder="Filter rows…" value={search} onChange={e => setSearch(e.target.value)} /></div>
+            <div><div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Top N (0=all)</div><input type="number" style={{ ...inp, width: 65 }} min={0} value={showTop} onChange={e => setShowTop(Number(e.target.value))} /></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Color</div>
+              <span style={{ ...chip(condEnabled), padding: '3px 10px' }} onClick={() => setCondEnabled(v => !v)}>{condEnabled ? 'ON' : 'OFF'}</span>
+            </div>
+            {condEnabled && <>
+              <div><div style={{ fontSize: 10, color: '#f87171', marginBottom: 3 }}>Red ≤</div><input type="number" style={{ ...inp, width: 70 }} value={condLo} onChange={e => setCondLo(e.target.value)} /></div>
+              <div><div style={{ fontSize: 10, color: '#4ade80', marginBottom: 3 }}>Green ≥</div><input type="number" style={{ ...inp, width: 70 }} value={condHi} onChange={e => setCondHi(e.target.value)} /></div>
+            </>}
+          </div>
+        </div>
+      </div>
+
+      {loading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Pivot chal raha hai… (pehli baar 10-30s lag sakta hai)</div>}
+      {error && <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 14px', color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>⚠ {error}</div>}
+      {!loading && !error && pivotRows.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Dimensions choose karo aur ▶ Run Pivot click karo.</div>
+      )}
+
+      {!loading && pivotRows.length > 0 && (
+        <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid var(--card-border)' }}>
+          <div style={{ padding: '8px 12px', background: 'var(--card-bg)', borderBottom: '1px solid var(--card-border)', display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{filtered.length.toLocaleString()} / {pivotRows.length.toLocaleString()} rows</span>
+            <span>Value: <b style={{ color: '#818cf8' }}>{valSpecs.map(v => `${v.col}(${v.agg})`).join(', ')}</b></span>
+            <span>Grand Total: <b style={{ color: '#4ade80' }}>{grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</b></span>
+          </div>
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr>
+                {pivotCols.map(h => (
+                  <th key={h} onClick={() => handleSort(h)} style={{ ...pth, textAlign: 'left' }}>
+                    {h.toUpperCase()} {sortCol === h ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--sidebar-bg)44' }}>
+                  {pivotCols.map(h => {
+                    const val = row[h]
+                    const isNum = typeof val === 'number'
+                    const bg = isNum && condEnabled ? (val >= Number(condHi || 0) && condHi ? '#14532d' : val <= Number(condLo || 0) && condLo ? '#450a0a' : undefined) : undefined
+                    return <td key={h} style={{ ...(isNum ? ptd : ptdL), background: bg, color: isNum && val < 0 ? '#f87171' : undefined }}>{isNum ? fmtP(val) : (val ?? '—')}</td>
+                  })}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: 'var(--sidebar-bg)', fontWeight: 700 }}>
+                {pivotCols.map((h, i) => {
+                  const total = i === 0 ? null : typeof filtered[0]?.[h] === 'number' ? filtered.reduce((s, r) => s + toNumP(r[h]), 0) : null
+                  return <td key={h} style={{ ...ptd, borderTop: '2px solid var(--card-border)' }}>{i === 0 ? `TOTAL (${filtered.length})` : total !== null ? fmtP(total) : ''}</td>
+                })}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SaleDashboard() {
-  const [view, setView] = useState<'8week' | '2year'>('8week')
+  const [view, setView] = useState<'8week' | '2year' | 'pivot'>('8week')
 
   // ── 8-Week state ────────────────────────────────────────────────────────────
   const [data,     setData]     = useState<Summary | null>(null)
@@ -201,11 +489,11 @@ export default function SaleDashboard() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* View toggle */}
           <div style={{ display: 'flex', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 6, overflow: 'hidden' }}>
-            {([['8week', '8-Week Sale'], ['2year', '2Y Weekly']] as const).map(([v, label]) => (
+            {([['8week', '8-Week Sale'], ['2year', '2Y Weekly'], ['pivot', '📊 Pivot']] as const).map(([v, label]) => (
               <button key={v} onClick={() => setView(v)} style={{
                 padding: '5px 14px', fontSize: 11, cursor: 'pointer', border: 'none',
-                background: view === v ? '#22d3ee' : 'transparent',
-                color: view === v ? '#000' : 'var(--text-muted)',
+                background: view === v ? (v === 'pivot' ? '#818cf8' : '#22d3ee') : 'transparent',
+                color: view === v ? (v === 'pivot' ? '#fff' : '#000') : 'var(--text-muted)',
                 fontWeight: view === v ? 800 : 400,
               }}>{label}</button>
             ))}
@@ -222,16 +510,18 @@ export default function SaleDashboard() {
               ))}
             </div>
           )}
-          <input
-            placeholder="Search store..."
-            value={view === '8week' ? search : wSearch}
-            onChange={e => view === '8week' ? setSearch(e.target.value) : setWSearch(e.target.value)}
-            style={{
-              background: 'var(--card-bg)', border: '1px solid var(--card-border)',
-              borderRadius: 6, padding: '5px 10px', fontSize: 12,
-              color: 'var(--text-primary)', outline: 'none', width: 190,
-            }}
-          />
+          {view !== 'pivot' && (
+            <input
+              placeholder="Search store..."
+              value={view === '8week' ? search : wSearch}
+              onChange={e => view === '8week' ? setSearch(e.target.value) : setWSearch(e.target.value)}
+              style={{
+                background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+                borderRadius: 6, padding: '5px 10px', fontSize: 12,
+                color: 'var(--text-primary)', outline: 'none', width: 190,
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -540,6 +830,11 @@ export default function SaleDashboard() {
           </>
         )
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* PIVOT VIEW                                                             */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {view === 'pivot' && <SalePivot />}
     </div>
   )
 }

@@ -959,8 +959,8 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
                     <td style={{ padding: '5px 8px' }}>
                       <span style={{
                         fontSize: 9, padding: '2px 6px', borderRadius: 10, fontWeight: 700,
-                        background: s.status === 'ACTIVE' ? '#064e3b' : s.status === 'UPCOMING' ? '#1e3a5f' : '#1e293b',
-                        color: s.status === 'ACTIVE' ? '#34d399' : s.status === 'UPCOMING' ? '#60a5fa' : '#94a3b8',
+                        background: s.status === 'ACTIVE' ? '#064e3b' : s.status === 'UPCOMING_STORE' ? '#1e3a5f' : '#1e293b',
+                        color: s.status === 'ACTIVE' ? '#34d399' : s.status === 'UPCOMING_STORE' ? '#60a5fa' : '#94a3b8',
                       }}>{s.status || '—'}</span>
                     </td>
                     <td style={{ padding: '5px 8px', color: '#a78bfa', fontWeight: 700 }}>{s.grade || '—'}</td>
@@ -1200,7 +1200,21 @@ export default function Dashboard() {
       {effectiveDashTab === 'store-network' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
+            <a
+              href="/api/dashboard/store-master-csv"
+              download="store_master.csv"
+              style={{
+                fontSize: 10, fontWeight: 600, color: '#818cf8', border: '1px solid #818cf8',
+                borderRadius: 4, padding: '2px 8px', textDecoration: 'none', letterSpacing: 0.4,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}
+              title="Download Store Master CSV"
+            >
+              ⬇ CSV
+            </a>
+          </div>
         </div>
         <div style={{ width: '100%' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, width: '100%', alignItems: 'start' }}>

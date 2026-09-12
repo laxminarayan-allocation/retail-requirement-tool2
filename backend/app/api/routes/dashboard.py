@@ -899,15 +899,16 @@ async def stores_by_split(split: str, value: str):
                             code = str(r.get("store_name", "—")).strip()
                             sm = store_lookup.get(code, {})
                             name = str(sm.get("store_name_f", sm.get("location", ""))) if sm else str(r.get("initial_name", r.get("location", "")))
-                            raw_status = str(r.get("store_status", "")).upper()
-                            status = "ACTIVE" if "ACTIVE" in raw_status and "UPCOMING" not in raw_status else "UPCOMING" if "UPCOMING" in raw_status else raw_status
+                            raw_status = str(r.get("store_status", "")).strip().upper()
+                            if raw_status not in ("ACTIVE", "UPCOMING_STORE"):
+                                continue
                             area_v = r.get("area")
                             try: area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
                             except: area_f = None
-                            stores.append({"code": code, "name": name, "status": status,
+                            stores.append({"code": code, "name": name, "status": raw_status,
                                            "grade": str(sm.get("store_grade", r.get("store_grade", ""))),
                                            "zone": str(r.get("zone", "")), "state": str(r.get("state", state_val)), "area": area_f})
-                        stores.sort(key=lambda x: (0 if x["status"] == "ACTIVE" else 1, x["code"]))
+                        stores.sort(key=lambda x: (0 if x["status"] == "ACTIVE" else 1 if x["status"] == "UPCOMING_STORE" else 2, x["code"]))
                         return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
             except Exception as _sce:
                 logger.warning("state_city parquet lookup failed: %s", _sce)
@@ -942,7 +943,8 @@ async def stores_by_split(split: str, value: str):
             if "zone" not in store_df.columns or "store_grade" not in store_df.columns:
                 return APIResponse.ok(data={"stores": [], "count": 0, "note": "zone or store_grade column missing"})
             mask = (store_df["zone"].fillna("").str.strip().str.upper() == zone_val.upper()) & \
-                   (store_df["store_grade"].fillna("").str.strip().str.upper() == grade_val.upper())
+                   (store_df["store_grade"].fillna("").str.strip().str.upper() == grade_val.upper()) & \
+                   (store_df["store_status"].fillna("").str.strip().str.upper().isin(["ACTIVE", "UPCOMING_STORE"]))
             filtered = store_df[mask].copy()
             stores = []
             for r in filtered.to_dict("records"):
@@ -1020,9 +1022,8 @@ async def stores_by_split(split: str, value: str):
                             sm = store_lookup.get(code, {})
                             name = str(sm.get("store_name_f", sm.get("location", ""))) \
                                    if sm else str(r.get("initial_name", r.get("location", "")))
-                            raw_status = str(r.get("store_status", "")).upper()
-                            status = "ACTIVE" if "ACTIVE" in raw_status and "UPCOMING" not in raw_status else \
-                                     "UPCOMING" if "UPCOMING" in raw_status else raw_status
+                            raw_status = str(r.get("store_status", "")).strip().upper()
+                            status = raw_status
                             area_v = r.get("area")
                             try:
                                 area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
@@ -1057,7 +1058,7 @@ async def stores_by_split(split: str, value: str):
                         "area": area_f,
                     })
 
-            STATUS_ORDER = {"ACTIVE": 0, "UPCOMING": 1}
+            STATUS_ORDER = {"ACTIVE": 0, "UPCOMING_STORE": 1}
             stores.sort(key=lambda x: (STATUS_ORDER.get(x["status"], 2), x["code"]))
             return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
 
@@ -1132,7 +1133,7 @@ async def stores_by_split(split: str, value: str):
             except Exception as exc:
                 logger.warning("fy/cy upcoming merge failed: %s", exc)
 
-            STATUS_ORDER = {"ACTIVE": 0, "UPCOMING": 1}
+            STATUS_ORDER = {"ACTIVE": 0, "UPCOMING_STORE": 1}
             stores.sort(key=lambda x: (STATUS_ORDER.get(x["status"], 2), x.get("opening_date", ""), x["code"]))
             return APIResponse.ok(data={"stores": stores, "count": len(stores), "split": split, "value": value})
 
@@ -1141,7 +1142,8 @@ async def stores_by_split(split: str, value: str):
             return APIResponse.ok(data={"stores": [], "count": 0,
                                         "note": f"Column {col} not available"})
 
-        mask = store_df[col].fillna("—").str.strip().str.upper() == value.strip().upper()
+        mask = (store_df[col].fillna("—").str.strip().str.upper() == value.strip().upper()) & \
+               (store_df["store_status"].fillna("").str.strip().str.upper().isin(["ACTIVE", "UPCOMING_STORE"]))
         filtered = store_df[mask].copy()
 
         stores = []
@@ -1212,7 +1214,7 @@ async def stores_by_split(split: str, value: str):
                         stores.append({
                             "code":   code,
                             "name":   str(r.get("initial_name", r.get("location", ""))),
-                            "status": "UPCOMING",
+                            "status": "UPCOMING_STORE",
                             "grade":  str(r.get("store_grade", "")),
                             "zone":   str(r.get("_zone", r.get("zone", ""))),
                             "state":  str(r.get("state", "")),
@@ -1221,8 +1223,8 @@ async def stores_by_split(split: str, value: str):
         except Exception as exc:
             logger.warning("stores-by upcoming merge failed (non-fatal): %s", exc)
 
-        # Sort: ACTIVE first, UPCOMING next, rest last; then alpha by code
-        STATUS_ORDER = {"ACTIVE": 0, "UPCOMING": 1}
+        # Sort: ACTIVE first, UPCOMING_STORE next; then alpha by code
+        STATUS_ORDER = {"ACTIVE": 0, "UPCOMING_STORE": 1}
         stores.sort(key=lambda x: (STATUS_ORDER.get(x["status"], 2), x["code"]))
         return APIResponse.ok(data={
             "stores": stores,
@@ -1234,3 +1236,41 @@ async def stores_by_split(split: str, value: str):
     except Exception as exc:
         logger.warning("stores-by failed: %s", exc)
         return APIResponse.fail(str(exc))
+
+
+@router.get("/store-master-csv")
+def store_master_csv():
+    """Download full store master as CSV."""
+    import io
+    from fastapi.responses import StreamingResponse
+    from app.repositories.store_repository import StoreRepository
+
+    repo = StoreRepository()
+    df = repo.get_all_stores(active_only=False)
+
+    # Friendly column order / names
+    col_map = {
+        "store_name":   "Store Code",
+        "store_name_f": "Store Name",
+        "zone":         "Zone",
+        "state_name":   "State",
+        "city":         "City",
+        "district":     "District",
+        "cluster_type": "Cluster",
+        "store_grade":  "Grade",
+        "store_tag":    "Tag",
+        "store_status": "Status",
+        "opening_date": "Opening Date",
+    }
+    out_cols = [c for c in col_map if c in df.columns]
+    out = df[out_cols].rename(columns=col_map)
+
+    buf = io.StringIO()
+    out.to_csv(buf, index=False)
+    buf.seek(0)
+
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=store_master.csv"},
+    )

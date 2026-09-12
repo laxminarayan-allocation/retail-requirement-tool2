@@ -63,7 +63,9 @@ class ItemRepository:
         with _CACHE_LOCK:
             if _CACHE is not None:
                 return _CACHE
-            df = _load_from_parquet() or _load_from_oracle()
+            df = _load_from_parquet()
+            if df is None:
+                df = _load_from_oracle()
             _CACHE = df
         return _CACHE
 

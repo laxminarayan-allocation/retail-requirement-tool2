@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 _CACHE: Optional[pd.DataFrame] = None
 _CACHE_LOCK = threading.Lock()
 
-# Parquet column → expected name mapping (lowercase after read)
+# Parquet column → expected name mapping (lowercase after read).
+# Applied simultaneously by pandas rename — no collision risk.
 _COL_ALIASES = {
-    "site_code":   "store_name",   # T_STORE_OPENING_DATE uses SITE_CODE
+    "site_code":   "store_name",    # SITE_CODE = store code identifier used everywhere
+    "store_name":  "store_name_f",  # STORE_NAME = full display name
     "city_name":   "city",
     "state":       "state_name",
 }
@@ -76,7 +78,9 @@ class StoreRepository:
                 if _CACHE is not None:
                     df = _CACHE
                 else:
-                    df = _load_from_parquet() or _load_from_oracle()
+                    df = _load_from_parquet()
+                    if df is None:
+                        df = _load_from_oracle()
                     _CACHE = df
 
         if active_only:

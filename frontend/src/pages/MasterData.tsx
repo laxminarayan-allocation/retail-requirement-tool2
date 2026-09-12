@@ -741,9 +741,12 @@ export default function MasterData() {
   }
 
   useEffect(() => {
-    TABLE_KEYS.forEach(k => { loadStatus(k); loadKpi(k) })
+    // Load status only on mount — KPIs load lazily on first expand/click
+    TABLE_KEYS.forEach(k => loadStatus(k))
     loadCustomTables()
     fetchImStatus()
+    // Load KPIs in background after a short delay so status renders first
+    setTimeout(() => TABLE_KEYS.forEach(k => loadKpi(k)), 1500)
   }, [fetchImStatus])
 
   useEffect(() => {
@@ -755,7 +758,7 @@ export default function MasterData() {
   async function loadStatus(key: TableKey) {
     setStatusLoading(p => ({ ...p, [key]: true }))
     try {
-      const res = await http.get(`/master/table/${key}/status`)
+      const res = await http.get(`/master/table/${key}/status`, { timeout: 8000 })
       if (res.data.success) setStatuses(p => ({ ...p, [key]: res.data.data }))
     } catch { /* ignore */ } finally {
       setStatusLoading(p => ({ ...p, [key]: false }))
@@ -764,18 +767,19 @@ export default function MasterData() {
 
   async function loadKpi(key: TableKey) {
     try {
-      const res = await http.get(`/master/table/${key}/kpi`)
+      const res = await http.get(`/master/table/${key}/kpi`, { timeout: 15000 })
       if (res.data.success) setKpis(p => ({ ...p, [key]: res.data.data }))
     } catch { /* ignore */ }
   }
 
   async function loadCustomTables() {
     try {
-      const res = await http.get('/master/custom')
+      const res = await http.get('/master/custom', { timeout: 8000 })
       if (res.data.success) {
         const tables: CustomTable[] = res.data.data.tables
         setCustomTables(tables)
-        tables.forEach(t => loadCustomStatus(t.id))
+        // Stagger custom status loads to avoid hammering backend all at once
+        tables.forEach((t, i) => setTimeout(() => loadCustomStatus(t.id), i * 200))
       }
     } catch { /* ignore */ }
   }
@@ -783,7 +787,7 @@ export default function MasterData() {
   async function loadCustomStatus(id: string) {
     setStatusLoading(p => ({ ...p, [id]: true }))
     try {
-      const res = await http.get(`/master/custom/${id}/status`)
+      const res = await http.get(`/master/custom/${id}/status`, { timeout: 8000 })
       if (res.data.success) setStatuses(p => ({ ...p, [id]: res.data.data }))
     } catch { /* ignore */ } finally {
       setStatusLoading(p => ({ ...p, [id]: false }))

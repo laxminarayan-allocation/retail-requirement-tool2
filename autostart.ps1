@@ -25,5 +25,5 @@ Start-Sleep -Seconds 3
 # Frontend
 Start-Process powershell -ArgumentList @(
     "-NoExit", "-Command",
-    "cd '$FRONTEND'; npm run dev"
+    "cd '$FRONTEND'; npm run dev -- --host 0.0.0.0"
 ) -WindowStyle Minimized

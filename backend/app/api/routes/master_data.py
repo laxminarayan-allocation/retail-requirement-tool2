@@ -248,6 +248,11 @@ _MASTER_TABLES: dict[str, dict] = {
 }
 
 
+# KPI in-memory cache: key → (computed_at_ts, kpi_dict)
+_KPI_CACHE: dict[str, tuple[float, dict]] = {}
+_KPI_TTL = 3600  # recompute at most once per hour
+
+
 def _age_label(age_s: float) -> str:
     if age_s < 3600:
         return f"{round(age_s/60)}min ago"
@@ -294,7 +299,7 @@ async def master_table_status(key: str):
 
 @router.get("/table/{key}/kpi", response_model=APIResponse)
 async def master_table_kpi(key: str):
-    """Compute quick KPIs from the local Parquet file (no Oracle needed)."""
+    """Compute quick KPIs from the local Parquet file (no Oracle needed). Cached for 1hr."""
     if key not in _MASTER_TABLES:
         raise HTTPException(status_code=404, detail="Unknown table key.")
     t = _MASTER_TABLES[key]
@@ -303,6 +308,11 @@ async def master_table_kpi(key: str):
 
     if not has_output(t["owner"], t["name"]):
         return APIResponse.ok(data={"available": False})
+
+    # Return cached KPI if fresh
+    cached = _KPI_CACHE.get(key)
+    if cached and (time.time() - cached[0]) < _KPI_TTL:
+        return APIResponse.ok(data=cached[1])
 
     df = read_cache(t["owner"], t["name"])
     if df is None or df.empty:
@@ -339,6 +349,7 @@ async def master_table_kpi(key: str):
             kpis["date_from"] = mn.strftime("%d %b %Y")
             kpis["date_to"]   = mx.strftime("%d %b %Y")
 
+    _KPI_CACHE[key] = (time.time(), kpis)
     return APIResponse.ok(data=kpis)
 
 

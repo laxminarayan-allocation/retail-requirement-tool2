@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import ExportPanel from '@/components/ExportPanel'
 import http from '@/api/http'
 import NumFilterDropdown, { NumFilterIcon, useNumFilter } from '@/components/NumFilterDropdown'
+import History from '@/pages/History'
 
 function useDebounce<T>(value: T, delay = 400): T {
   const [debounced, setDebounced] = useState(value)
@@ -299,6 +300,37 @@ export default function Results() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const numFilter = useNumFilter()
+  const [pageTab, setPageTab] = useState<'results' | 'history'>(
+    searchParams.get('tab') === 'history' ? 'history' : 'results'
+  )
+
+  const tabBar = (
+    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--card-border)', flexShrink: 0, background: 'var(--content-bg)' }}>
+      {([
+        { key: 'results', label: '📋 Results' },
+        { key: 'history', label: '🕑 History' },
+      ] as const).map(({ key, label }) => (
+        <button key={key} onClick={() => setPageTab(key)} style={{
+          background: pageTab === key ? '#1e293b' : 'transparent',
+          border: 'none',
+          borderBottom: pageTab === key ? '2px solid #38bdf8' : '2px solid transparent',
+          color: pageTab === key ? '#e2e8f0' : '#64748b',
+          fontSize: 12, fontWeight: 600, padding: '8px 18px', cursor: 'pointer',
+        }}>{label}</button>
+      ))}
+    </div>
+  )
+
+  if (pageTab === 'history') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+        {tabBar}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <History />
+        </div>
+      </div>
+    )
+  }
 
   // Run state
   const [runId, setRunId] = useState(searchParams.get('run_id') ?? '')

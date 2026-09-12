@@ -130,16 +130,56 @@ def get_access_stats(owner: str, obj: str) -> dict:
 
 
 def list_cache() -> list[dict]:
-    """Return all downloaded objects sorted by fetch time desc."""
+    """Return all parquet files in OUTPUT_DIR, using .meta.json when available,
+    synthesising metadata from file stats for orphan parquet files."""
     _ensure_dir()
     results = []
-    for mp in sorted(OUTPUT_DIR.glob("*.meta.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    seen: set[str] = set()
+
+    # First pass: files with meta JSON
+    for mp in OUTPUT_DIR.glob("*.meta.json"):
         try:
             meta = json.loads(mp.read_text())
             age_s = time.time() - meta.get("fetched_at_ts", 0)
             meta["age_seconds"] = round(age_s)
             meta["age_minutes"] = round(age_s / 60, 1)
+            seen.add(mp.stem.replace(".meta", "").upper())
             results.append(meta)
         except Exception:
             continue
+
+    # Second pass: orphan parquet files (no meta)
+    for pq_path in OUTPUT_DIR.glob("*.parquet"):
+        stem = pq_path.stem.upper()
+        if stem in seen:
+            continue
+        try:
+            parts = stem.split("__", 1)
+            owner = parts[0] if len(parts) == 2 else "UNKNOWN"
+            obj   = parts[1] if len(parts) == 2 else stem
+            st = pq_path.stat()
+            age_s = time.time() - st.st_mtime
+            row_count = 0
+            columns = []
+            meta = {
+                "owner": owner,
+                "object_name": obj,
+                "file": str(pq_path.name),
+                "rows": row_count,
+                "columns": columns,
+                "col_count": len(columns),
+                "size_bytes": st.st_size,
+                "size_mb": round(st.st_size / 1_048_576, 2),
+                "fetched_at": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+                "fetched_at_ts": st.st_mtime,
+                "age_seconds": round(age_s),
+                "age_minutes": round(age_s / 60, 1),
+                "orphan": True,  # no meta.json — synthesised from file stats
+            }
+            results.append(meta)
+            seen.add(stem)
+        except Exception:
+            continue
+
+    results.sort(key=lambda m: m.get("fetched_at_ts", 0), reverse=True)
     return results

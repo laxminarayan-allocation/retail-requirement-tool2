@@ -5,9 +5,10 @@
  * Oracle pool state, run store metrics, and environment info.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import http from '@/api/http'
 import { useAuth, hasRole } from '@/context/AuthContext'
+import Procedures from '@/pages/Procedures'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -643,6 +644,27 @@ function VersionControlCard() {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export default function Settings() {
+  const [searchParams] = useSearchParams()
+  const [pageTab, setPageTab] = useState<'settings' | 'procedures'>(
+    searchParams.get('tab') === 'procedures' ? 'procedures' : 'settings'
+  )
+  const tabBar = (
+    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--card-border)', flexShrink: 0, background: 'var(--content-bg)', marginBottom: 12 }}>
+      {([
+        { key: 'settings', label: '⚙️ Settings' },
+        { key: 'procedures', label: '📋 Procedures' },
+      ] as const).map(({ key, label }) => (
+        <button key={key} onClick={() => setPageTab(key)} style={{
+          background: pageTab === key ? '#1e293b' : 'transparent',
+          border: 'none',
+          borderBottom: pageTab === key ? '2px solid #38bdf8' : '2px solid transparent',
+          color: pageTab === key ? '#e2e8f0' : '#64748b',
+          fontSize: 12, fontWeight: 600, padding: '8px 18px', cursor: 'pointer',
+        }}>{label}</button>
+      ))}
+    </div>
+  )
+
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [readiness, setReadiness] = useState<HealthReady | null>(null)
   const [actionPending, setActionPending] = useState<string | null>(null)
@@ -769,8 +791,20 @@ export default function Settings() {
     }
   }
 
+  if (pageTab === 'procedures') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+        {tabBar}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <Procedures />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={S.page}>
+      {tabBar}
       {/* Header */}
       <div style={S.header}>
         <div>

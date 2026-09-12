@@ -4,13 +4,16 @@ Reads from local parquet files (downloaded via Oracle Refresh) instead of live O
 Stock: MISRETAIL__T_STK_REPORT_DC_STOCK.parquet
 Item master: REPORT__V_ITEM_MASTER.parquet
 """
+import json
 import logging
 import math
 import time
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Request
+from pydantic import BaseModel
 
 from app.models.response_models import APIResponse
 
@@ -20,6 +23,33 @@ router = APIRouter(prefix="/warehouse-inventory", tags=["Warehouse Inventory"])
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "output"
 _STOCK_FILE = _DATA_DIR / "MISRETAIL__T_STK_REPORT_DC_STOCK.parquet"
 _ITEM_FILE  = _DATA_DIR / "REPORT__V_ITEM_MASTER.parquet"
+
+# ── Preset storage ────────────────────────────────────────────────────────────
+_PRESETS_FILE = Path(__file__).resolve().parents[3] / "data" / "pivot_presets.json"
+
+def _load_presets() -> list[dict]:
+    try:
+        if _PRESETS_FILE.exists():
+            return json.loads(_PRESETS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+def _save_presets(presets: list[dict]) -> None:
+    _PRESETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _PRESETS_FILE.write_text(json.dumps(presets, ensure_ascii=False, indent=2), encoding="utf-8")
+
+class PivotPreset(BaseModel):
+    name: str
+    rowDims: list[str]
+    colDims: list[str]
+    valSpecs: list[dict[str, Any]]
+    colFilters: dict[str, Any] = {}
+    search: str = ""
+    showTop: int = 0
+    condEnabled: bool = False
+    condLo: str = ""
+    condHi: str = ""
 
 # In-memory cache of merged dataframe
 _DF_CACHE: pd.DataFrame | None = None
@@ -253,3 +283,26 @@ async def get_warehouse_summary():
     except Exception as exc:
         logger.exception("warehouse summary failed")
         return APIResponse.fail(message=str(exc)[:200])
+
+
+# ── Pivot presets (server-side) ───────────────────────────────────────────────
+
+@router.get("/presets")
+async def get_presets():
+    return APIResponse.ok(data={"presets": _load_presets()})
+
+
+@router.post("/presets")
+async def save_preset(preset: PivotPreset):
+    presets = _load_presets()
+    presets = [p for p in presets if p.get("name") != preset.name]
+    presets.append(preset.model_dump())
+    _save_presets(presets)
+    return APIResponse.ok(data={"presets": presets})
+
+
+@router.delete("/presets/{name}")
+async def delete_preset(name: str):
+    presets = [p for p in _load_presets() if p.get("name") != name]
+    _save_presets(presets)
+    return APIResponse.ok(data={"presets": presets})

@@ -64,7 +64,7 @@ def _safe_oracle_stats() -> dict:
         store_repo = StoreRepository()
 
         t0 = time.perf_counter()
-        # Both repositories now load from parquet first — sub-10ms if parquet present
+        # Both repositories load from parquet first — sub-10ms if parquet present
         item_df  = item_repo._load()
         store_df = store_repo.get_all_stores(active_only=True)
         oracle_ms = round((time.perf_counter() - t0) * 1000, 1)
@@ -503,6 +503,7 @@ async def dashboard_summary():
         "factors": factors,
         "summary_ms": elapsed_ms,
     })
+
 
 
 @router.post("/cache/clear", response_model=APIResponse)

@@ -370,9 +370,9 @@ def sale_store_summary():
     sale = sale.dropna(subset=["sale_date"])
 
     t1_date     = sale["sale_date"].max().date()
-    six_w_start = t1_date - timedelta(days=41)  # 42 days = 6 weeks
+    six_w_start = t1_date - timedelta(days=55)  # 56 days = 8 weeks
 
-    # Filter to last 6 weeks
+    # Filter to last 8 weeks
     six_w = sale[(sale["sale_date"].dt.date >= six_w_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
     six_w["date_str"] = six_w["sale_date"].dt.strftime("%Y-%m-%d")
 
@@ -386,7 +386,7 @@ def sale_store_summary():
 
     all_dates_rev = list(reversed(dates))  # newest → oldest
     weeks = []
-    for w in range(6):
+    for w in range(8):
         w_dates = all_dates_rev[w * 7: (w + 1) * 7]  # 7 dates per week, newest first
         if w_dates:
             weeks.append({
@@ -457,7 +457,7 @@ def sale_store_summary():
         "rows":         rows,
         "count":        len(rows),
         "sale_date":    t1_str,
-        "period_start": str(six_w_start),
+        "period_start": str(six_w_start),   # 8-week start
         "mtd_start":    str(mtd_start),
         "lm_start":     str(lm_start),
         "lm_end":       str(lm_end),

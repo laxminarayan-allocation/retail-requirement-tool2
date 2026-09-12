@@ -58,8 +58,9 @@ export default function SaleDashboard() {
   const [search, setSearch]   = useState('')
   const [sort, setSort]       = useState<SortKey>('yesterday_val')
   const [asc, setAsc]         = useState(false)
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set([2, 3, 4, 5, 6]))
-  const [topN, setTopN]       = useState(1)   // how many top weeks to sum for "Max Wk"
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set([2, 3, 4, 5, 6, 7, 8]))
+  // selectedWeeks: which weeks (1-indexed) to include in Max Wk column
+  const [selectedWeeks, setSelectedWeeks] = useState<Set<number>>(new Set([1]))
 
   useEffect(() => {
     http.get('/sale/store-summary')
@@ -84,10 +85,17 @@ export default function SaleDashboard() {
   const weekSum = (row: SaleRow, wk: WeekGroup) =>
     wk.dates.reduce((s, d) => s + (row.dates[d] ?? 0), 0)
 
-  // Top-N week sum: sum of best N weeks per store
-  const topNVal = (row: SaleRow) => {
-    const sorted = [...row.week_sums].sort((a, b) => b - a)
-    return sorted.slice(0, topN).reduce((s, v) => s + v, 0)
+  // Sum of specifically selected weeks (1-indexed) per store
+  const topNVal = (row: SaleRow) =>
+    row.week_sums.reduce((s, v, i) => selectedWeeks.has(i + 1) ? s + v : s, 0)
+
+  const toggleSelWk = (w: number) => {
+    setSelectedWeeks(prev => {
+      const next = new Set(prev)
+      if (next.has(w)) { if (next.size > 1) next.delete(w) }  // keep ≥1 selected
+      else next.add(w)
+      return next
+    })
   }
 
   const rows = useMemo(() => {
@@ -187,7 +195,7 @@ export default function SaleDashboard() {
           { label: `${fmtDate(t1)} Sale`, val: fmtV(totYday), sub: `${fmt(rows.reduce((s,r)=>s+r.yesterday_qty,0))} pcs`, color: '#38bdf8' },
           { label: 'MTD Sale',            val: fmtV(totMtd),  sub: fmtDate(data?.mtd_start ?? '') + ' – ' + fmtDate(t1), color: '#818cf8' },
           { label: 'Last Month',          val: fmtV(totLm),   sub: fmtDate(data?.lm_start ?? '') + ' – ' + fmtDate(data?.lm_end ?? ''), color: '#a78bfa' },
-          { label: '6-Week Sale',         val: fmtV(totSixW), sub: `${fmt(rows.reduce((s,r)=>s+r.six_w_qty,0))} pcs`,    color: '#22d3ee' },
+          { label: '8-Week Sale',         val: fmtV(totSixW), sub: `${fmt(rows.reduce((s,r)=>s+r.six_w_qty,0))} pcs`,    color: '#22d3ee' },
           { label: 'Stores Selling',      val: String(rows.filter(r => r.yesterday_val > 0).length), sub: `of ${rows.length}`, color: '#34d399' },
         ].map(k => (
           <div key={k.label} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '10px 14px', borderLeft: `3px solid ${k.color}` }}>
@@ -225,21 +233,25 @@ export default function SaleDashboard() {
           style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, cursor: 'pointer', background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-muted)' }}
         >Expand All</button>
 
-        {/* Top-N Max Week selector */}
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>Max Wk top:</span>
-        {[1, 2, 3, 4].map(n => (
+        {/* Max Wk week multi-selector */}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>Max Wk weeks:</span>
+        {Array.from({ length: weeks.length }, (_, i) => i + 1).map(n => (
           <button
             key={n}
-            onClick={() => setTopN(n)}
+            onClick={() => toggleSelWk(n)}
             style={{
               fontSize: 10, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
-              background: topN === n ? '#f59e0b' : 'transparent',
-              border: `1px solid ${topN === n ? '#f59e0b' : 'var(--card-border)'}`,
-              color: topN === n ? '#000' : 'var(--text-muted)',
-              fontWeight: topN === n ? 800 : 400,
+              background: selectedWeeks.has(n) ? '#f59e0b' : 'transparent',
+              border: `1px solid ${selectedWeeks.has(n) ? '#f59e0b' : 'var(--card-border)'}`,
+              color: selectedWeeks.has(n) ? '#000' : 'var(--text-muted)',
+              fontWeight: selectedWeeks.has(n) ? 800 : 400,
             }}
-          >{n}</button>
+          >W{n}</button>
         ))}
+        <button
+          onClick={() => setSelectedWeeks(new Set(weeks.map(w => w.week)))}
+          style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, cursor: 'pointer', background: 'transparent', border: '1px solid var(--card-border)', color: '#f59e0b' }}
+        >All</button>
       </div>
 
       {/* Pivot table */}
@@ -301,7 +313,7 @@ export default function SaleDashboard() {
                   onClick={() => toggleSort('max_week_val')}
                   style={{ ...thBase, color: '#f59e0b', minWidth: 80, fontWeight: 800, borderLeft: '2px solid #f59e0b26' }}
                 >
-                  Top{topN}Wk{arrow('max_week_val')}
+                  {selectedWeeks.size === weeks.length ? 'All' : `W${[...selectedWeeks].sort().join('+W')}`} ₹{arrow('max_week_val')}
                 </th>
 
                 {/* MTD */}
@@ -325,7 +337,7 @@ export default function SaleDashboard() {
                   onClick={() => toggleSort('six_w_val')}
                   style={{ ...thBase, color: '#22d3ee', minWidth: 80, fontWeight: 800 }}
                 >
-                  6W ₹{arrow('six_w_val')}
+                  8W ₹{arrow('six_w_val')}
                 </th>
               </tr>
             </thead>

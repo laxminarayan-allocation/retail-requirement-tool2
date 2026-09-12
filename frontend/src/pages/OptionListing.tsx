@@ -893,6 +893,7 @@ interface SchedStatus {
 }
 
 function SchedulerTab({ tokens: T }: { tokens: any }) {
+  const auth = { headers: { Authorization: `Bearer ${localStorage.getItem('ck_ss27_token') ?? ''}` } }
   const [status, setStatus] = useState<SchedStatus | null>(null)
   const [saving, setSaving] = useState(false)
   const [runNowLoading, setRunNowLoading] = useState(false)

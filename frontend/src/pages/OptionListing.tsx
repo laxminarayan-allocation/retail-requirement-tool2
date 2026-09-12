@@ -73,6 +73,22 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
   function addRow() { setDeptRows([...deptRows, blankRow()]) }
   function removeRow(i: number) { setDeptRows(deptRows.length > 1 ? deptRows.filter((_, idx) => idx !== i) : [blankRow()]) }
 
+  // Multi-select for bulk remove
+  const [selectedIdxs, setSelectedIdxs] = useState<Set<number>>(new Set())
+  const allSelected = deptRows.length > 0 && selectedIdxs.size === deptRows.length
+  function toggleSelect(i: number) {
+    setSelectedIdxs(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })
+  }
+  function toggleSelectAll() {
+    setSelectedIdxs(allSelected ? new Set() : new Set(deptRows.map((_, i) => i)))
+  }
+  function removeSelected() {
+    if (!selectedIdxs.size) return
+    const remaining = deptRows.filter((_, i) => !selectedIdxs.has(i))
+    setDeptRows(remaining.length ? remaining : [blankRow()])
+    setSelectedIdxs(new Set())
+  }
+
   type Candidate = { DEPARTMENT: string; DISPLAY_TYPE: string; ARTICLE_NAME: string; MRP: number }
   const [candidates, setCandidates]     = useState<Candidate[]>([])
   const [candLoading, setCandLoading]   = useState(false)
@@ -504,12 +520,28 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
             </div>
 
             {/* ── Selected Departments (manual / added) ── */}
-            <div style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-              Selected Departments ({deptRows.filter(r => r.department.trim()).length})
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Selected Departments ({deptRows.filter(r => r.department.trim()).length})
+              </div>
+              {selectedIdxs.size > 0 && (
+                <button onClick={removeSelected} disabled={running} style={{
+                  background: '#ef444422', border: '1px solid #ef444466', borderRadius: 6,
+                  color: '#ef4444', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: running ? 'not-allowed' : 'pointer',
+                }}>✕ Remove {selectedIdxs.size} selected</button>
+              )}
             </div>
 
             {/* Column headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 90px 32px', gap: 8, marginBottom: 4, padding: '0 2px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr 1fr 90px 32px', gap: 8, marginBottom: 4, padding: '0 2px', alignItems: 'center' }}>
+              {/* Select All checkbox */}
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                title="Select all"
+                style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#ef4444' }}
+              />
               {['Department', 'Display Type', 'Article Name', 'MRP Sale ≥', ''].map(h => (
                 <div key={h} style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
               ))}
@@ -517,7 +549,13 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
 
             {/* Rows */}
             {deptRows.map((row, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 90px 32px', gap: 8, marginBottom: 6 }}>
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 1fr 1fr 90px 32px', gap: 8, marginBottom: 6, alignItems: 'center', background: selectedIdxs.has(i) ? '#ef444411' : 'transparent', borderRadius: 6, padding: selectedIdxs.has(i) ? '2px 4px' : '0' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedIdxs.has(i)}
+                  onChange={() => toggleSelect(i)}
+                  style={{ cursor: 'pointer', width: 15, height: 15, accentColor: '#ef4444' }}
+                />
                 {(['department','display_type','article_name','mrp_sale'] as (keyof DeptRow)[]).map(f => (
                   <input key={f} value={row[f]}
                     onChange={e => updateRow(i, f, e.target.value)}
@@ -845,15 +883,178 @@ function QueriesTab({ tokens }: { tokens: any }) {
   )
 }
 
+// ─── Scheduler Tab ────────────────────────────────────────────────────────────
+
+interface LogEntry { ts: string; message: string; level: string }
+interface SchedStatus {
+  next_run_at: string | null; last_run_at: string | null
+  last_status: string | null; log: LogEntry[]
+  config: { enabled: boolean; hour: number; minute: number }
+}
+
+function SchedulerTab({ tokens: T }: { tokens: any }) {
+  const [status, setStatus] = useState<SchedStatus | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [runNowLoading, setRunNowLoading] = useState(false)
+  const [localHour, setLocalHour] = useState(9)
+  const [localMinute, setLocalMinute] = useState(0)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const logRef = useRef<HTMLDivElement>(null)
+
+  async function fetchStatus() {
+    try {
+      const r = await fetch('/api/option-listing/scheduler/status', { headers: auth.headers })
+      if (!r.ok) return
+      const d: SchedStatus = await r.json()
+      setStatus(d)
+      if (!saving) { setLocalHour(d.config.hour); setLocalMinute(d.config.minute) }
+    } catch {}
+  }
+
+  useEffect(() => { fetchStatus(); const id = setInterval(fetchStatus, 4000); return () => clearInterval(id) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (autoScroll && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+  }, [status?.log?.length, autoScroll])
+
+  async function saveConfig(patch: Partial<{ enabled: boolean; hour: number; minute: number }>) {
+    setSaving(true)
+    try {
+      await fetch('/api/option-listing/scheduler/config', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...auth.headers }, body: JSON.stringify(patch) })
+      await fetchStatus()
+    } finally { setSaving(false) }
+  }
+
+  async function runNow() {
+    setRunNowLoading(true)
+    try { await fetch('/api/option-listing/scheduler/run-now', { method: 'POST', headers: auth.headers }); await fetchStatus() }
+    finally { setRunNowLoading(false) }
+  }
+
+  const enabled = status?.config.enabled ?? true
+  const lastStatus = status?.last_status
+  const statusColor = lastStatus === 'success' ? '#22c55e' : lastStatus === 'failed' ? '#ef4444' : lastStatus === 'running' ? '#f59e0b' : T.textMuted
+  const levelColor = (l: string) => l === 'error' ? '#ef4444' : l === 'warn' ? '#f59e0b' : T.textSecondary
+  const timeLabel = status ? `${String(status.config.hour).padStart(2,'0')}:${String(status.config.minute).padStart(2,'0')} IST (daily)` : '—'
+
+  return (
+    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Config card */}
+      <div style={{ background: T.cardBg, border: `2px solid ${enabled ? T.accent : T.cardBorder}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: enabled ? T.accentBg : 'transparent', gap: 12, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flex: 1 }}>
+            <input type="checkbox" checked={enabled} onChange={e => saveConfig({ enabled: e.target.checked })}
+              style={{ width: 18, height: 18, accentColor: T.accent, cursor: 'pointer' }} />
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: enabled ? T.accent : T.textMuted }}>
+                {enabled ? '⏰ Scheduler Enabled' : '⏸ Scheduler Disabled'}
+              </div>
+              <div style={{ fontSize: 12, color: T.textSecondary, marginTop: 2 }}>
+                {enabled ? `Next run: ${status?.next_run_at ?? '…'}` : 'Auto-run is paused'}
+              </div>
+            </div>
+          </label>
+          <button onClick={runNow} disabled={runNowLoading}
+            style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#22c55e', color: '#fff', fontWeight: 700, fontSize: 13, cursor: runNowLoading ? 'wait' : 'pointer', opacity: runNowLoading ? 0.7 : 1, flexShrink: 0 }}>
+            {runNowLoading ? '⟳ Triggering…' : '▶ Run Now'}
+          </button>
+        </div>
+        <div style={{ padding: '14px 18px', borderTop: `1px solid ${T.cardBorder}`, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, minWidth: 80 }}>⏱ Run Time</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Hour (0–23)</span>
+            <input type="number" min={0} max={23} value={localHour}
+              onChange={e => { setSaving(true); setLocalHour(Number(e.target.value)) }}
+              onBlur={() => saveConfig({ hour: localHour, minute: localMinute })}
+              style={{ width: 70, fontSize: 18, fontFamily: 'monospace', fontWeight: 700, padding: '6px 10px', borderRadius: 7, border: `1px solid ${T.cardBorder}`, background: T.bg, color: T.textPrimary, outline: 'none', textAlign: 'center' }} />
+          </div>
+          <span style={{ fontSize: 22, color: T.textMuted, fontWeight: 700, marginTop: 14 }}>:</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Minute (0–59)</span>
+            <input type="number" min={0} max={59} value={localMinute}
+              onChange={e => { setSaving(true); setLocalMinute(Number(e.target.value)) }}
+              onBlur={() => saveConfig({ hour: localHour, minute: localMinute })}
+              style={{ width: 70, fontSize: 18, fontFamily: 'monospace', fontWeight: 700, padding: '6px 10px', borderRadius: 7, border: `1px solid ${T.cardBorder}`, background: T.bg, color: T.textPrimary, outline: 'none', textAlign: 'center' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Configured</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: T.accent, fontFamily: 'monospace' }}>{timeLabel}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginLeft: 'auto' }}>
+            {([['6:00',6,0],['7:00',7,0],['8:00',8,0],['9:00',9,0],['9:30',9,30],['10:00',10,0]] as [string,number,number][]).map(([label,h,m]) => (
+              <button key={label} onClick={() => { setLocalHour(h); setLocalMinute(m); saveConfig({ hour: h, minute: m }) }}
+                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `1px solid ${T.cardBorder}`,
+                  background: status?.config.hour === h && status?.config.minute === m ? T.accentBg : T.cardBg,
+                  color: status?.config.hour === h && status?.config.minute === m ? T.accent : T.textSecondary }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Status tiles */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Last Run', value: status?.last_run_at ?? 'Never' },
+          { label: 'Last Status', value: lastStatus ?? '—', color: statusColor },
+          { label: 'Next Scheduled', value: status?.next_run_at ?? '—' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ flex: 1, minWidth: 150, background: T.cardBg, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 600, marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: color ?? T.textPrimary, fontFamily: 'monospace' }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Log */}
+      <div style={{ background: T.cardBg, border: `1px solid ${T.cardBorder}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: `1px solid ${T.cardBorder}` }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: T.textPrimary }}>📋 Scheduler Log</span>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T.textMuted, cursor: 'pointer' }}>
+              <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} style={{ accentColor: T.accent }} />
+              Auto-scroll
+            </label>
+            <span style={{ fontSize: 11, color: T.textMuted }}>{status?.log?.length ?? 0} entries</span>
+          </div>
+        </div>
+        <div ref={logRef} style={{ height: 280, overflowY: 'auto', padding: '8px 0', fontFamily: 'monospace', fontSize: 12 }}>
+          {!status?.log?.length
+            ? <div style={{ color: T.textMuted, padding: '16px 20px', fontStyle: 'italic' }}>No log entries yet.</div>
+            : status.log.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: 12, padding: '3px 16px',
+                background: i % 2 === 0 ? 'transparent' : `${T.cardBorder}22`,
+                borderLeft: e.level === 'error' ? '3px solid #ef4444' : e.level === 'warn' ? '3px solid #f59e0b' : '3px solid transparent' }}>
+                <span style={{ color: T.textMuted, flexShrink: 0, fontSize: 11, paddingTop: 1 }}>{e.ts}</span>
+                <span style={{ color: levelColor(e.level), flex: 1, wordBreak: 'break-word' }}>{e.message}</span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      {/* Step badges */}
+      <div style={{ background: T.cardBg, border: `1px solid ${T.cardBorder}`, borderRadius: 10, padding: '12px 16px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, marginBottom: 8 }}>9 Steps run in order</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {(['MC','00','02','03','07','08','04','05','06']).map(s => (
+            <div key={s} style={{ background: T.accentBg, border: `1px solid ${T.accent}44`, borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: T.accent }}>{s}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function OptionListing() {
   const { tokens } = useTheme()
   const { lastCompletedAt } = useOracleRefresh()
-  const [tab, setTab] = useState<'pipeline'|'queries'>('pipeline')
+  const [tab, setTab] = useState<'pipeline'|'queries'|'scheduler'>('pipeline')
 
-
-  const tabBtn = (id: 'pipeline'|'queries', label: string) => (
+  const tabBtn = (id: 'pipeline'|'queries'|'scheduler', label: string) => (
     <button key={id} onClick={() => setTab(id)} style={{
       background: tab === id ? tokens.accentBg : 'transparent',
       color: tab === id ? tokens.accent : tokens.textMuted,
@@ -870,18 +1071,22 @@ export default function OptionListing() {
         <div style={{ fontSize: 18, fontWeight: 700, color: tokens.textPrimary, marginBottom: 2 }}>Option Listing</div>
         <div style={{ fontSize: 12, color: tokens.textMuted, marginBottom: 10 }}>AW26 Pre-Winter Allocation — Pipeline Runner &amp; Oracle Query Editor</div>
         <div style={{ display: 'flex', gap: 0 }}>
-          {tabBtn('pipeline', '▶ Pipeline')}
-          {tabBtn('queries',  '⬡ Oracle Queries')}
+          {tabBtn('pipeline',  '▶ Pipeline')}
+          {tabBtn('queries',   '⬡ Oracle Queries')}
+          {tabBtn('scheduler', '⏰ Scheduler')}
         </div>
       </div>
 
-      {/* Tab content — both always mounted so pipeline keeps running when tab switches */}
+      {/* Tab content — pipeline + scheduler always mounted so they keep running on tab switch */}
       <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
         <div style={{ display: tab === 'pipeline' ? 'block' : 'none' }}>
           <PipelineTab tokens={tokens} lastCompletedAt={lastCompletedAt} />
         </div>
         <div style={{ display: tab === 'queries' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
           <QueriesTab tokens={tokens} />
+        </div>
+        <div style={{ display: tab === 'scheduler' ? 'block' : 'none' }}>
+          <SchedulerTab tokens={tokens} />
         </div>
       </div>
     </div>

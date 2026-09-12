@@ -46,7 +46,7 @@ export default function SourceViewer() {
   useEffect(() => {
     http.get('/system/source/files').then(r => {
       const d = r.data
-      if (d.ok && d.data?.files) {
+      if (d.success && d.data?.files) {
         setFiles(d.data.files)
         if (d.data.files.length > 0) setSelected(d.data.files[0].key)
       }
@@ -59,7 +59,7 @@ export default function SourceViewer() {
     setContent('')
     http.get(`/system/source/read?file=${selected}`).then(r => {
       const d = r.data
-      if (d.ok && d.data) {
+      if (d.success && d.data) {
         setContent(d.data.content)
         setPath(d.data.path)
         setLines(d.data.lines)

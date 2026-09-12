@@ -39,6 +39,7 @@ from app.api.routes import oracle_refresh as oracle_refresh_routes
 from app.api.routes import versions as versions_routes
 from app.api.routes import warehouse_inventory as warehouse_inventory_routes
 from app.api.routes import data_store as data_store_routes
+from app.api.routes import preferences as preferences_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -396,6 +397,7 @@ app.include_router(oracle_refresh_routes.router, prefix="/api")  # Oracle / Exce
 app.include_router(versions_routes.router, prefix="/api")          # Version Control / Changelog
 app.include_router(warehouse_inventory_routes.router, prefix="/api")  # Warehouse Inventory
 app.include_router(data_store_routes.router,         prefix="/api")  # Parquet Data Store
+app.include_router(preferences_routes.router,        prefix="/api")  # User Preferences
 
 
 @app.get("/api", tags=["Root"])

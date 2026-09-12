@@ -413,20 +413,45 @@ function StoreSummary({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const storeNumFilter = useNumFilter()
 
-  // ── Column drag-and-drop reorder ──────────────────────────────────────────
-  const STORAGE_KEY = 'nso_col_order_v1'
-  function loadColOrder() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (!saved) return STORE_COLS
-      const keys: string[] = JSON.parse(saved)
-      const keySet = new Set(keys)
-      const savedCols = keys.map(k => STORE_COLS.find(c => c.key === k)).filter(Boolean) as typeof STORE_COLS
-      const newCols = STORE_COLS.filter(c => !keySet.has(c.key))
-      return [...savedCols, ...newCols]
-    } catch { return STORE_COLS }
+  // ── Column drag-and-drop reorder (global — saved to backend per user) ────────
+  const PREF_KEY = 'nso_col_order_v1'
+
+  function applyKeys(keys: string[]): typeof STORE_COLS {
+    const keySet = new Set(keys)
+    const saved = keys.map(k => STORE_COLS.find(c => c.key === k)).filter(Boolean) as typeof STORE_COLS
+    const newCols = STORE_COLS.filter(c => !keySet.has(c.key))
+    return [...saved, ...newCols]
   }
-  const [colOrder, setColOrder] = useState(loadColOrder)
+
+  const [colOrder, setColOrder] = useState<typeof STORE_COLS>(STORE_COLS)
+
+  // Load from backend on mount; fall back to localStorage if offline
+  useEffect(() => {
+    http.get<{ success: boolean; data: { value: string | null } }>(
+      `/preferences/${PREF_KEY}`
+    ).then(res => {
+      const val = res.data?.data?.value
+      if (val) setColOrder(applyKeys(JSON.parse(val)))
+    }).catch(() => {
+      try {
+        const saved = localStorage.getItem(PREF_KEY)
+        if (saved) setColOrder(applyKeys(JSON.parse(saved)))
+      } catch { /* ignore */ }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function saveColOrder(keys: string[]) {
+    const json = JSON.stringify(keys)
+    // save to backend (global)
+    http.put(`/preferences/${PREF_KEY}`, { value: json }).catch(() => {
+      // fallback: at least save locally
+      try { localStorage.setItem(PREF_KEY, json) } catch { /* ignore */ }
+    })
+    // also keep localStorage in sync for instant next load
+    try { localStorage.setItem(PREF_KEY, json) } catch { /* ignore */ }
+  }
+
   const dragCol = useRef<string | null>(null)
   const dragOverCol = useRef<string | null>(null)
 
@@ -441,14 +466,14 @@ function StoreSummary({
       const ti = arr.findIndex(c => c.key === to)
       const [col] = arr.splice(fi, 1)
       arr.splice(ti, 0, col)
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.map(c => c.key))) } catch {}
+      saveColOrder(arr.map(c => c.key))
       return arr
     })
     dragCol.current = null; dragOverCol.current = null
   }
   function resetColOrder() {
     setColOrder(STORE_COLS)
-    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+    saveColOrder(STORE_COLS.map(c => c.key))
   }
 
   function load(src?: 'nso' | 'all') {

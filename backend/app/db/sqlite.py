@@ -247,6 +247,14 @@ CREATE TABLE IF NOT EXISTS db_refresh_settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id     TEXT NOT NULL,
+    pref_key    TEXT NOT NULL,
+    pref_value  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, pref_key)
+);
 """
 
 

@@ -362,6 +362,7 @@ class SchedulerConfig(BaseModel):
     enabled: bool | None = None
     hour: int | None = None
     minute: int | None = None
+    days: str | None = None   # "daily" | "1-6" | "1-5"
 
 
 @router.get("/scheduler/status")
@@ -373,7 +374,7 @@ def scheduler_status():
 @router.put("/scheduler/config")
 def scheduler_config(body: SchedulerConfig):
     from app.core.pipeline_scheduler import update_config
-    return update_config(enabled=body.enabled, hour=body.hour, minute=body.minute)
+    return update_config(enabled=body.enabled, hour=body.hour, minute=body.minute, days=body.days)
 
 
 @router.post("/scheduler/run-now")

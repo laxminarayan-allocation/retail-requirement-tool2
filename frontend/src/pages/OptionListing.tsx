@@ -889,7 +889,7 @@ interface LogEntry { ts: string; message: string; level: string }
 interface SchedStatus {
   next_run_at: string | null; last_run_at: string | null
   last_status: string | null; log: LogEntry[]
-  config: { enabled: boolean; hour: number; minute: number }
+  config: { enabled: boolean; hour: number; minute: number; days: string }
 }
 
 function SchedulerTab({ tokens: T }: { tokens: any }) {
@@ -898,6 +898,7 @@ function SchedulerTab({ tokens: T }: { tokens: any }) {
   const [runNowLoading, setRunNowLoading] = useState(false)
   const [localHour, setLocalHour] = useState(9)
   const [localMinute, setLocalMinute] = useState(0)
+  const [localDays, setLocalDays] = useState('1-6')
   const [autoScroll, setAutoScroll] = useState(true)
   const logRef = useRef<HTMLDivElement>(null)
 
@@ -907,7 +908,7 @@ function SchedulerTab({ tokens: T }: { tokens: any }) {
       if (!r.ok) return
       const d: SchedStatus = await r.json()
       setStatus(d)
-      if (!saving) { setLocalHour(d.config.hour); setLocalMinute(d.config.minute) }
+      if (!saving) { setLocalHour(d.config.hour); setLocalMinute(d.config.minute); setLocalDays(d.config.days) }
     } catch {}
   }
 
@@ -935,7 +936,10 @@ function SchedulerTab({ tokens: T }: { tokens: any }) {
   const lastStatus = status?.last_status
   const statusColor = lastStatus === 'success' ? '#22c55e' : lastStatus === 'failed' ? '#ef4444' : lastStatus === 'running' ? '#f59e0b' : T.textMuted
   const levelColor = (l: string) => l === 'error' ? '#ef4444' : l === 'warn' ? '#f59e0b' : T.textSecondary
-  const timeLabel = status ? `${String(status.config.hour).padStart(2,'0')}:${String(status.config.minute).padStart(2,'0')} IST (daily)` : '—'
+  const daysLabel = (d: string) => d === '1-6' ? 'Mon–Sat' : d === '1-5' ? 'Mon–Fri' : 'Every day'
+  const timeLabel = status
+    ? `${String(status.config.hour).padStart(2,'0')}:${String(status.config.minute).padStart(2,'0')} IST · ${daysLabel(status.config.days)}`
+    : '—'
 
   return (
     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -990,6 +994,20 @@ function SchedulerTab({ tokens: T }: { tokens: any }) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Days row */}
+        <div style={{ padding: '12px 18px', borderTop: `1px solid ${T.cardBorder}`, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, minWidth: 80 }}>📅 Run Days</span>
+          {([['daily','Every day'],['1-6','Mon–Sat'],['1-5','Mon–Fri']] as [string,string][]).map(([val, label]) => (
+            <button key={val} onClick={() => { setLocalDays(val); saveConfig({ days: val }) }}
+              style={{ padding: '7px 18px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                border: `2px solid ${(status?.config.days ?? localDays) === val ? T.accent : T.cardBorder}`,
+                background: (status?.config.days ?? localDays) === val ? T.accentBg : T.cardBg,
+                color: (status?.config.days ?? localDays) === val ? T.accent : T.textSecondary }}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 

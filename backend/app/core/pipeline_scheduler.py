@@ -1,11 +1,8 @@
 """
 Pipeline scheduler — triggers all 9 Option Listing pipeline steps
-(MC + 00-02-03-07-08-04-05-06) at a configurable time daily (IST).
+(MC + 00-02-03-07-08-04-05-06) at a configurable time on configured days (IST).
 
-State (in-memory, reset on restart):
-  _config       — enabled flag + hour/minute
-  _status       — next_run_at, last_run_at, last_status, log entries
-  _sched_lock   — protects both dicts
+days: "daily" | "1-6" (Mon-Sat) | "1-5" (Mon-Fri)
 """
 import logging
 import threading
@@ -17,20 +14,20 @@ logger = logging.getLogger(__name__)
 PIPELINE_ALL_STEPS = ["mc", "00", "02", "03", "07", "08", "04", "05", "06"]
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# ── Mutable scheduler state ────────────────────────────────────────────────────
 _sched_lock = threading.Lock()
 
 _config: dict = {
     "enabled": True,
     "hour": 9,
     "minute": 0,
+    "days": "1-6",   # "daily" | "1-6" Mon-Sat | "1-5" Mon-Fri
 }
 
 _status: dict = {
-    "next_run_at": None,   # ISO string (IST)
-    "last_run_at": None,   # ISO string (IST)
-    "last_status": None,   # "success" | "failed" | "running"
-    "log": [],             # list of {ts, message, level}
+    "next_run_at": None,
+    "last_run_at": None,
+    "last_status": None,
+    "log": [],
 }
 
 _run_now_flag = threading.Event()
@@ -41,19 +38,20 @@ def get_status() -> dict:
         return {**_status, "config": {**_config}}
 
 
-def update_config(enabled: bool | None = None, hour: int | None = None, minute: int | None = None) -> dict:
+def update_config(enabled=None, hour=None, minute=None, days=None) -> dict:
     with _sched_lock:
         if enabled is not None:
             _config["enabled"] = enabled
         if hour is not None:
-            _config["hour"] = hour
+            _config["hour"] = int(hour)
         if minute is not None:
-            _config["minute"] = minute
+            _config["minute"] = int(minute)
+        if days is not None:
+            _config["days"] = days
         return {**_config}
 
 
 def trigger_now() -> None:
-    """Signal the scheduler loop to run immediately."""
     _run_now_flag.set()
 
 
@@ -72,12 +70,30 @@ def _log(message: str, level: str = "info") -> None:
         logger.info("pipeline_scheduler: %s", message)
 
 
+def _is_run_day(dt: datetime, days: str) -> bool:
+    """Monday=0 ... Sunday=6 in Python weekday()."""
+    wd = dt.weekday()  # 0=Mon, 6=Sun
+    if days == "daily":
+        return True
+    if days == "1-6":   # Mon(0)–Sat(5)
+        return wd <= 5
+    if days == "1-5":   # Mon(0)–Fri(4)
+        return wd <= 4
+    return True
+
+
 def _seconds_until_target() -> float:
+    """Return seconds until the next configured run time on a valid day."""
     with _sched_lock:
-        h, m = _config["hour"], _config["minute"]
+        h, m, days = _config["hour"], _config["minute"], _config["days"]
     now_ist = datetime.now(IST)
     target = now_ist.replace(hour=h, minute=m, second=0, microsecond=0)
     if now_ist >= target:
+        target += timedelta(days=1)
+    # Advance until we hit a run day
+    for _ in range(8):
+        if _is_run_day(target, days):
+            break
         target += timedelta(days=1)
     return (target - now_ist).total_seconds()
 
@@ -95,7 +111,7 @@ def _do_run() -> None:
         result = run_pipeline(body)
         run_id = result.get("run_id", "?")
         _log(f"✓ Pipeline triggered — run_id={run_id}")
-        # wait for it to finish (poll status)
+
         import time as _t
         from app.api.routes.option_listing import pipeline_status
         for _ in range(360):  # max 30 min
@@ -108,7 +124,7 @@ def _do_run() -> None:
             final = "timeout"
 
         if final == "done":
-            _log(f"✓ Pipeline completed successfully (run_id={run_id})", "info")
+            _log(f"✓ Pipeline completed successfully (run_id={run_id})")
             with _sched_lock:
                 _status["last_status"] = "success"
         else:
@@ -126,19 +142,19 @@ def _scheduler_loop() -> None:
     while True:
         with _sched_lock:
             enabled = _config["enabled"]
-            h, m = _config["hour"], _config["minute"]
+            days = _config["days"]
 
         wait = _seconds_until_target()
-        next_ist = (datetime.now(IST) + timedelta(seconds=wait)).strftime("%Y-%m-%d %H:%M IST")
+        next_ist = (datetime.now(IST) + timedelta(seconds=wait)).strftime("%Y-%m-%d %H:%M IST (%a)")
         with _sched_lock:
             _status["next_run_at"] = next_ist
 
+        days_label = {"daily": "Every day", "1-6": "Mon–Sat", "1-5": "Mon–Fri"}.get(days, days)
         if enabled:
-            _log(f"⏰ Next auto-run scheduled at {next_ist}")
+            _log(f"⏰ Next auto-run: {next_ist}  [{days_label}]")
         else:
-            _log(f"⏸ Scheduler disabled — next would be {next_ist} (skipped until re-enabled)")
+            _log(f"⏸ Disabled — next would be {next_ist} [{days_label}]")
 
-        # Wait until target time OR run_now signal
         fired = _run_now_flag.wait(timeout=wait)
 
         if fired:
@@ -153,9 +169,9 @@ def _scheduler_loop() -> None:
                 continue
 
         _do_run()
-        time.sleep(61)  # prevent double-fire within same minute
+        time.sleep(61)
 
 
 def start_scheduler() -> None:
     threading.Thread(target=_scheduler_loop, daemon=True, name="pipeline-daily-scheduler").start()
-    logger.info("pipeline_scheduler: started (default 09:00 IST daily)")
+    logger.info("pipeline_scheduler: started (09:00 IST Mon-Sat)")

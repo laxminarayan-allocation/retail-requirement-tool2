@@ -110,7 +110,7 @@ const ROLE_COLOR: Record<string, string> = {
 
 // styles are now computed dynamically via theme tokens — see mkStyles() below
 
-function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOver, onDrop, onDragEnd, onTouchStart, onTouchMove, onTouchEnd }: {
   to: string; label: string; icon: string
   reorderMode?: boolean
   dragOver?: boolean
@@ -118,6 +118,9 @@ function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOv
   onDragOver?: (e: React.DragEvent) => void
   onDrop?: () => void
   onDragEnd?: () => void
+  onTouchStart?: (e: React.TouchEvent) => void
+  onTouchMove?: (e: React.TouchEvent) => void
+  onTouchEnd?: (e: React.TouchEvent) => void
 }) {
   const { tokens } = useTheme()
   return (
@@ -127,10 +130,14 @@ function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOv
       onDragOver={reorderMode ? onDragOver : undefined}
       onDrop={reorderMode ? onDrop : undefined}
       onDragEnd={reorderMode ? onDragEnd : undefined}
+      onTouchStart={reorderMode ? onTouchStart : undefined}
+      onTouchMove={reorderMode ? onTouchMove : undefined}
+      onTouchEnd={reorderMode ? onTouchEnd : undefined}
       style={{
         display: 'flex', alignItems: 'center', position: 'relative',
         borderTop: dragOver ? `2px solid #818cf8` : '2px solid transparent',
         transition: 'border-color 0.1s',
+        touchAction: reorderMode ? 'none' : undefined,
       }}
     >
       {reorderMode && (
@@ -490,6 +497,10 @@ export default function AppLayout() {
   const [reorderMode, setReorderMode] = useState(false)
   const dragIdxRef = useRef<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  // Touch reorder state
+  const touchDragIdxRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number>(0)
+  const navItemHeightRef = useRef<number>(44)
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('app_nav_order')
@@ -686,6 +697,26 @@ export default function AppLayout() {
                 setDragOverIdx(null)
               }}
               onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null) }}
+              onTouchStart={e => {
+                touchDragIdxRef.current = idx
+                touchStartYRef.current = e.touches[0].clientY
+                const el = e.currentTarget as HTMLElement
+                navItemHeightRef.current = el.getBoundingClientRect().height || 44
+              }}
+              onTouchMove={e => {
+                if (touchDragIdxRef.current === null) return
+                const dy = e.touches[0].clientY - touchStartYRef.current
+                const steps = Math.round(dy / navItemHeightRef.current)
+                const targetIdx = Math.max(0, Math.min(visibleNav.length - 1, touchDragIdxRef.current + steps))
+                setDragOverIdx(targetIdx)
+              }}
+              onTouchEnd={() => {
+                if (touchDragIdxRef.current !== null && dragOverIdx !== null && touchDragIdxRef.current !== dragOverIdx) {
+                  moveNavItem(touchDragIdxRef.current, dragOverIdx)
+                }
+                touchDragIdxRef.current = null
+                setDragOverIdx(null)
+              }}
             />
           ))}
         </nav>

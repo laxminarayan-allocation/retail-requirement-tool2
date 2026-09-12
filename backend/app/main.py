@@ -76,6 +76,10 @@ async def lifespan(app: FastAPI):
     if settings.is_oracle_configured:
         start_scheduler()
 
+    # Pipeline: auto-run all 8 steps at 09:00 IST daily
+    from app.core.pipeline_scheduler import start_scheduler as pipeline_start_scheduler
+    pipeline_start_scheduler()
+
     # DB Explorer: start configurable auto-refresh scheduler
     from app.core.db_scheduler import start_scheduler as db_start_scheduler
     if settings.is_oracle_configured:

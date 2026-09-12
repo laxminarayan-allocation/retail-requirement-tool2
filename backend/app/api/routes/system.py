@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
@@ -336,3 +337,43 @@ async def git_pull():
     except Exception as exc:
         logger.exception("git_pull error")
         return APIResponse.fail(message=str(exc))
+
+
+# ── Source Viewer (admin only) ─────────────────────────────────────────────────
+_BACKEND_ROOT = Path(__file__).resolve().parents[3]   # retail_requirement_tool/backend
+
+_SOURCE_FILES: dict[str, str] = {
+    "dashboard":        "app/api/routes/dashboard.py",
+    "nso":              "app/api/routes/nso.py",
+    "sale":             "app/api/routes/sale.py",
+    "system":           "app/api/routes/system.py",
+    "store_repository": "app/repositories/store_repository.py",
+    "item_repository":  "app/repositories/item_repository.py",
+    "parquet_store":    "app/core/parquet_store.py",
+    "main":             "app/main.py",
+}
+
+
+@router.get("/source/files", response_model=APIResponse)
+def source_file_list():
+    """Return the list of viewable source files."""
+    files = [{"key": k, "path": v} for k, v in _SOURCE_FILES.items()]
+    return APIResponse.ok(data={"files": files})
+
+
+@router.get("/source/read", response_model=APIResponse)
+def source_read(file: str):
+    """Return content of a whitelisted backend source file."""
+    if file not in _SOURCE_FILES:
+        return APIResponse.fail(f"Unknown file key: {file}")
+    path = _BACKEND_ROOT / _SOURCE_FILES[file]
+    if not path.exists():
+        return APIResponse.fail(f"File not found: {_SOURCE_FILES[file]}")
+    content = path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+    return APIResponse.ok(data={
+        "key": file,
+        "path": _SOURCE_FILES[file],
+        "content": content,
+        "lines": len(lines),
+    })

@@ -84,18 +84,18 @@ SOURCES: list[dict] = [
         "table": "MISRETAIL.T_CUSTOM_COGS",
         "schedule": "daily",
         "sql": """
-            SELECT TRUNC(BILL_DATE,'DD') SALE_DATE, SITE_CODE, ICODE,
-                   SUM(QTY) AS SALE_QTY, SUM(NETAMT) AS SALE_NETAMT
+            SELECT TRUNC(BILLDATE,'DD') SALE_DATE, SITECODE, BARCODE AS ICODE,
+                   SUM(CUSTOM_SL_Q) AS SALE_QTY, SUM(CUSTOM_SL_V) AS SALE_NETAMT
             FROM MISRETAIL.T_CUSTOM_COGS
-            WHERE TRUNC(BILL_DATE,'DD') >= TRUNC(SYSDATE) - 365
-              AND TRUNC(BILL_DATE,'DD') <= TRUNC(SYSDATE) - 1
-              AND ICODE IN (
+            WHERE TRUNC(BILLDATE,'DD') >= TRUNC(SYSDATE) - 365
+              AND TRUNC(BILLDATE,'DD') <= TRUNC(SYSDATE) - 1
+              AND BARCODE IN (
                   SELECT DISTINCT ICODE FROM REPORT.V_ITEM_MASTER
                   WHERE SUBSTR(SEASON,1,4) IN ('AW26','SS26')
                     AND DIVISION IN ('KIDS','LADIES','MENS')
                     AND ATTRIBUTE1 IN ('LT WINTER','PREWINTER')
               )
-            GROUP BY TRUNC(BILL_DATE,'DD'), SITE_CODE, ICODE
+            GROUP BY TRUNC(BILLDATE,'DD'), SITECODE, BARCODE
         """,
     },
     {
@@ -154,7 +154,7 @@ SOURCES: list[dict] = [
         "label": "PBS / Sparky REQ",
         "table": "CK_A2166.V_SPARKY_PBS_REQ",
         "schedule": "daily",
-        "sql": "SELECT * FROM CK_A2166.V_SPARKY_PBS_REQ WHERE ATTRIBUTE1 IN ('LT WINTER','PREWINTER')",
+        "sql": "SELECT * FROM CK_A2166.V_SPARKY_PBS_REQ",
     },
     {
         "key": "wh_stock",
@@ -266,7 +266,7 @@ def download_source(key: str) -> None:
         rows = len(df)
         tmp = _parquet_path(key).with_suffix(".tmp.parquet")
         df.to_parquet(tmp, index=False, engine="pyarrow", compression="snappy")
-        tmp.rename(_parquet_path(key))
+        tmp.replace(_parquet_path(key))  # replace() works on Windows even if dest exists
         _write_meta(key, rows)
 
         finished = datetime.now(IST).isoformat()

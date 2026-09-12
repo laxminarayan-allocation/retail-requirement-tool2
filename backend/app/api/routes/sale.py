@@ -352,10 +352,11 @@ async def get_sale_filters():
 @router.get("/store-summary", response_model=APIResponse)
 def sale_store_summary():
     """
-    Store-wise daily sale pivot (MTD) from sale_raw parquet.
-    Returns rows with store_name + one key per date (YYYY-MM-DD) = sale_netamt,
-    plus mtd_val total. Dates = MTD start → T-1.
+    Store-wise daily sale pivot — last 6 weeks (42 days) from sale_raw parquet.
+    Returns rows with store_name + one key per date (YYYY-MM-DD) = sale_netamt.
+    Also returns weeks[] grouping for collapse UI.
     """
+    from datetime import timedelta
     from app.core.parquet_store import read_parquet
     from app.repositories.store_repository import StoreRepository
 
@@ -368,51 +369,78 @@ def sale_store_summary():
     sale["sale_date"] = pd.to_datetime(sale["sale_date"], errors="coerce")
     sale = sale.dropna(subset=["sale_date"])
 
-    t1_date  = sale["sale_date"].max().date()
-    mtd_start = t1_date.replace(day=1)
+    t1_date     = sale["sale_date"].max().date()
+    six_w_start = t1_date - timedelta(days=41)  # 42 days = 6 weeks
 
-    # Filter to MTD only
-    mtd = sale[(sale["sale_date"].dt.date >= mtd_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
-    mtd["date_str"] = mtd["sale_date"].dt.strftime("%Y-%m-%d")
+    # Filter to last 6 weeks
+    six_w = sale[(sale["sale_date"].dt.date >= six_w_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
+    six_w["date_str"] = six_w["sale_date"].dt.strftime("%Y-%m-%d")
 
-    # Pivot: store × date → sum(sale_netamt)
-    pivot_val = mtd.groupby(["sitecode", "date_str"])["sale_netamt"].sum().unstack(fill_value=0)
-    pivot_qty = mtd.groupby(["sitecode", "date_str"])["sale_qty"].sum().unstack(fill_value=0)
+    # Pivot: store × date → sum
+    pivot_val = six_w.groupby(["sitecode", "date_str"])["sale_netamt"].sum().unstack(fill_value=0)
+    pivot_qty = six_w.groupby(["sitecode", "date_str"])["sale_qty"].sum().unstack(fill_value=0)
 
-    # All dates in sorted order
+    # All dates sorted ascending; build week groups (newest-first)
     dates = sorted(pivot_val.columns.tolist())
     t1_str = str(t1_date)
 
+    all_dates_rev = list(reversed(dates))  # newest → oldest
+    weeks = []
+    for w in range(6):
+        w_dates = all_dates_rev[w * 7: (w + 1) * 7]  # 7 dates per week, newest first
+        if w_dates:
+            weeks.append({
+                "week":   w + 1,
+                "label":  f"W{w + 1}",
+                "dates":  w_dates,        # newest first within week
+                "start":  min(w_dates),
+                "end":    max(w_dates),
+            })
+
     store_df = StoreRepository().get_all_stores(active_only=False)
-    store_map = store_df.set_index("store_name").to_dict("index") if "store_name" in store_df.columns else {}
+    if "site_id" in store_df.columns:
+        store_df["_sid"] = store_df["site_id"].astype(str).str.strip()
+        store_map = store_df.drop_duplicates("_sid").set_index("_sid").to_dict("index")
+    else:
+        store_map = {}
 
     rows = []
     for code in pivot_val.index:
-        sm   = store_map.get(str(code), {})
+        sid   = str(code).strip()
+        sm    = store_map.get(sid, {})
         dvals = {d: round(float(pivot_val.loc[code, d]), 2) if d in pivot_val.columns else 0.0 for d in dates}
-        dqtys = {d: int(pivot_qty.loc[code, d]) if d in pivot_qty.columns else 0 for d in dates}
-        mtd_val  = round(sum(dvals.values()), 2)
-        mtd_qty  = sum(dqtys.values())
-        yday_val = dvals.get(t1_str, 0.0)
-        yday_qty = dqtys.get(t1_str, 0)
+        dqtys = {d: int(pivot_qty.loc[code, d])             if d in pivot_qty.columns else 0    for d in dates}
+
+        six_w_val = round(sum(dvals.values()), 2)
+        six_w_qty = sum(dqtys.values())
+        yday_val  = dvals.get(t1_str, 0.0)
+        yday_qty  = dqtys.get(t1_str, 0)
+
+        # Per-week sums for max-week computation
+        week_sums = [sum(dvals.get(d, 0) for d in wk["dates"]) for wk in weeks]
+        max_week_val = round(max(week_sums) if week_sums else 0, 2)
+
         rows.append({
-            "store_name":    str(code),
-            "store_name_f":  str(sm.get("store_name_f", "")),
-            "zone":          str(sm.get("zone", "")),
-            "state":         str(sm.get("state_name", "")),
-            "grade":         str(sm.get("store_grade", "")),
-            "yesterday_val": yday_val,
-            "yesterday_qty": yday_qty,
-            "mtd_val":       mtd_val,
-            "mtd_qty":       mtd_qty,
-            "dates":         dvals,
+            "store_name":       sid,
+            "store_name_short": str(sm.get("store_name_short", "")),
+            "store_name_f":     str(sm.get("store_name_f", "")),
+            "zone":             str(sm.get("zone", "")),
+            "state":            str(sm.get("state_name", "")),
+            "grade":            str(sm.get("store_grade", "")),
+            "yesterday_val":    yday_val,
+            "yesterday_qty":    yday_qty,
+            "six_w_val":        six_w_val,
+            "six_w_qty":        six_w_qty,
+            "max_week_val":     max_week_val,
+            "dates":            dvals,
         })
 
     rows.sort(key=lambda x: -x["yesterday_val"])
     return APIResponse.ok(data={
-        "rows":       rows,
-        "count":      len(rows),
-        "sale_date":  t1_str,
-        "mtd_start":  str(mtd_start),
-        "dates":      dates,
+        "rows":        rows,
+        "count":       len(rows),
+        "sale_date":   t1_str,
+        "period_start": str(six_w_start),
+        "dates":       dates,
+        "weeks":       weeks,
     })

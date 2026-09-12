@@ -87,13 +87,25 @@ async def lifespan(app: FastAPI):
     if settings.is_oracle_configured:
         db_start_scheduler()
 
-        # Layer 2b: Store master cache — warm immediately so zone clicks are instant
-        import threading as _th_store
-        _th_store.Thread(
-            target=lambda: __import__("app.repositories.store_repository", fromlist=["warm_store_cache"]).warm_store_cache(),
-            daemon=True, name="store-cache-warmup"
-        ).start()
-        logger.info("Store cache warmup thread started")
+        # Layer 2b: Master data caches — parquet-first, Oracle fallback
+        # All T-1 data: load once at startup, never hit Oracle again intra-day
+        def _warm_all_caches():
+            import time as _t
+            _t.sleep(3)  # let Oracle pool settle first
+            from app.repositories.store_repository import warm_store_cache
+            from app.repositories.item_repository import warm_item_cache
+            from app.repositories.stock_repository import warm_stock_cache
+            from app.repositories.sales_repository import warm_sales_cache
+            from app.repositories.pbs_repository import warm_pbs_cache
+            warm_store_cache()   # parquet → instant
+            warm_item_cache()    # parquet → instant
+            warm_stock_cache()   # Oracle (no parquet yet) — runs once
+            warm_sales_cache()   # Oracle (no parquet yet) — runs once
+            warm_pbs_cache()     # Oracle (no parquet yet) — runs once
+
+        import threading as _th_warm
+        _th_warm.Thread(target=_warm_all_caches, daemon=True, name="master-cache-warmup").start()
+        logger.info("Master data cache warmup thread started (parquet-first)")
 
         # Layer 3: Dashboard cache warm — refresh every 2 hours so viewers never wait
         import threading as _th2

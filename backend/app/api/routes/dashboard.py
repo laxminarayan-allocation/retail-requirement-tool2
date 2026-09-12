@@ -47,17 +47,16 @@ def _fetch_oracle_stats_fresh() -> None:
 
 
 def _safe_oracle_stats() -> dict:
-    """Pull aggregate counts from Oracle caches. Returns zeros on any error.
-    Result is cached for _ORACLE_TTL seconds to avoid hammering Oracle on every page load."""
+    """Pull aggregate counts from parquet (preferred) or Oracle caches.
+    Result is cached for _ORACLE_TTL seconds to avoid repeated computation."""
     global _oracle_cache, _oracle_cache_ts
     age = time.time() - _oracle_cache_ts
     if _oracle_cache and age < _ORACLE_TTL:
         cached = dict(_oracle_cache)
-        cached["oracle_cache_ms"] = round(age * 1000, 1)  # show age, not query time
+        cached["oracle_cache_ms"] = round(age * 1000, 1)
         cached["from_cache"] = True
         return cached
     try:
-        import concurrent.futures
         from app.repositories.item_repository import ItemRepository
         from app.repositories.store_repository import StoreRepository
 
@@ -65,12 +64,9 @@ def _safe_oracle_stats() -> dict:
         store_repo = StoreRepository()
 
         t0 = time.perf_counter()
-        # Run both Oracle fetches in parallel with a 25s cap
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-            f_items  = ex.submit(item_repo._load)
-            f_stores = ex.submit(store_repo.get_all_stores, True)
-            item_df  = f_items.result(timeout=60)
-            store_df = f_stores.result(timeout=60)
+        # Both repositories now load from parquet first — sub-10ms if parquet present
+        item_df  = item_repo._load()
+        store_df = store_repo.get_all_stores(active_only=True)
         oracle_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         # Item stats

@@ -1,10 +1,12 @@
 """
 SalesRepository — fetch last-4-week rolling sales from CK_A2166.V_LAST_4WK_SL_ST_MC.
 
-The view already aggregates weekly sales at store × department level.
-WK1 = most recent week, WK5 = oldest week in the rolling window.
+Cache: fetched once per process (T-1 data, 23h TTL).
+Oracle hit only on first call or after explicit invalidation.
 """
 import logging
+import threading
+import time
 from typing import Optional
 
 import pandas as pd
@@ -14,43 +16,65 @@ from app.repositories.base_repository import fetch_df, load_sql
 
 logger = logging.getLogger(__name__)
 
+_CACHE: Optional[pd.DataFrame] = None
+_CACHE_LOCK = threading.Lock()
+_CACHE_TS: float = 0.0
+_TTL = 23 * 3600
+
+
+def _load_fresh() -> pd.DataFrame:
+    sql = load_sql("sales_base.sql")
+    with get_connection() as conn:
+        df = fetch_df(conn, sql, label="sales_mc")
+    week_cols = ["wk1", "wk2", "wk3", "wk4", "wk5"]
+    for col in week_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    if all(c in df.columns for c in ["wk1", "wk2", "wk3", "wk4"]):
+        df["sl_4wk_q"] = df["wk1"] + df["wk2"] + df["wk3"] + df["wk4"]
+        df["avg_wk_sl"] = (df["sl_4wk_q"] / 4).round(2)
+    if "max_slq" in df.columns:
+        df["max_slq"] = pd.to_numeric(df["max_slq"], errors="coerce").fillna(0)
+    logger.info("SalesRepository: loaded %d rows from Oracle", len(df))
+    return df
+
 
 class SalesRepository:
+
+    def _load(self) -> pd.DataFrame:
+        global _CACHE, _CACHE_TS
+        if _CACHE is not None and (time.time() - _CACHE_TS) < _TTL:
+            return _CACHE
+        with _CACHE_LOCK:
+            if _CACHE is not None and (time.time() - _CACHE_TS) < _TTL:
+                return _CACHE
+            df = _load_fresh()
+            _CACHE = df
+            _CACHE_TS = time.time()
+        return _CACHE
 
     def get_mc_sales(
         self,
         department: Optional[str] = None,
         store_name: Optional[str] = None,
     ) -> pd.DataFrame:
-        """
-        Return last-5-week sales at MC (department) × store level.
-
-        Columns returned:
-            store_name, department, display_type,
-            wk1, wk2, wk3, wk4, wk5,
-            max_slq, max_week, max_week_start_date, max_week_end_date
-
-        Derived columns added here (not in Oracle):
-            sl_4wk_q  = wk1+wk2+wk3+wk4  (last 4 complete weeks)
-            avg_wk_sl = sl_4wk_q / 4      (weekly average)
-        """
-        sql = load_sql("sales_base.sql")
-        with get_connection() as conn:
-            df = fetch_df(conn, sql, label="sales_mc")
-
-        # Apply Python-side filters (avoids adding bind vars to shared SQL)
+        df = self._load().copy()
         if department:
             df = df[df["department"] == department]
         if store_name:
             df = df[df["store_name"] == store_name]
-
-        # Derived metrics
-        week_cols = ["wk1", "wk2", "wk3", "wk4", "wk5"]
-        for col in week_cols:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
-        df["sl_4wk_q"] = df["wk1"] + df["wk2"] + df["wk3"] + df["wk4"]
-        df["avg_wk_sl"] = (df["sl_4wk_q"] / 4).round(2)
-        df["max_slq"] = pd.to_numeric(df["max_slq"], errors="coerce").fillna(0)
-
         return df.reset_index(drop=True)
+
+    def invalidate_cache(self) -> None:
+        global _CACHE, _CACHE_TS
+        _CACHE = None
+        _CACHE_TS = 0.0
+        logger.info("SalesRepository cache invalidated")
+
+
+def warm_sales_cache() -> None:
+    try:
+        SalesRepository()._load()
+        logger.info("sales-cache-warmup: done")
+    except Exception as exc:
+        logger.warning("sales-cache-warmup: failed — %s", exc)

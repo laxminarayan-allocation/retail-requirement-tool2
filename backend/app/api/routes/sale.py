@@ -347,3 +347,72 @@ async def get_sale_filters():
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/store-summary", response_model=APIResponse)
+def sale_store_summary():
+    """
+    Store-wise daily sale pivot (MTD) from sale_raw parquet.
+    Returns rows with store_name + one key per date (YYYY-MM-DD) = sale_netamt,
+    plus mtd_val total. Dates = MTD start → T-1.
+    """
+    from app.core.parquet_store import read_parquet
+    from app.repositories.store_repository import StoreRepository
+
+    try:
+        sale = read_parquet("sale_raw")
+    except FileNotFoundError:
+        return APIResponse.fail("sale_raw parquet not downloaded yet. Go to Data Store and download SALE Raw.")
+
+    sale.columns = [c.lower() for c in sale.columns]
+    sale["sale_date"] = pd.to_datetime(sale["sale_date"], errors="coerce")
+    sale = sale.dropna(subset=["sale_date"])
+
+    t1_date  = sale["sale_date"].max().date()
+    mtd_start = t1_date.replace(day=1)
+
+    # Filter to MTD only
+    mtd = sale[(sale["sale_date"].dt.date >= mtd_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
+    mtd["date_str"] = mtd["sale_date"].dt.strftime("%Y-%m-%d")
+
+    # Pivot: store × date → sum(sale_netamt)
+    pivot_val = mtd.groupby(["sitecode", "date_str"])["sale_netamt"].sum().unstack(fill_value=0)
+    pivot_qty = mtd.groupby(["sitecode", "date_str"])["sale_qty"].sum().unstack(fill_value=0)
+
+    # All dates in sorted order
+    dates = sorted(pivot_val.columns.tolist())
+    t1_str = str(t1_date)
+
+    store_df = StoreRepository().get_all_stores(active_only=False)
+    store_map = store_df.set_index("store_name").to_dict("index") if "store_name" in store_df.columns else {}
+
+    rows = []
+    for code in pivot_val.index:
+        sm   = store_map.get(str(code), {})
+        dvals = {d: round(float(pivot_val.loc[code, d]), 2) if d in pivot_val.columns else 0.0 for d in dates}
+        dqtys = {d: int(pivot_qty.loc[code, d]) if d in pivot_qty.columns else 0 for d in dates}
+        mtd_val  = round(sum(dvals.values()), 2)
+        mtd_qty  = sum(dqtys.values())
+        yday_val = dvals.get(t1_str, 0.0)
+        yday_qty = dqtys.get(t1_str, 0)
+        rows.append({
+            "store_name":    str(code),
+            "store_name_f":  str(sm.get("store_name_f", "")),
+            "zone":          str(sm.get("zone", "")),
+            "state":         str(sm.get("state_name", "")),
+            "grade":         str(sm.get("store_grade", "")),
+            "yesterday_val": yday_val,
+            "yesterday_qty": yday_qty,
+            "mtd_val":       mtd_val,
+            "mtd_qty":       mtd_qty,
+            "dates":         dvals,
+        })
+
+    rows.sort(key=lambda x: -x["yesterday_val"])
+    return APIResponse.ok(data={
+        "rows":       rows,
+        "count":      len(rows),
+        "sale_date":  t1_str,
+        "mtd_start":  str(mtd_start),
+        "dates":      dates,
+    })

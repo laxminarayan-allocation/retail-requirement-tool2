@@ -36,10 +36,12 @@ SOURCES: list[dict] = [
         "table": "MISRETAIL.T_STORE_OPENING_DATE",
         "schedule": "weekly",
         "sql": """
-            SELECT SITE_CODE, STORE_NAME, STORE_GRADE, STORE_TAG,
-                   CITY_NAME, STATE, DISTRICT, CLUSTER_TYPE,
-                   OPENING_DATE, STORE_STATUS
-            FROM MISRETAIL.T_STORE_OPENING_DATE
+            SELECT s.SITE_CODE, s.STORE_NAME, s.STORE_GRADE, s.STORE_TAG,
+                   s.CITY_NAME, s.STATE, s.DISTRICT, s.CLUSTER_TYPE,
+                   s.OPENING_DATE, s.STORE_STATUS,
+                   v.ZONE
+            FROM MISRETAIL.T_STORE_OPENING_DATE s
+            LEFT JOIN CK_A2166.V_STORE_MASTER v ON v.SITECODE = s.SITE_CODE
         """,
     },
     {

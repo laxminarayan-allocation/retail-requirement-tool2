@@ -74,6 +74,8 @@ const SECTIONS = [
   { id: 'factors', label: '⚙️  Calc Factors' },
   { id: 'distribution', label: '📦  Distribution Model' },
   { id: 'option_listing', label: '🏷️  Option Listing Filter' },
+  { id: 'pipeline', label: '⚙️  Pipeline & Scheduler' },
+  { id: 'data_store', label: '💾  Data Store' },
   { id: 'store_status', label: '🏪  Store Status' },
   { id: 'results', label: '📋  Results & Export' },
   { id: 'settings_guide', label: '⚙️  Settings & Server' },
@@ -441,6 +443,127 @@ export default function UserManual() {
                 </ol>
                 <div style={S.tip}>
                   💡 Summary stats mein "OL Held" count dikhta hai — kitne rows option listing hold se affected hue.
+                </div>
+              </Section>
+
+              <div style={S.divider} />
+
+              <Section id="pipeline" title="⚙️ Pipeline & Scheduler (Option Listing)">
+                <p style={S.p}>
+                  Option Listing page ke andar <strong>⏰ Scheduler</strong> tab hai — pipeline ka 3rd tab.
+                  Yeh tab pipeline steps ka automated daily run manage karta hai aur manual "Run Now" bhi provide karta hai.
+                </p>
+
+                <div style={S.sectionLabel}>Pipeline Steps (9 Total)</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 14 }}>
+                  {[
+                    { step: 'MC', desc: 'Load from Oracle — New MC Search (REPORT.T_GRID × V_ITEM_MASTER)' },
+                    { step: '00', desc: 'Master data download' },
+                    { step: '02', desc: 'GRC Processing' },
+                    { step: '03', desc: 'REQ Processing' },
+                    { step: '07', desc: 'PBS / Sparky REQ' },
+                    { step: '08', desc: 'Warehouse Stock' },
+                    { step: '04', desc: 'Color Distribution' },
+                    { step: '05', desc: 'Summary Excel' },
+                    { step: '06', desc: 'Audit' },
+                  ].map(s => (
+                    <div key={s.step} style={{ background: 'rgba(56,189,248,.08)', border: '1px solid rgba(56,189,248,.2)', borderRadius: 6, padding: '6px 10px', fontSize: 12 }}>
+                      <span style={{ fontWeight: 700, color: '#38bdf8' }}>{s.step}</span>
+                      <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>{s.desc}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={S.sectionLabel}>Step MC — Load from Oracle</div>
+                <p style={S.p}>
+                  Pipeline ka pehla step (MC) Oracle se live data fetch karta hai — <code>REPORT.T_GRID × REPORT.V_ITEM_MASTER</code> join karke
+                  PREWINTER / LT WINTER articles load karta hai. Yeh step inline run hota hai, koi script nahi.
+                  Agar yeh fail hoga to pipeline rok deta hai.
+                </p>
+
+                <div style={S.sectionLabel}>Scheduler Tab — Features</div>
+                <ul style={S.stepList}>
+                  <li style={{ marginBottom: 6 }}><strong>Enable / Disable toggle</strong> — scheduler on/off karo.</li>
+                  <li style={{ marginBottom: 6 }}><strong>▶ Run Now</strong> — abhi pipeline start karo, schedule ka wait nahi.</li>
+                  <li style={{ marginBottom: 6 }}><strong>Time config</strong> — hour + minute set karo (default: 9:00 AM IST). Presets: 6:00–10:00.</li>
+                  <li style={{ marginBottom: 6 }}><strong>Run Days</strong> — Every day | <strong>Mon–Sat (default)</strong> | Mon–Fri. Sunday skip hoti hai by default.</li>
+                  <li style={{ marginBottom: 6 }}><strong>Next Scheduled</strong> — agla run kab hoga, IST mein dikhata hai.</li>
+                  <li style={{ marginBottom: 6 }}><strong>Live Log</strong> — pipeline steps ka real-time log, 4 second refresh. Scroll down hota rahtai hai.</li>
+                  <li style={{ marginBottom: 6 }}><strong>Step badges</strong> — MC, 00, 02, 03, 07, 08, 04, 05, 06 — live status dikhate hain.</li>
+                </ul>
+
+                <div style={S.tip}>
+                  💡 Pipeline scheduler daemon thread pe chalta hai — backend restart ke baad automatically resume ho jaata hai.
+                  "Run Now" instant trigger hai, sleep ka wait nahi karta.
+                </div>
+                <div style={S.warn}>
+                  ⚠️ Pipeline step MC fail ho jaaye to baaki steps nahi chalenge. Pehle Oracle connection check karo.
+                </div>
+              </Section>
+
+              <div style={S.divider} />
+
+              <Section id="data_store" title="💾 Data Store — Parquet Cache">
+                <p style={S.p}>
+                  Data Store page Oracle se data ko <strong>local Parquet files</strong> mein download karta hai —
+                  ek baar download, phir sare reports us local cache se padh sakte hain. Isse Oracle pe live load kam hoti hai
+                  aur reports fast hote hain.
+                </p>
+
+                <div style={S.sectionLabel}>Architecture</div>
+                <div style={{ background: 'rgba(56,189,248,.06)', border: '1px solid rgba(56,189,248,.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 14, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                  <strong style={{ color: '#38bdf8' }}>Oracle</strong>
+                  {' → '}
+                  <strong style={{ color: '#fbbf24' }}>Download (background thread)</strong>
+                  {' → '}
+                  <strong style={{ color: '#4ade80' }}>Parquet Files (D:\…\DataStore\)</strong>
+                  {' → '}
+                  <strong style={{ color: '#a78bfa' }}>Reports read from local cache</strong>
+                  <br />
+                  Sab data <strong>T−1</strong> hai (kal ka Oracle data). Scheduler daily 9 AM IST pe auto-refresh karta hai.
+                </div>
+
+                <div style={S.sectionLabel}>12 Registered Sources</div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, marginBottom: 14 }}>
+                  {[
+                    { key: 'store_master', label: 'Store Master', schedule: 'weekly' },
+                    { key: 'item_master', label: 'Item Master', schedule: 'daily' },
+                    { key: 'grc_raw', label: 'GRC Raw', schedule: 'daily' },
+                    { key: 'sale_raw', label: 'SALE Raw', schedule: 'daily' },
+                    { key: 'req_raw', label: 'REQ Raw (MRP Req)', schedule: 'daily' },
+                    { key: 'art_grid', label: 'Article Grid', schedule: 'daily' },
+                    { key: 'prepack_avg', label: 'Prepack Avg', schedule: 'daily' },
+                    { key: 'prev_allocation', label: 'Prev Allocation (Option Listing)', schedule: 'daily' },
+                    { key: 'mc_req_apps', label: 'MC REQ Apps', schedule: 'daily' },
+                    { key: 'color_family', label: 'Color Family', schedule: 'daily' },
+                    { key: 'pbs_req', label: 'PBS / Sparky REQ', schedule: 'daily' },
+                    { key: 'wh_stock', label: 'Warehouse Stock', schedule: 'daily' },
+                  ].map(s => (
+                    <div key={s.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--content-bg)', borderRadius: 5, padding: '5px 10px', fontSize: 12 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>{s.label}</span>
+                      <span style={{ color: s.schedule === 'weekly' ? '#fbbf24' : '#38bdf8', fontWeight: 600 }}>{s.schedule}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={S.sectionLabel}>Status Indicators</div>
+                <ul style={S.stepList}>
+                  <li style={{ marginBottom: 6 }}><strong style={{ color: '#22c55e' }}>✅ Fresh</strong> — last 26 hours mein download hua. Reports ready hain.</li>
+                  <li style={{ marginBottom: 6 }}><strong style={{ color: '#f59e0b' }}>⚠️ Stale</strong> — 26+ hours purana. Refresh karna chahiye.</li>
+                  <li style={{ marginBottom: 6 }}><strong style={{ color: '#ef4444' }}>❌ Missing</strong> — abhi tak download nahi hua. Pehli baar "Download All" karo.</li>
+                </ul>
+
+                <div style={S.sectionLabel}>Usage</div>
+                <ol style={S.stepList}>
+                  <li style={{ marginBottom: 6 }}>Nav mein <strong>💾 Data Store</strong> click karo.</li>
+                  <li style={{ marginBottom: 6 }}>Pehli baar: <strong>⬇ Download All</strong> button click karo — sab 12 sources sequentially download honge.</li>
+                  <li style={{ marginBottom: 6 }}>Individual source refresh karna ho: us row ka <strong>⬇ Refresh</strong> button click karo.</li>
+                  <li style={{ marginBottom: 6 }}>Status 3 seconds mein auto-update hoti hai — downloading progress live dikhta hai.</li>
+                </ol>
+
+                <div style={S.tip}>
+                  💡 Scheduler daily 9 AM IST pe pipeline run karta hai — Data Store bhi us time refresh ho jaata hai automatically.
+                  Manual refresh ki zaroorat sirf tab hai jab urgent fresh data chahiye.
                 </div>
               </Section>
 

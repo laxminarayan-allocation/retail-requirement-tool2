@@ -17,6 +17,7 @@ import ReqDashboard from '@/pages/ReqDashboard'
 import DistributionModel from '@/pages/DistributionModel'
 import Simulation from '@/pages/Simulation'
 import OptionListing from '@/pages/OptionListing'
+import PipelineScheduler from '@/pages/PipelineScheduler'
 import OracleRefreshPage from '@/pages/OracleRefreshPage'
 import WarehouseInventory from '@/pages/WarehouseInventory'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="distribution" element={<DistributionModel />} />
             <Route path="simulation" element={<Navigate to="/calculation?tab=simulation" replace />} />
             <Route path="option-listing" element={<OptionListing />} />
+            <Route path="pipeline-scheduler" element={<PipelineScheduler />} />
             <Route path="oracle-refresh" element={<OracleRefreshPage />} />
           </Route>
         </Routes>

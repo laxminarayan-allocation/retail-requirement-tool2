@@ -354,6 +354,35 @@ def pipeline_status():
         return _run_log[0]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SCHEDULER ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SchedulerConfig(BaseModel):
+    enabled: bool | None = None
+    hour: int | None = None
+    minute: int | None = None
+
+
+@router.get("/scheduler/status")
+def scheduler_status():
+    from app.core.pipeline_scheduler import get_status
+    return get_status()
+
+
+@router.put("/scheduler/config")
+def scheduler_config(body: SchedulerConfig):
+    from app.core.pipeline_scheduler import update_config
+    return update_config(enabled=body.enabled, hour=body.hour, minute=body.minute)
+
+
+@router.post("/scheduler/run-now")
+def scheduler_run_now():
+    from app.core.pipeline_scheduler import trigger_now
+    trigger_now()
+    return {"triggered": True}
+
+
 OUTPUT_DIR = CODES_DIR / "OUTPUT"
 
 @router.get("/output/files")

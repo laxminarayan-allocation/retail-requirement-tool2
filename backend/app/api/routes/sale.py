@@ -404,6 +404,22 @@ def sale_store_summary():
     else:
         store_map = {}
 
+    # MTD and LM ranges
+    mtd_start = t1_date.replace(day=1)
+    import calendar
+    lm_year  = t1_date.year if t1_date.month > 1 else t1_date.year - 1
+    lm_month = t1_date.month - 1 if t1_date.month > 1 else 12
+    lm_start = t1_date.replace(year=lm_year, month=lm_month, day=1)
+    lm_end   = t1_date.replace(year=lm_year, month=lm_month,
+                               day=calendar.monthrange(lm_year, lm_month)[1])
+
+    # MTD pivot (from full sale, not six_w)
+    mtd_df = sale[(sale["sale_date"].dt.date >= mtd_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
+    lm_df  = sale[(sale["sale_date"].dt.date >= lm_start)  & (sale["sale_date"].dt.date <= lm_end)].copy()
+
+    mtd_pv = mtd_df.groupby("sitecode")["sale_netamt"].sum() if len(mtd_df) else pd.Series(dtype=float)
+    lm_pv  = lm_df.groupby("sitecode")["sale_netamt"].sum()  if len(lm_df)  else pd.Series(dtype=float)
+
     rows = []
     for code in pivot_val.index:
         sid   = str(code).strip()
@@ -416,9 +432,8 @@ def sale_store_summary():
         yday_val  = dvals.get(t1_str, 0.0)
         yday_qty  = dqtys.get(t1_str, 0)
 
-        # Per-week sums for max-week computation
-        week_sums = [sum(dvals.get(d, 0) for d in wk["dates"]) for wk in weeks]
-        max_week_val = round(max(week_sums) if week_sums else 0, 2)
+        # Per-week sums (for frontend top-N max computation)
+        week_sums = [round(sum(dvals.get(d, 0) for d in wk["dates"]), 2) for wk in weeks]
 
         rows.append({
             "store_name":       sid,
@@ -431,16 +446,21 @@ def sale_store_summary():
             "yesterday_qty":    yday_qty,
             "six_w_val":        six_w_val,
             "six_w_qty":        six_w_qty,
-            "max_week_val":     max_week_val,
+            "week_sums":        week_sums,   # index = week index (0=W1 newest)
+            "mtd_val":          round(float(mtd_pv.get(code, 0)), 2),
+            "lm_val":           round(float(lm_pv.get(code, 0)),  2),
             "dates":            dvals,
         })
 
     rows.sort(key=lambda x: -x["yesterday_val"])
     return APIResponse.ok(data={
-        "rows":        rows,
-        "count":       len(rows),
-        "sale_date":   t1_str,
+        "rows":         rows,
+        "count":        len(rows),
+        "sale_date":    t1_str,
         "period_start": str(six_w_start),
-        "dates":       dates,
-        "weeks":       weeks,
+        "mtd_start":    str(mtd_start),
+        "lm_start":     str(lm_start),
+        "lm_end":       str(lm_end),
+        "dates":        dates,
+        "weeks":        weeks,
     })

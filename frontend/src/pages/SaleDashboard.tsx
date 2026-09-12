@@ -20,7 +20,9 @@ interface SaleRow {
   yesterday_qty: number
   six_w_val: number
   six_w_qty: number
-  max_week_val: number
+  week_sums: number[]   // index = week index (0=W1 newest)
+  mtd_val: number
+  lm_val: number
   dates: Record<string, number>
 }
 
@@ -29,6 +31,9 @@ interface Summary {
   count: number
   sale_date: string
   period_start: string
+  mtd_start: string
+  lm_start: string
+  lm_end: string
   dates: string[]
   weeks: WeekGroup[]
 }
@@ -44,7 +49,7 @@ const fmtDate = (d: string) => {
   return `${dt.getDate()}-${dt.toLocaleString('en', { month: 'short' })}`
 }
 
-type SortKey = 'store_name' | 'yesterday_val' | 'six_w_val' | 'max_week_val' | string
+type SortKey = 'store_name' | 'yesterday_val' | 'six_w_val' | 'max_week_val' | 'mtd_val' | 'lm_val' | string
 
 export default function SaleDashboard() {
   const [data, setData]       = useState<Summary | null>(null)
@@ -53,8 +58,8 @@ export default function SaleDashboard() {
   const [search, setSearch]   = useState('')
   const [sort, setSort]       = useState<SortKey>('yesterday_val')
   const [asc, setAsc]         = useState(false)
-  // collapsed weeks: Set of week numbers (1–6) that are collapsed
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set([2, 3, 4, 5, 6]))
+  const [topN, setTopN]       = useState(1)   // how many top weeks to sum for "Max Wk"
 
   useEffect(() => {
     http.get('/sale/store-summary')
@@ -79,6 +84,12 @@ export default function SaleDashboard() {
   const weekSum = (row: SaleRow, wk: WeekGroup) =>
     wk.dates.reduce((s, d) => s + (row.dates[d] ?? 0), 0)
 
+  // Top-N week sum: sum of best N weeks per store
+  const topNVal = (row: SaleRow) => {
+    const sorted = [...row.week_sums].sort((a, b) => b - a)
+    return sorted.slice(0, topN).reduce((s, v) => s + v, 0)
+  }
+
   const rows = useMemo(() => {
     if (!data) return []
     let r = data.rows
@@ -93,10 +104,12 @@ export default function SaleDashboard() {
     }
     r = [...r].sort((a, b) => {
       let av: number | string, bv: number | string
-      if (sort === 'store_name')      { av = a.store_name; bv = b.store_name }
-      else if (sort === 'yesterday_val') { av = a.yesterday_val; bv = b.yesterday_val }
-      else if (sort === 'six_w_val')  { av = a.six_w_val; bv = b.six_w_val }
-      else if (sort === 'max_week_val') { av = a.max_week_val; bv = b.max_week_val }
+      if (sort === 'store_name')        { av = a.store_name; bv = b.store_name }
+      else if (sort === 'yesterday_val'){ av = a.yesterday_val; bv = b.yesterday_val }
+      else if (sort === 'six_w_val')    { av = a.six_w_val; bv = b.six_w_val }
+      else if (sort === 'max_week_val') { av = topNVal(a); bv = topNVal(b) }
+      else if (sort === 'mtd_val')      { av = a.mtd_val; bv = b.mtd_val }
+      else if (sort === 'lm_val')       { av = a.lm_val; bv = b.lm_val }
       else { av = a.dates[sort] ?? 0; bv = b.dates[sort] ?? 0 }
       if (typeof av === 'number' && typeof bv === 'number')
         return asc ? av - bv : bv - av
@@ -110,6 +123,8 @@ export default function SaleDashboard() {
 
   const totYday   = rows.reduce((s, r) => s + r.yesterday_val, 0)
   const totSixW   = rows.reduce((s, r) => s + r.six_w_val, 0)
+  const totMtd    = rows.reduce((s, r) => s + r.mtd_val, 0)
+  const totLm     = rows.reduce((s, r) => s + r.lm_val, 0)
 
   const toggleSort = (k: SortKey) => {
     if (sort === k) setAsc(a => !a); else { setSort(k); setAsc(false) }
@@ -167,10 +182,12 @@ export default function SaleDashboard() {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
         {[
           { label: `${fmtDate(t1)} Sale`, val: fmtV(totYday), sub: `${fmt(rows.reduce((s,r)=>s+r.yesterday_qty,0))} pcs`, color: '#38bdf8' },
-          { label: '6-Week Sale',         val: fmtV(totSixW), sub: `${fmt(rows.reduce((s,r)=>s+r.six_w_qty,0))} pcs`,    color: '#818cf8' },
+          { label: 'MTD Sale',            val: fmtV(totMtd),  sub: fmtDate(data?.mtd_start ?? '') + ' – ' + fmtDate(t1), color: '#818cf8' },
+          { label: 'Last Month',          val: fmtV(totLm),   sub: fmtDate(data?.lm_start ?? '') + ' – ' + fmtDate(data?.lm_end ?? ''), color: '#a78bfa' },
+          { label: '6-Week Sale',         val: fmtV(totSixW), sub: `${fmt(rows.reduce((s,r)=>s+r.six_w_qty,0))} pcs`,    color: '#22d3ee' },
           { label: 'Stores Selling',      val: String(rows.filter(r => r.yesterday_val > 0).length), sub: `of ${rows.length}`, color: '#34d399' },
         ].map(k => (
           <div key={k.label} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '10px 14px', borderLeft: `3px solid ${k.color}` }}>
@@ -207,6 +224,22 @@ export default function SaleDashboard() {
           onClick={() => setCollapsed(new Set())}
           style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, cursor: 'pointer', background: 'transparent', border: '1px solid var(--card-border)', color: 'var(--text-muted)' }}
         >Expand All</button>
+
+        {/* Top-N Max Week selector */}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>Max Wk top:</span>
+        {[1, 2, 3, 4].map(n => (
+          <button
+            key={n}
+            onClick={() => setTopN(n)}
+            style={{
+              fontSize: 10, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+              background: topN === n ? '#f59e0b' : 'transparent',
+              border: `1px solid ${topN === n ? '#f59e0b' : 'var(--card-border)'}`,
+              color: topN === n ? '#000' : 'var(--text-muted)',
+              fontWeight: topN === n ? 800 : 400,
+            }}
+          >{n}</button>
+        ))}
       </div>
 
       {/* Pivot table */}
@@ -263,18 +296,34 @@ export default function SaleDashboard() {
                     ))
                 })}
 
-                {/* Max Week */}
+                {/* Max Week top-N */}
                 <th
                   onClick={() => toggleSort('max_week_val')}
                   style={{ ...thBase, color: '#f59e0b', minWidth: 80, fontWeight: 800, borderLeft: '2px solid #f59e0b26' }}
                 >
-                  Max Wk{arrow('max_week_val')}
+                  Top{topN}Wk{arrow('max_week_val')}
+                </th>
+
+                {/* MTD */}
+                <th
+                  onClick={() => toggleSort('mtd_val')}
+                  style={{ ...thBase, color: '#818cf8', minWidth: 80, fontWeight: 800, borderLeft: '2px solid #818cf826' }}
+                >
+                  MTD{arrow('mtd_val')}
+                </th>
+
+                {/* LM */}
+                <th
+                  onClick={() => toggleSort('lm_val')}
+                  style={{ ...thBase, color: '#a78bfa', minWidth: 80, fontWeight: 800 }}
+                >
+                  LM{arrow('lm_val')}
                 </th>
 
                 {/* 6W Total */}
                 <th
                   onClick={() => toggleSort('six_w_val')}
-                  style={{ ...thBase, color: '#34d399', minWidth: 80, fontWeight: 800 }}
+                  style={{ ...thBase, color: '#22d3ee', minWidth: 80, fontWeight: 800 }}
                 >
                   6W ₹{arrow('six_w_val')}
                 </th>
@@ -314,12 +363,81 @@ export default function SaleDashboard() {
                 })}
 
                 <td style={{ ...td, fontWeight: 800, color: '#f59e0b', borderLeft: '2px solid #f59e0b26' }}>
-                  {fmtV(rows.reduce((s, r) => s + r.max_week_val, 0))}
+                  {fmtV(rows.reduce((s, r) => s + topNVal(r), 0))}
                 </td>
-                <td style={{ ...td, fontWeight: 800, color: '#34d399' }}>
+                <td style={{ ...td, fontWeight: 800, color: '#818cf8', borderLeft: '2px solid #818cf826' }}>
+                  {fmtV(totMtd)}
+                </td>
+                <td style={{ ...td, fontWeight: 800, color: '#a78bfa' }}>
+                  {fmtV(totLm)}
+                </td>
+                <td style={{ ...td, fontWeight: 800, color: '#22d3ee' }}>
                   {fmtV(totSixW)}
                 </td>
               </tr>
+
+              {/* Store count row — stores with sale > 0 per column */}
+              {(() => {
+                const cntStyle: React.CSSProperties = {
+                  ...td, fontSize: 10, fontWeight: 600,
+                  color: 'var(--text-muted)', letterSpacing: 0.3,
+                }
+                const cntBadge = (n: number, total: number) => {
+                  const pct = total > 0 ? n / total : 0
+                  const color = pct >= 0.9 ? '#34d399' : pct >= 0.7 ? '#f59e0b' : '#f87171'
+                  return (
+                    <span style={{ color, fontWeight: 700, fontSize: 10 }}>{n}</span>
+                  )
+                }
+                const t = rows.length
+                const ydayCnt = rows.filter(r => r.yesterday_val > 0).length
+                return (
+                  <tr style={{ background: '#080d18', borderTop: '1px dashed #1e293b' }}>
+                    <td style={{ ...tdL, fontSize: 9, color: 'var(--text-muted)' }}></td>
+                    <td style={{ ...tdL, fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>stores &gt;0</td>
+
+                    {/* T-1 count */}
+                    <td style={{ ...cntStyle, borderLeft: '2px solid #38bdf826' }}>
+                      {cntBadge(ydayCnt, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                    </td>
+
+                    {weeks.map(wk => {
+                      const isCollapsed = collapsed.has(wk.week)
+                      if (isCollapsed) {
+                        const cnt = rows.filter(r => weekSum(r, wk) > 0).length
+                        return (
+                          <td key={`cnt-wk-${wk.week}`} style={{ ...cntStyle, borderLeft: '2px solid #818cf826', background: '#080d18' }}>
+                            {cntBadge(cnt, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                          </td>
+                        )
+                      }
+                      return wk.dates
+                        .filter(d => d !== t1)
+                        .map((d, di) => {
+                          const cnt = rows.filter(r => (r.dates[d] ?? 0) > 0).length
+                          return (
+                            <td key={`cnt-${d}`} style={{ ...cntStyle, borderLeft: di === 0 ? '2px solid #818cf826' : undefined }}>
+                              {cntBadge(cnt, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                            </td>
+                          )
+                        })
+                    })}
+
+                    <td style={{ ...cntStyle, borderLeft: '2px solid #f59e0b26' }}>
+                      {cntBadge(rows.filter(r => topNVal(r) > 0).length, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                    </td>
+                    <td style={{ ...cntStyle, borderLeft: '2px solid #818cf826' }}>
+                      {cntBadge(rows.filter(r => r.mtd_val > 0).length, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                    </td>
+                    <td style={cntStyle}>
+                      {cntBadge(rows.filter(r => r.lm_val > 0).length, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                    </td>
+                    <td style={cntStyle}>
+                      {cntBadge(rows.filter(r => r.six_w_val > 0).length, t)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{t}</span>
+                    </td>
+                  </tr>
+                )
+              })()}
 
               {rows.map((r, i) => (
                 <tr
@@ -374,13 +492,25 @@ export default function SaleDashboard() {
                       })
                   })}
 
-                  {/* Max Week */}
-                  <td style={{ ...td, color: r.max_week_val > 0 ? '#f59e0b' : 'var(--text-muted)', fontWeight: r.max_week_val > 0 ? 700 : 400, borderLeft: '2px solid #f59e0b26' }}>
-                    {r.max_week_val > 0 ? fmtV(r.max_week_val) : '—'}
+                  {/* Top-N Max Week */}
+                  {(() => { const v = topNVal(r); return (
+                    <td style={{ ...td, color: v > 0 ? '#f59e0b' : 'var(--text-muted)', fontWeight: v > 0 ? 700 : 400, borderLeft: '2px solid #f59e0b26' }}>
+                      {v > 0 ? fmtV(v) : '—'}
+                    </td>
+                  )})()}
+
+                  {/* MTD */}
+                  <td style={{ ...td, color: r.mtd_val > 0 ? '#818cf8' : 'var(--text-muted)', fontWeight: r.mtd_val > 0 ? 600 : 400, borderLeft: '2px solid #818cf826' }}>
+                    {r.mtd_val > 0 ? fmtV(r.mtd_val) : '—'}
+                  </td>
+
+                  {/* LM */}
+                  <td style={{ ...td, color: r.lm_val > 0 ? '#a78bfa' : 'var(--text-muted)', fontWeight: r.lm_val > 0 ? 600 : 400 }}>
+                    {r.lm_val > 0 ? fmtV(r.lm_val) : '—'}
                   </td>
 
                   {/* 6W Total */}
-                  <td style={{ ...td, color: r.six_w_val > 0 ? '#34d399' : 'var(--text-muted)', fontWeight: r.six_w_val > 0 ? 700 : 400 }}>
+                  <td style={{ ...td, color: r.six_w_val > 0 ? '#22d3ee' : 'var(--text-muted)', fontWeight: r.six_w_val > 0 ? 700 : 400 }}>
                     {fmtV(r.six_w_val)}
                   </td>
                 </tr>

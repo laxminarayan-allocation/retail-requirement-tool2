@@ -87,6 +87,14 @@ async def lifespan(app: FastAPI):
     if settings.is_oracle_configured:
         db_start_scheduler()
 
+        # Layer 2b: Store master cache — warm immediately so zone clicks are instant
+        import threading as _th_store
+        _th_store.Thread(
+            target=lambda: __import__("app.repositories.store_repository", fromlist=["warm_store_cache"]).warm_store_cache(),
+            daemon=True, name="store-cache-warmup"
+        ).start()
+        logger.info("Store cache warmup thread started")
+
         # Layer 3: Dashboard cache warm — refresh every 2 hours so viewers never wait
         import threading as _th2
         def _dashboard_cache_loop():

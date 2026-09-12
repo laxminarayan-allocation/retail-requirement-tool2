@@ -1,8 +1,11 @@
 """
-StoreRepository — fetch and cache the store master from CK_A2166.V_STORE_MASTER.
+StoreRepository — fetch and cache the store master.
 
-The store master rarely changes during a session so it is cached after the
-first fetch.  Call invalidate_cache() to force a refresh.
+Load priority:
+  1. Parquet DataStore (store_master.parquet) — instant, sub-10ms
+  2. Oracle V_STORE_MASTER — fallback when parquet not downloaded yet
+
+The cache is populated once per process; call invalidate_cache() to force refresh.
 """
 import logging
 import threading
@@ -18,14 +21,47 @@ logger = logging.getLogger(__name__)
 _CACHE: Optional[pd.DataFrame] = None
 _CACHE_LOCK = threading.Lock()
 
+# Parquet column → expected name mapping (lowercase after read)
+_COL_ALIASES = {
+    "site_code":   "store_name",   # T_STORE_OPENING_DATE uses SITE_CODE
+    "city_name":   "city",
+    "state":       "state_name",
+}
+
+
+def _load_from_parquet() -> Optional[pd.DataFrame]:
+    """Try to read store_master.parquet from the DataStore. Returns None on failure."""
+    try:
+        from app.core.parquet_store import read_parquet
+        df = read_parquet("store_master")
+        # Normalise column names to lowercase
+        df.columns = [c.lower() for c in df.columns]
+        # Rename aliased columns so downstream code finds them
+        df = df.rename(columns=_COL_ALIASES)
+        logger.info("StoreRepository: loaded %d rows from parquet cache", len(df))
+        return df
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        logger.warning("StoreRepository: parquet load failed (%s) — falling back to Oracle", exc)
+        return None
+
+
+def _load_from_oracle() -> pd.DataFrame:
+    sql = load_sql("store_base.sql")
+    with get_connection() as conn:
+        df = fetch_df(conn, sql, label="store_master")
+    logger.info("StoreRepository: loaded %d rows from Oracle", len(df))
+    return df
+
 
 class StoreRepository:
 
     def get_all_stores(self, active_only: bool = True) -> pd.DataFrame:
         """
-        Return all stores from V_STORE_MASTER.
+        Return store master — from parquet if available, else Oracle.
 
-        Columns returned:
+        Columns returned (best-effort; parquet and Oracle may differ slightly):
             sitecode, location, sitealias, store_name, store_name_f,
             zone, city, state_name, cluster_type, store_grade, gm_grd,
             store_tag, store_status, opening_date, store_type, area,
@@ -40,13 +76,13 @@ class StoreRepository:
                 if _CACHE is not None:
                     df = _CACHE
                 else:
-                    sql = load_sql("store_base.sql")
-                    with get_connection() as conn:
-                        df = fetch_df(conn, sql, label="store_master")
+                    df = _load_from_parquet() or _load_from_oracle()
                     _CACHE = df
 
         if active_only:
-            return df[df["store_status"] == "ACTIVE"].reset_index(drop=True)
+            status_col = "store_status"
+            if status_col in df.columns:
+                return df[df[status_col].fillna("").str.upper() == "ACTIVE"].reset_index(drop=True)
         return df.copy()
 
     def get_store_names(self) -> list[str]:
@@ -69,3 +105,12 @@ class StoreRepository:
         global _CACHE
         _CACHE = None
         logger.info("StoreRepository cache invalidated")
+
+
+def warm_store_cache() -> None:
+    """Pre-load store master at startup so first zone click is instant."""
+    try:
+        StoreRepository().get_all_stores(active_only=False)
+        logger.info("store-cache-warmup: done")
+    except Exception as exc:
+        logger.warning("store-cache-warmup: failed — %s", exc)

@@ -24,7 +24,6 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
   { to: '/database',   label: 'Database Explorer',icon: '🗄️', minRole: 'planner' },
   { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'planner' },
-  { to: '/calculation',label: 'Calculation',      icon: '▶️', minRole: 'planner' },
   { to: '/req',          label: 'Requirements',      icon: '📝', minRole: 'planner' },
   { to: '/distribution', label: 'Distribution',      icon: '🔀', minRole: 'planner' },
   { to: '/simulation',   label: 'Simulation',        icon: '🧮', minRole: 'planner' },

@@ -1166,62 +1166,8 @@ async def stores_by_split(split: str, value: str):
                 "area":   area_f,
             })
 
-        # Merge upcoming stores from parquet for grade / tag splits
-        try:
-            from app.core.parquet_cache import has_output, read_cache as _rc
-            if has_output("MISRETAIL", "T_STORE_OPENING_DATE"):
-                sod = _rc("MISRETAIL", "T_STORE_OPENING_DATE")
-                if sod is not None and "store_status" in sod.columns:
-                    upcoming_sod = sod[sod["store_status"].str.upper() == "UPCOMING_STORE"].copy()
-
-                    if split.lower() == "zone":
-                        zone_col = next((c for c in ("zone", "region_type") if c in upcoming_sod.columns), None)
-                        pq_filtered = upcoming_sod.iloc[0:0]
-                        if zone_col:
-                            candidate = upcoming_sod[
-                                upcoming_sod[zone_col].fillna("").str.strip().str.upper() == value.strip().upper()
-                            ]
-                            if not candidate.empty:
-                                pq_filtered = candidate
-                        if pq_filtered.empty:
-                            # vectorized zone lookup — no iterrows
-                            ref_to_zone = dict(zip(store_df["store_name"].fillna("").astype(str),
-                                                   store_df["zone"].fillna("").astype(str)))
-                            upcoming_sod["_zone"] = upcoming_sod["ref_store"].fillna("").astype(str).str.strip().map(ref_to_zone).fillna("—")
-                            pq_filtered = upcoming_sod[
-                                upcoming_sod["_zone"].str.upper() == value.strip().upper()
-                            ]
-                    else:
-                        _PARQUET_COL = {"grade": "store_grade", "tag": "store_tag", "city": "city", "store_city": "city"}
-                        pq_col = _PARQUET_COL.get(split.lower())
-                        if not pq_col or pq_col not in upcoming_sod.columns:
-                            pq_filtered = upcoming_sod.iloc[0:0]
-                        else:
-                            pq_filtered = upcoming_sod[
-                                upcoming_sod[pq_col].fillna("-").str.strip().str.upper() == value.strip().upper()
-                            ]
-
-                    for r in pq_filtered.to_dict("records"):
-                        code = str(r.get("store_name", "—")).strip()
-                        if code in seen_codes:
-                            continue
-                        seen_codes.add(code)
-                        area_v = r.get("area")
-                        try:
-                            area_f = None if area_v is None or pd.isna(area_v) else float(area_v)
-                        except Exception:
-                            area_f = None
-                        stores.append({
-                            "code":   code,
-                            "name":   str(r.get("initial_name", r.get("location", ""))),
-                            "status": "UPCOMING_STORE",
-                            "grade":  str(r.get("store_grade", "")),
-                            "zone":   str(r.get("_zone", r.get("zone", ""))),
-                            "state":  str(r.get("state", "")),
-                            "area":   area_f,
-                        })
-        except Exception as exc:
-            logger.warning("stores-by upcoming merge failed (non-fatal): %s", exc)
+        # store_master parquet already contains UPCOMING_STORE stores (via T_STORE_OPENING_DATE LEFT JOIN)
+        # No secondary merge needed — avoids duplicates from mismatched store code keys
 
         # Sort: ACTIVE first, UPCOMING_STORE next; then alpha by code
         STATUS_ORDER = {"ACTIVE": 0, "UPCOMING_STORE": 1}

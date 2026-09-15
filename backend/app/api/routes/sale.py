@@ -631,24 +631,37 @@ def sale_store_summary(refresh: bool = False):
         if age < _STORE_SUMMARY_TTL:
             return APIResponse.ok(data=_STORE_SUMMARY_CACHE)
 
-    from datetime import timedelta
-    from app.core.parquet_store import read_parquet
+    from datetime import timedelta, date as _date
+    from app.core.parquet_store import _parquet_path
     from app.repositories.store_repository import StoreRepository
+    import pyarrow.parquet as pq
 
     try:
-        sale = read_parquet("sale_raw")
-    except FileNotFoundError:
-        return APIResponse.fail("sale_raw parquet not downloaded yet. Go to Data Store and download SALE Raw.")
+        p = _parquet_path("sale_raw")
+        if not p.exists():
+            return APIResponse.fail("sale_raw parquet not downloaded yet. Go to Data Store and download SALE Raw.")
+
+        # Read only last 8 weeks using pyarrow row-group filter (avoids loading 76M rows)
+        cutoff_date = _date.today() - timedelta(days=56)
+        cutoff_ts   = pd.Timestamp(cutoff_date)
+        sale = pd.read_parquet(p, engine="pyarrow",
+                               filters=[("SALE_DATE", ">=", cutoff_ts)])
+    except Exception as exc:
+        return APIResponse.fail(f"sale_raw read failed: {str(exc)[:200]}")
 
     sale.columns = [c.lower() for c in sale.columns]
     sale["sale_date"] = pd.to_datetime(sale["sale_date"], errors="coerce")
     sale = sale.dropna(subset=["sale_date"])
 
-    t1_date     = sale["sale_date"].max().date()
-    six_w_start = t1_date - timedelta(days=55)  # 56 days = 8 weeks
+    if sale.empty:
+        return APIResponse.fail("sale_raw has no data in last 8 weeks.")
 
-    # Filter to last 8 weeks
-    six_w = sale[(sale["sale_date"].dt.date >= six_w_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
+    t1_date     = sale["sale_date"].max().date()
+    six_w_start = t1_date - timedelta(days=55)
+
+    # Filter precisely (pyarrow filter may include extra rows at row-group boundary)
+    cutoff_ts2  = pd.Timestamp(six_w_start)
+    six_w = sale[sale["sale_date"] >= cutoff_ts2].copy()
     six_w["date_str"] = six_w["sale_date"].dt.strftime("%Y-%m-%d")
 
     # Pivot: store × date → sum
@@ -703,9 +716,10 @@ def sale_store_summary(refresh: bool = False):
     lm_end   = t1_date.replace(year=lm_year, month=lm_month,
                                day=calendar.monthrange(lm_year, lm_month)[1])
 
-    # MTD pivot (from full sale, not six_w)
-    mtd_df = sale[(sale["sale_date"].dt.date >= mtd_start) & (sale["sale_date"].dt.date <= t1_date)].copy()
-    lm_df  = sale[(sale["sale_date"].dt.date >= lm_start)  & (sale["sale_date"].dt.date <= lm_end)].copy()
+    # MTD/LM: use Timestamp comparisons (no .dt.date on large df)
+    mtd_df = sale[sale["sale_date"] >= pd.Timestamp(mtd_start)].copy()
+    lm_df  = sale[(sale["sale_date"] >= pd.Timestamp(lm_start)) &
+                  (sale["sale_date"] <= pd.Timestamp(lm_end))].copy()
 
     mtd_pv = mtd_df.groupby("sitecode")["sale_netamt"].sum() if len(mtd_df) else pd.Series(dtype=float)
     lm_pv  = lm_df.groupby("sitecode")["sale_netamt"].sum()  if len(lm_df)  else pd.Series(dtype=float)

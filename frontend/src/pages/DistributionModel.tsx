@@ -225,8 +225,8 @@ export default function DistributionModel() {
     | { type: 'attr1'; attr1: string; except_stores: string[] }
   const [holdRules, setHoldRules] = useState<HoldRule[]>([])
   const [holdStoreSelected, setHoldStoreSelected] = useState<string[]>([])
-  const [holdAttr1Input, setHoldAttr1Input] = useState('')
-  const [holdExceptInput, setHoldExceptInput] = useState('')
+  const [holdAttr1Selected, setHoldAttr1Selected] = useState<string[]>([])
+  const [holdExceptSelected, setHoldExceptSelected] = useState<string[]>([])
 
   const addStoreHold = () => {
     const stores = holdStoreSelected.map(s => s.toUpperCase()).filter(Boolean)
@@ -235,12 +235,12 @@ export default function DistributionModel() {
     setHoldStoreSelected([])
   }
   const addAttr1Hold = () => {
-    const a1 = holdAttr1Input.trim()
-    if (!a1) return
-    const except = holdExceptInput.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+    if (!holdAttr1Selected.length) return
+    const a1 = holdAttr1Selected[0]
+    const except = holdExceptSelected.map(s => s.toUpperCase())
     setHoldRules(r => [...r.filter(x => !(x.type === 'attr1' && x.attr1.toUpperCase() === a1.toUpperCase())), { type: 'attr1', attr1: a1, except_stores: except }])
-    setHoldAttr1Input('')
-    setHoldExceptInput('')
+    setHoldAttr1Selected([])
+    setHoldExceptSelected([])
   }
   const removeHold = (idx: number) => setHoldRules(r => r.filter((_, i) => i !== idx))
 
@@ -689,22 +689,9 @@ export default function DistributionModel() {
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: tokens.textSecondary, width: 70, flexShrink: 0 }}>Attr1 Hold</span>
-              <input
-                placeholder="LT WINTER"
-                value={holdAttr1Input}
-                onChange={e => setHoldAttr1Input(e.target.value)}
-                style={{ width: 120, padding: '4px 8px', fontSize: 12, borderRadius: 5,
-                  border: `1px solid ${tokens.border}`, background: tokens.cardBg, color: tokens.text }}
-              />
+              <MultiSelect label="Attr1" options={attribute1Options} selected={holdAttr1Selected} onChange={setHoldAttr1Selected} width={160} />
               <span style={{ fontSize: 11, color: tokens.textMuted }}>except</span>
-              <input
-                placeholder="ANG, SPN, KDC, BDG"
-                value={holdExceptInput}
-                onChange={e => setHoldExceptInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addAttr1Hold()}
-                style={{ flex: 1, minWidth: 140, padding: '4px 8px', fontSize: 12, borderRadius: 5,
-                  border: `1px solid ${tokens.border}`, background: tokens.cardBg, color: tokens.text }}
-              />
+              <MultiSelect label="Stores" options={storeOptions} selected={holdExceptSelected} onChange={setHoldExceptSelected} width={240} />
               <button onClick={addAttr1Hold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
             </div>
             {holdRules.length > 0 && (

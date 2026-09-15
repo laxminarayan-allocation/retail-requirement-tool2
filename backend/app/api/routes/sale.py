@@ -25,6 +25,11 @@ _STORE_SUMMARY_CACHE: dict | None = None
 _STORE_SUMMARY_TS: float = 0.0
 _STORE_SUMMARY_TTL = 1800  # 30 min
 
+# ── weekly-summary result cache ───────────────────────────────────────────────
+_WEEKLY_SUMMARY_CACHE: dict | None = None
+_WEEKLY_SUMMARY_TS: float = 0.0
+_WEEKLY_SUMMARY_TTL = 1800  # 30 min
+
 # ── Sale Pivot preset storage ─────────────────────────────────────────────────
 _SALE_PRESETS_FILE = Path(__file__).resolve().parents[3] / "data" / "sale_pivot_presets.json"
 
@@ -481,12 +486,18 @@ async def get_sale_filters():
 
 
 @router.get("/weekly-summary", response_model=APIResponse)
-def sale_weekly_summary():
+def sale_weekly_summary(refresh: bool = False):
     """
     2-year store × week pivot using TY + LY parquet cache.
     Weeks grouped by month for collapse UI.
     Returns both sl_v and sl_q per store per week.
     """
+    global _WEEKLY_SUMMARY_CACHE, _WEEKLY_SUMMARY_TS
+
+    if not refresh and _WEEKLY_SUMMARY_CACHE is not None:
+        if time.time() - _WEEKLY_SUMMARY_TS < _WEEKLY_SUMMARY_TTL:
+            return APIResponse.ok(data=_WEEKLY_SUMMARY_CACHE)
+
     try:
         from app.core.parquet_cache import has_output, read_cache
 
@@ -531,8 +542,9 @@ def sale_weekly_summary():
             opening_dates = sorted(od.tolist())
         total_stores_ever = len(opening_dates)
 
+        import bisect
         def active_count_on(end_date: pd.Timestamp) -> int:
-            return sum(1 for d in opening_dates if d <= end_date)
+            return bisect.bisect_right(opening_dates, end_date)
 
         # Build week_end_map: week_key → last date in that week from sale data
         week_end_map: dict = {}
@@ -594,11 +606,10 @@ def sale_weekly_summary():
             })
 
         rows.sort(key=lambda x: -x["total_val"])
-        return APIResponse.ok(data={
-            "rows":   rows,
-            "count":  len(rows),
-            "months": months_meta,
-        })
+        result = {"rows": rows, "count": len(rows), "months": months_meta}
+        _WEEKLY_SUMMARY_CACHE = result
+        _WEEKLY_SUMMARY_TS    = time.time()
+        return APIResponse.ok(data=result)
     except Exception as exc:
         logger.error("weekly-summary error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

@@ -20,6 +20,11 @@ from app.models.response_models import APIResponse
 from app.db.connection import get_connection
 from app.core.config import settings
 
+# ── store-summary result cache ────────────────────────────────────────────────
+_STORE_SUMMARY_CACHE: dict | None = None
+_STORE_SUMMARY_TS: float = 0.0
+_STORE_SUMMARY_TTL = 1800  # 30 min
+
 # ── Sale Pivot preset storage ─────────────────────────────────────────────────
 _SALE_PRESETS_FILE = Path(__file__).resolve().parents[3] / "data" / "sale_pivot_presets.json"
 
@@ -600,12 +605,19 @@ def sale_weekly_summary():
 
 
 @router.get("/store-summary", response_model=APIResponse)
-def sale_store_summary():
+def sale_store_summary(refresh: bool = False):
     """
     Store-wise daily sale pivot — last 6 weeks (42 days) from sale_raw parquet.
     Returns rows with store_name + one key per date (YYYY-MM-DD) = sale_netamt.
     Also returns weeks[] grouping for collapse UI.
     """
+    global _STORE_SUMMARY_CACHE, _STORE_SUMMARY_TS
+
+    if not refresh and _STORE_SUMMARY_CACHE is not None:
+        age = time.time() - _STORE_SUMMARY_TS
+        if age < _STORE_SUMMARY_TTL:
+            return APIResponse.ok(data=_STORE_SUMMARY_CACHE)
+
     from datetime import timedelta
     from app.core.parquet_store import read_parquet
     from app.repositories.store_repository import StoreRepository
@@ -685,12 +697,18 @@ def sale_store_summary():
     mtd_pv = mtd_df.groupby("sitecode")["sale_netamt"].sum() if len(mtd_df) else pd.Series(dtype=float)
     lm_pv  = lm_df.groupby("sitecode")["sale_netamt"].sum()  if len(lm_df)  else pd.Series(dtype=float)
 
+    # Convert pivot to dict-of-dicts for O(1) per-cell access (much faster than .loc in loop)
+    pv_dict = pivot_val.to_dict(orient="index")
+    pq_dict = pivot_qty.to_dict(orient="index")
+
     rows = []
     for code in pivot_val.index:
         sid   = str(code).strip()
         sm    = store_map.get(sid, {})
-        dvals = {d: round(float(pivot_val.loc[code, d]), 2) if d in pivot_val.columns else 0.0 for d in dates}
-        dqtys = {d: int(pivot_qty.loc[code, d])             if d in pivot_qty.columns else 0    for d in dates}
+        row_v = pv_dict.get(code, {})
+        row_q = pq_dict.get(code, {})
+        dvals = {d: round(float(row_v.get(d, 0)), 2) for d in dates}
+        dqtys = {d: int(row_q.get(d, 0))             for d in dates}
 
         six_w_val = round(sum(dvals.values()), 2)
         six_w_qty = sum(dqtys.values())
@@ -719,17 +737,20 @@ def sale_store_summary():
         })
 
     rows.sort(key=lambda x: -x["yesterday_val"])
-    return APIResponse.ok(data={
+    result = {
         "rows":         rows,
         "count":        len(rows),
         "sale_date":    t1_str,
-        "period_start": str(six_w_start),   # 8-week start
+        "period_start": str(six_w_start),
         "mtd_start":    str(mtd_start),
         "lm_start":     str(lm_start),
         "lm_end":       str(lm_end),
         "dates":        dates,
         "weeks":        weeks,
-    })
+    }
+    _STORE_SUMMARY_CACHE = result
+    _STORE_SUMMARY_TS    = time.time()
+    return APIResponse.ok(data=result)
 
 
 # ── Sale Pivot ────────────────────────────────────────────────────────────────

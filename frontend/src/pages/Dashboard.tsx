@@ -1202,18 +1202,30 @@ export default function Dashboard() {
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
-            <a
-              href="/api/dashboard/store-master-csv"
-              download="store_master.csv"
+            <button
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem('ck_ss27_token') || ''
+                  const res = await fetch('/api/dashboard/store-master-csv', {
+                    headers: { Authorization: `Bearer ${token}` },
+                  })
+                  if (!res.ok) throw new Error('Download failed')
+                  const blob = await res.blob()
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url; a.download = 'store_master.csv'; a.click()
+                  URL.revokeObjectURL(url)
+                } catch { alert('CSV download failed') }
+              }}
               style={{
                 fontSize: 10, fontWeight: 600, color: '#818cf8', border: '1px solid #818cf8',
-                borderRadius: 4, padding: '2px 8px', textDecoration: 'none', letterSpacing: 0.4,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
+                borderRadius: 4, padding: '2px 8px', background: 'transparent', cursor: 'pointer',
+                letterSpacing: 0.4, display: 'inline-flex', alignItems: 'center', gap: 4,
               }}
               title="Download Store Master CSV"
             >
               ⬇ CSV
-            </a>
+            </button>
           </div>
         </div>
         <div style={{ width: '100%' }}>

@@ -56,7 +56,8 @@ _DF_CACHE: pd.DataFrame | None = None
 _DF_CACHE_TS: float = 0.0
 _CACHE_TTL = 3600  # 1 hour (parquet doesn't change often)
 
-_ITEM_KEEP = ["icode", "mrp", "desc1", "color", "season", "cat1", "cat3", "cat4", "cat5", "sz_grp", "partyname"]
+_ITEM_KEEP = ["icode", "mrp", "desc1", "color", "season", "cat1", "cat3", "cat4", "cat5", "sz_grp", "partyname",
+              "option_level", "allocation_option", "attribute1", "concept_new"]  # superset — only existing cols read
 
 
 def _load_df(refresh: bool = False) -> pd.DataFrame:
@@ -67,7 +68,15 @@ def _load_df(refresh: bool = False) -> pd.DataFrame:
         return _DF_CACHE
 
     stock = pd.read_parquet(_STOCK_FILE)
-    item  = pd.read_parquet(_ITEM_FILE, columns=_ITEM_KEEP)
+
+    # Read only columns that actually exist in this parquet (avoids crash on schema mismatch)
+    item_all_cols = list(pd.read_parquet(_ITEM_FILE).columns)
+    # Exclude cols already in stock to avoid merge conflict (keep icode for join key)
+    stock_cols = set(stock.columns) - {"icode"}
+    keep = [c for c in _ITEM_KEEP if c in item_all_cols and c not in stock_cols]
+    if "icode" not in keep:
+        keep = ["icode"] + keep
+    item = pd.read_parquet(_ITEM_FILE, columns=keep)
 
     # Rename item master columns to avoid clash with stock cols
     item = item.rename(columns={"desc1": "item_desc", "color": "item_color"})

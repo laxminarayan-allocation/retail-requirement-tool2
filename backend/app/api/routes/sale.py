@@ -523,12 +523,14 @@ def sale_weekly_summary(refresh: bool = False):
         ly = _prep(df_ly, "LY")
         combined = pd.concat([ty, ly], ignore_index=True)
 
-        # Aggregate to store × week
-        agg = combined.groupby(["store_name", "week_key", "month_key"], as_index=False).agg(
+        # Aggregate to store × week (group by week only — a cross-month week must not appear twice)
+        agg = combined.groupby(["store_name", "week_key"], as_index=False).agg(
             val=("sl_v",   "sum"),
             qty=("sl_qty", "sum"),
             week_start=("week_start", "min"),
         )
+        # Assign month from week_start so a week belongs to exactly one month
+        agg["month_key"] = agg["week_start"].dt.strftime("%Y-%m")
 
         # Build opening-date map for active store count per period
         import calendar as _cal

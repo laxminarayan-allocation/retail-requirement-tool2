@@ -224,15 +224,15 @@ export default function DistributionModel() {
     | { type: 'store'; stores: string[] }
     | { type: 'attr1'; attr1: string; except_stores: string[] }
   const [holdRules, setHoldRules] = useState<HoldRule[]>([])
-  const [holdStoreInput, setHoldStoreInput] = useState('')
+  const [holdStoreSelected, setHoldStoreSelected] = useState<string[]>([])
   const [holdAttr1Input, setHoldAttr1Input] = useState('')
   const [holdExceptInput, setHoldExceptInput] = useState('')
 
   const addStoreHold = () => {
-    const stores = holdStoreInput.split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+    const stores = holdStoreSelected.map(s => s.toUpperCase()).filter(Boolean)
     if (!stores.length) return
     setHoldRules(r => [...r.filter(x => x.type !== 'store'), { type: 'store', stores }])
-    setHoldStoreInput('')
+    setHoldStoreSelected([])
   }
   const addAttr1Hold = () => {
     const a1 = holdAttr1Input.trim()
@@ -684,14 +684,7 @@ export default function DistributionModel() {
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: tokens.textSecondary, width: 70, flexShrink: 0 }}>Store Hold</span>
-              <input
-                placeholder="JCL, MPR, BAR, NTV"
-                value={holdStoreInput}
-                onChange={e => setHoldStoreInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addStoreHold()}
-                style={{ flex: 1, minWidth: 140, padding: '4px 8px', fontSize: 12, borderRadius: 5,
-                  border: `1px solid ${tokens.border}`, background: tokens.cardBg, color: tokens.text }}
-              />
+              <MultiSelect label="Stores" options={storeOptions} selected={holdStoreSelected} onChange={setHoldStoreSelected} width={260} />
               <button onClick={addStoreHold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -154,9 +154,126 @@ function SessionLimitCell({ user, onSave }: { user: User; onSave: (md: number, m
   )
 }
 
+// ── Section → Parquet/Oracle source map ───────────────────────────────────────
+const SECTION_SOURCES = [
+  {
+    section: 'Dashboard',
+    icon: '📊',
+    sources: [
+      { label: 'Store Opening Dates', oracle: 'MISRETAIL.T_STORE_OPENING_DATE', parquet: 'MISRETAIL__T_STORE_OPENING_DATE', usage: 'Active/Upcoming store count, weekly opening chart' },
+      { label: 'Allocation Summary', oracle: 'MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION', parquet: 'MISRETAIL__T_ALLOCATION_FOR_ALL_DIVISION', usage: 'Allocation stats by division' },
+    ],
+  },
+  {
+    section: 'Sale Dashboard',
+    icon: '💰',
+    sources: [
+      { label: 'Sale TY (This Year)', oracle: 'MISRETAIL.T_CUSTOM_COGS', parquet: 'MISRETAIL__SALE_TY_STORE_DATE', usage: 'Store-wise daily sale, MTD, weekly summary' },
+      { label: 'Sale LY (Last Year)', oracle: 'MISRETAIL.T_CUSTOM_COGS', parquet: 'MISRETAIL__SALE_LY_STORE_DATE', usage: 'LY comparison in sale dashboard' },
+      { label: 'Sale Raw (store-summary)', oracle: 'MISRETAIL.T_CUSTOM_COGS', parquet: 'DataStore/sale_raw.parquet', usage: 'Store summary + weekly aggregation' },
+      { label: 'Store Master NSO', oracle: 'CK_A2166.STORE_MASTER_NSO', parquet: 'CK_A2166__STORE_MASTER_NSO', usage: 'Store names enrichment in sale summary' },
+    ],
+  },
+  {
+    section: 'NSO Dashboard',
+    icon: '🏪',
+    sources: [
+      { label: 'NSO View', oracle: 'CK_A2166.V_NSO', parquet: 'CK_A2166__V_NSO', usage: 'Store View – NSO filter' },
+      { label: 'All Chain View', oracle: 'CK_A2166.V_ALL_WITH_NSO', parquet: 'CK_A2166__V_ALL_WITH_NSO', usage: 'Store View – All Chain filter' },
+      { label: 'Store Master NSO', oracle: 'CK_A2166.STORE_MASTER_NSO', parquet: 'CK_A2166__STORE_MASTER_NSO', usage: 'Store enrichment (city, state, grade)' },
+    ],
+  },
+  {
+    section: 'Warehouse Inventory',
+    icon: '🏭',
+    sources: [
+      { label: 'DC Stock Report', oracle: 'MISRETAIL.T_STK_REPORT_DC_STOCK', parquet: 'output/MISRETAIL__T_STK_REPORT_DC_STOCK.parquet', usage: 'All warehouse stock rows' },
+      { label: 'Item Master', oracle: 'REPORT.V_ITEM_MASTER', parquet: 'output/REPORT__V_ITEM_MASTER.parquet', usage: 'Item enrichment (sz_grp, option_level, concept)' },
+    ],
+  },
+  {
+    section: 'Distribution Model',
+    icon: '📦',
+    sources: [
+      { label: 'Item Master', oracle: 'REPORT.V_ITEM_MASTER', parquet: 'REPORT__V_ITEM_MASTER', usage: 'Article/item lookup for allocation' },
+      { label: 'Option Listing (Concept)', oracle: 'REPORT.T_CLR_CONCEPT_AW26_V1', parquet: 'REPORT__T_CLR_CONCEPT_AW26_V1', usage: 'Option-level concept allocation' },
+      { label: 'Distribution BASE', oracle: '—', parquet: 'DIST__BASE', usage: 'Computed allocation base (generated on run)' },
+    ],
+  },
+  {
+    section: 'Requirements Dashboard',
+    icon: '📋',
+    sources: [
+      { label: 'Sparky / PBS Pivot', oracle: 'CK_A2166.V_SPARKY_PBS_REQ', parquet: 'CK_A2166__V_SPARKY_PIVOT', usage: 'PBS requirement tab' },
+      { label: 'Size Pivot', oracle: 'CK_A2166.V_SZ_REQ_APPS', parquet: 'CK_A2166__V_SIZE_PIVOT', usage: 'Size-wise requirement tab' },
+      { label: 'MRP Pivot', oracle: 'CK_A2166.V_MRP_REQ_APPS_PW', parquet: 'CK_A2166__V_MRP_PIVOT', usage: 'MRP requirement tab' },
+      { label: 'Article Pivot V2', oracle: 'CK_A2166.V_ART_PIVOT_V2', parquet: 'CK_A2166__V_ART_PIVOT_V2', usage: 'Article requirement tab' },
+      { label: 'MC Pivot V2', oracle: 'CK_A2166.V_MC_PIVOT_V2', parquet: 'CK_A2166__V_MC_PIVOT_V2', usage: 'MC requirement tab' },
+      { label: 'Filter Meta', oracle: 'SSRK.ITEM_MV_FILTER_META_V2', parquet: 'SSRK__ITEM_MV_FILTER_META_V2', usage: 'Filter dropdowns (article, division, etc.)' },
+    ],
+  },
+  {
+    section: 'Data Store (parquet_store)',
+    icon: '🗄️',
+    sources: [
+      { label: 'Store Master', oracle: 'MISRETAIL.T_STORE_OPENING_DATE + CK_A2166.V_STORE_MASTER', parquet: 'DataStore/store_master.parquet', usage: 'Base store list for all sections' },
+      { label: 'Item Master', oracle: 'REPORT.V_ITEM_MASTER', parquet: 'DataStore/item_master.parquet', usage: 'AW26/SS26 LT WINTER/PREWINTER items' },
+      { label: 'GRC Raw', oracle: 'MISRETAIL.CUBE$PURCHASE (GRC_ANA)', parquet: 'DataStore/grc_raw.parquet', usage: 'Daily GRC by store+barcode' },
+      { label: 'Sale Raw', oracle: 'MISRETAIL.T_CUSTOM_COGS', parquet: 'DataStore/sale_raw.parquet', usage: 'Daily sale by store+barcode (2yr)' },
+      { label: 'REQ Raw', oracle: 'CK_A2166.V_MRP_REQ_APPS_PW', parquet: 'DataStore/req_raw.parquet', usage: 'MRP requirement allocation' },
+      { label: 'Article Grid', oracle: 'REPORT.T_GRID', parquet: 'DataStore/art_grid.parquet', usage: 'Store-grade grid values' },
+      { label: 'Prepack Avg', oracle: 'REPORT.T_PREPACK_AVG', parquet: 'DataStore/prepack_avg.parquet', usage: 'Prepack average sizes' },
+      { label: 'Prev Allocation', oracle: 'REPORT.T_CLR_CONCEPT_AW26_V1', parquet: 'DataStore/prev_allocation.parquet', usage: 'Option listing (concept)' },
+      { label: 'MC REQ Apps', oracle: 'CK_A2166.V_MC_REQ_APPS_2', parquet: 'DataStore/mc_req_apps.parquet', usage: 'MC requirement' },
+      { label: 'Warehouse Stock', oracle: 'CK_A2166.V_WH_STOCK', parquet: 'DataStore/wh_stock.parquet', usage: 'WH stock LT WINTER/PREWINTER' },
+    ],
+  },
+]
+
+function DataSourcesPanel() {
+  const thTd: React.CSSProperties = { padding: '7px 10px', textAlign: 'left', borderBottom: '1px solid #1e293b', fontSize: 11 }
+  const thStyle: React.CSSProperties = { ...thTd, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', background: '#0f172a' }
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>
+        Har section kaunse Oracle tables/views se data laata hai aur kaunsi parquet file use karta hai.
+      </p>
+      {SECTION_SOURCES.map(sec => (
+        <div key={sec.section} style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginBottom: 8 }}>
+            {sec.icon} {sec.section}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Source Name</th>
+                  <th style={thStyle}>Oracle Table / View</th>
+                  <th style={thStyle}>Parquet File</th>
+                  <th style={thStyle}>Used For</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sec.sources.map(src => (
+                  <tr key={src.label} style={{ background: 'transparent' }}>
+                    <td style={{ ...thTd, color: '#94a3b8', fontWeight: 600 }}>{src.label}</td>
+                    <td style={{ ...thTd, color: '#fbbf24', fontFamily: 'monospace' }}>{src.oracle}</td>
+                    <td style={{ ...thTd, color: '#34d399', fontFamily: 'monospace', fontSize: 10 }}>{src.parquet}</td>
+                    <td style={{ ...thTd, color: '#cbd5e1' }}>{src.usage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function AdminPanel() {
   const { previewRole, setPreviewRole } = useAuth()
-  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access' | 'live'>('requests')
+  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access' | 'live' | 'datasources'>('requests')
   const [requests, setRequests] = useState<RoleRequest[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [logs, setLogs] = useState<Log[]>([])
@@ -400,6 +517,7 @@ export default function AdminPanel() {
           )}
         </button>
         <button style={S.tab(tab === 'access')} onClick={() => setTab('access')}>🛡️ Access Matrix</button>
+        <button style={S.tab(tab === 'datasources')} onClick={() => setTab('datasources')}>📦 Data Sources</button>
         <button style={S.tab(tab === 'live')} onClick={() => setTab('live')}>
           🟢 Live
           {liveSessions.length > 0 && (
@@ -959,6 +1077,9 @@ export default function AdminPanel() {
           )}
         </div>
       )}
+
+      {/* ── Data Sources ── */}
+      {tab === 'datasources' && <DataSourcesPanel />}
 
       {/* ── Access Matrix ── */}
       {tab === 'access' && <AccessMatrix />}

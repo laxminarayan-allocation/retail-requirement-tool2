@@ -1,5 +1,53 @@
 [
   {
+    "id": "v1.3.58-auto",
+    "version": "1.3.58",
+    "date": "2026-09-12",
+    "type": "feature",
+    "title": "42 updates (2026-09-12)",
+    "desc": "• fix: add touch event support for nav reorder on mobile\n• feat: enhance Data Structure tool â€” search, schema chips, 5 detail tabs, ER diagram\n• feat: Sale Dashboard â€” merge 2Y Weekly tab + per-period store count\n• feat: merge 2Y Weekly into Sale Dashboard as inline tab\n• feat: NSO-format store names in Sale Dashboard + 2yr sale_raw range\n• feat: 2-year weekly sale page + store name fix in sale dashboard\n• fix: sale dashboard store names â€” join on SITE_CODE not LOCATION\n• feat: sale dashboard â€” 8-week range, Max Wk multi-select (W1-W8)\n• feat: sale dashboard â€” store count row, MTD/LM columns, top-N max week\n• feat: sale dashboard â€” 6-week rolling window with week collapse/expand\n• feat: Sale Dashboard â€” store x date MTD pivot table\n• fix: source viewer use d.success instead of d.ok for API response check\n• feat: add Source Viewer page for admin â€” view backend Python route files\n• fix: remove duplicate parquet merge in stores-by â€” store_master already has UPCOMING_STORE\n• fix: show only ACTIVE/UPCOMING_STORE in zone modal + add store master CSV download\n• feat: admin-only backend pages + NSO column order save confirmation\n• feat: add ZONE column to store_master DataStore via LEFT JOIN V_STORE_MASTER\n• feat: parquet-first repos, global NSO col order, Sale Dashboard admin-only\n• perf: parquet-first + 23h TTL cache across all repositories\n• perf: StoreRepository loads from parquet first, warms at startup\n• feat: NSO column order saved globally per user (backend SQLite)\n• feat: Sale Dashboard â€” under construction, admin-only visibility\n• feat: NSO Dashboard drag & drop column reordering\n• fix: parquet_store â€” atomic rename + SALE Raw/PBS SQL column fixes\n• feat: add Parquet Data Store â€” Oracle â†’ local cache layer\n• fix: define auth header inside SchedulerTab component\n• feat: add Run Days selector (Daily / Mon-Sat / Mon-Fri) to Pipeline Scheduler\n• refactor: move Pipeline Scheduler inside Option Listing as a tab\n• feat: Pipeline Scheduler page with live log, Run Now, and time config\n• feat: add MC Search as Step 1 in pipeline + Oracle Queries page\n• feat: pipeline scheduler calls Load from Oracle before running 8 steps\n• feat: add daily 09:00 IST auto-scheduler for all 8 pipeline steps\n• feat: move Results as tab inside Simulation (Calculation page)\n• feat: remove Calculation from nav, keep Simulation only\n• feat: per-user tab-level access control via pageAccess overrides\n• feat: restrict viewer tab access across 3 pages\n• fix: restrict Results page to planner+ role (remove viewer access)\n• feat: move View As button to Users tab, per-user preview\n• feat: add View As admin preview mode (viewer/planner nav simulation)\n• fix: Downloaded Files mobile â€” toolbar horizontal scroll + table minWidth\n• fix: mobile horizontal scroll â€” wrap all tables with overflow-x:auto + minWidth\n• fix: allow horizontal scroll in main content for mobile/landscape",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "6a84c27cdf1ad7204b8190b7cdfa9a3ed605887e",
+    "auto": true
+  },
+  {
+    "id": "v1.3.56-auto",
+    "version": "1.3.56",
+    "date": "2026-09-12",
+    "type": "feature",
+    "title": "41 updates (2026-09-12)",
+    "desc": "• feat: Sale Pivot page inside Sale Dashboard\n• feat: Sale Dashboard â€” merge 2Y Weekly tab + per-period store count\n• feat: merge 2Y Weekly into Sale Dashboard as inline tab\n• feat: NSO-format store names in Sale Dashboard + 2yr sale_raw range\n• feat: 2-year weekly sale page + store name fix in sale dashboard\n• fix: sale dashboard store names â€” join on SITE_CODE not LOCATION\n• feat: sale dashboard â€” 8-week range, Max Wk multi-select (W1-W8)\n• feat: sale dashboard â€” store count row, MTD/LM columns, top-N max week\n• feat: sale dashboard â€” 6-week rolling window with week collapse/expand\n• feat: Sale Dashboard â€” store x date MTD pivot table\n• fix: source viewer use d.success instead of d.ok for API response check\n• feat: add Source Viewer page for admin â€” view backend Python route files\n• fix: remove duplicate parquet merge in stores-by â€” store_master already has UPCOMING_STORE\n• fix: show only ACTIVE/UPCOMING_STORE in zone modal + add store master CSV download\n• feat: admin-only backend pages + NSO column order save confirmation\n• feat: add ZONE column to store_master DataStore via LEFT JOIN V_STORE_MASTER\n• feat: parquet-first repos, global NSO col order, Sale Dashboard admin-only\n• perf: parquet-first + 23h TTL cache across all repositories\n• perf: StoreRepository loads from parquet first, warms at startup\n• feat: NSO column order saved globally per user (backend SQLite)\n• feat: Sale Dashboard â€” under construction, admin-only visibility\n• feat: NSO Dashboard drag & drop column reordering\n• fix: parquet_store â€” atomic rename + SALE Raw/PBS SQL column fixes\n• feat: add Parquet Data Store â€” Oracle â†’ local cache layer\n• fix: define auth header inside SchedulerTab component\n• feat: add Run Days selector (Daily / Mon-Sat / Mon-Fri) to Pipeline Scheduler\n• refactor: move Pipeline Scheduler inside Option Listing as a tab\n• feat: Pipeline Scheduler page with live log, Run Now, and time config\n• feat: add MC Search as Step 1 in pipeline + Oracle Queries page\n• feat: pipeline scheduler calls Load from Oracle before running 8 steps\n• feat: add daily 09:00 IST auto-scheduler for all 8 pipeline steps\n• feat: move Results as tab inside Simulation (Calculation page)\n• feat: remove Calculation from nav, keep Simulation only\n• feat: per-user tab-level access control via pageAccess overrides\n• feat: restrict viewer tab access across 3 pages\n• fix: restrict Results page to planner+ role (remove viewer access)\n• feat: move View As button to Users tab, per-user preview\n• feat: add View As admin preview mode (viewer/planner nav simulation)\n• fix: Downloaded Files mobile â€” toolbar horizontal scroll + table minWidth\n• fix: mobile horizontal scroll â€” wrap all tables with overflow-x:auto + minWidth\n• fix: allow horizontal scroll in main content for mobile/landscape",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "edddd31f930e5d13d74cce0b2613b6362368cbe4",
+    "auto": true
+  },
+  {
+    "id": "v1.3.59-auto",
+    "version": "1.3.59",
+    "date": "2026-09-11",
+    "type": "feature",
+    "title": "5 updates (2026-09-11)",
+    "desc": "• fix: add /simulation to AdminPanel ALL_PAGES for per-user access override\n• feat: add Data Table tab to Sale Dashboard; rename Article Detail to Data Table in NSO\n• feat: admin password reset in Admin Panel Users tab\n• feat: 5 SS27 upgrades â€” nav, modal, errors, icon, password security\n• perf: 10x faster warehouse inventory load",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "6afd1ae590e9a84d7fcfca943de1d37d920878fa",
+    "auto": true
+  },
+  {
+    "id": "v1.3.57-auto",
+    "version": "1.3.57",
+    "date": "2026-09-11",
+    "type": "feature",
+    "title": "8 updates (2026-09-11)",
+    "desc": "• feat: add Admin Live Sessions tab + admin-sessions endpoint\n• fix: add /simulation to AdminPanel ALL_PAGES for per-user access override\n• feat: add Data Table tab to Sale Dashboard; rename Article Detail to Data Table in NSO\n• feat: admin password reset in Admin Panel Users tab\n• feat: 5 SS27 upgrades â€” nav, modal, errors, icon, password security\n• perf: 10x faster warehouse inventory load\n• feat: self-service password reset in forgot password flow\n• feat: CSV download in Warehouse Inventory data table",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "ed60826223e853ee48c579b30725816db32aaf52",
+    "auto": true
+  },
+  {
     "id": "v1.3.55-auto",
     "version": "1.3.55",
     "date": "2026-09-11",

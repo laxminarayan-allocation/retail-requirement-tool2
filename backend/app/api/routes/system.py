@@ -341,8 +341,10 @@ async def git_pull():
 
 # ── Source Viewer (admin only) ─────────────────────────────────────────────────
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]   # retail_requirement_tool/backend
+_PROJECT_ROOT = _BACKEND_ROOT.parent                  # retail_requirement_tool/
 
 _SOURCE_FILES: dict[str, str] = {
+    "start":            "../start.py",
     "dashboard":        "app/api/routes/dashboard.py",
     "nso":              "app/api/routes/nso.py",
     "sale":             "app/api/routes/sale.py",

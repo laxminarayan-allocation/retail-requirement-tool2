@@ -97,7 +97,37 @@ def refresh_daily_files() -> None:
     logger.info("db_scheduler: daily refresh complete (%d files)", len(daily))
 
 
+def _was_refreshed_today() -> bool:
+    """Check if any daily file was refreshed today (from parquet cache mtime)."""
+    try:
+        from app.core.parquet_cache import get_meta
+        freq_map = get_freq_map()
+        daily = [(k.split("__")[0], k.split("__")[1]) for k, v in freq_map.items() if v == "daily"]
+        if not daily:
+            return True  # nothing to refresh
+        today = datetime.now().date()
+        for owner, obj in daily[:3]:  # check first 3
+            meta = get_meta(owner, obj)
+            if meta and meta.get("saved_at"):
+                saved = datetime.fromisoformat(meta["saved_at"][:10]).date()
+                if saved >= today:
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 def _scheduler_loop() -> None:
+    # On startup: if today's scheduled time has passed and refresh wasn't done, run immediately
+    sched_time = get_schedule_time()
+    h, m = int(sched_time.split(":")[0]), int(sched_time.split(":")[1])
+    now = datetime.now()
+    scheduled_today = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if now > scheduled_today and not _was_refreshed_today():
+        logger.info("db_scheduler: missed today's refresh — running catch-up now")
+        time.sleep(10)  # let Oracle pool fully settle
+        refresh_daily_files()
+
     while True:
         sched_time = get_schedule_time()
         wait = _seconds_until(sched_time)

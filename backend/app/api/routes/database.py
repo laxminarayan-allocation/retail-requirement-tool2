@@ -536,3 +536,17 @@ async def update_schedule(body: ScheduleBody):
     from app.core.db_scheduler import set_schedule_time
     set_schedule_time(body.time)
     return APIResponse.ok(data={"time": body.time})
+
+
+@router.post("/output/refresh-all", response_model=APIResponse)
+async def refresh_all_daily():
+    """Trigger immediate refresh of all daily-freq parquet files (admin only). Runs in background."""
+    import threading
+    from app.core.db_scheduler import refresh_daily_files, get_freq_map
+    freq_map = get_freq_map()
+    daily_count = sum(1 for v in freq_map.values() if v == "daily")
+    threading.Thread(target=refresh_daily_files, daemon=True, name="manual-refresh-all").start()
+    return APIResponse.ok(
+        message=f"Refresh started for {daily_count} daily files. Check Database Explorer in ~2 min.",
+        data={"daily_count": daily_count, "started": True}
+    )

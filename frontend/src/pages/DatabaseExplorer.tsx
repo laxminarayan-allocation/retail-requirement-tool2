@@ -887,6 +887,9 @@ interface DlWinState {
 
 function DownloadedFilesPanel() {
   const isMobile = useIsMobile()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const [refreshAllState, setRefreshAllState] = useState<'idle' | 'running' | 'done'>('idle')
   const [files, setFiles] = useState<OutputFile[]>([])
   const [loading, setLoading] = useState(false)
   const [wins, setWins] = useState<Record<string, DlWinState>>({})
@@ -1222,6 +1225,41 @@ function DownloadedFilesPanel() {
             />
             {autoRunning && <span style={{ fontSize: 9, color: '#fbbf24', fontWeight: 700 }}>⟳</span>}
           </div>
+
+          {/* Admin: Refresh All Daily button */}
+          {isAdmin && (
+            <button
+              disabled={refreshAllState === 'running'}
+              onClick={async () => {
+                setRefreshAllState('running')
+                try {
+                  const r = await http.post('/database/output/refresh-all')
+                  if (r.data.success) {
+                    setAutoRunLog(`⟳ Refresh All started — ${r.data.data?.daily_count ?? '?'} files. Check back in ~2 min.`)
+                    setRefreshAllState('done')
+                    setTimeout(() => setRefreshAllState('idle'), 5000)
+                  } else {
+                    setAutoRunLog(`✗ ${r.data.message}`)
+                    setRefreshAllState('idle')
+                  }
+                } catch {
+                  setAutoRunLog('✗ Refresh All failed')
+                  setRefreshAllState('idle')
+                }
+              }}
+              style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 8px',
+                background: refreshAllState === 'running' ? '#1e293b' : '#1e3a5f',
+                border: '1px solid #2563eb', borderRadius: 4,
+                color: refreshAllState === 'running' ? '#64748b' : '#60a5fa',
+                cursor: refreshAllState === 'running' ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap' as const,
+              }}
+              title="Refresh all Daily-freq files from Oracle now (Admin only)"
+            >
+              {refreshAllState === 'running' ? '⟳ Running…' : refreshAllState === 'done' ? '✓ Started' : '⚡ Refresh All Daily'}
+            </button>
+          )}
         </div>
         </div>
       )}

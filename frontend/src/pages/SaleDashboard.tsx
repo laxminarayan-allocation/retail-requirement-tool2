@@ -787,11 +787,11 @@ export default function SaleDashboard() {
                           {months.map(m => {
                             const isCollapsed = wCollapsed.has(m.key)
                             if (isCollapsed) {
-                              const denom = m.store_count ?? totalEver
+                              const denom = (m.store_count != null && m.store_count > 0) ? m.store_count : totalEver
                               return <td key={m.key} style={{ ...td, fontSize: 10, borderLeft: '2px solid #818cf826', background: '#080d18' }}>{cntBadge(wRows.filter(r => wVal(r, m.key, 'month') > 0).length, denom)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{denom}</span></td>
                             }
                             return m.weeks.map((wk, wi) => {
-                              const denom = wk.store_count ?? totalEver
+                              const denom = (wk.store_count != null && wk.store_count > 0) ? wk.store_count : totalEver
                               return <td key={wk.key} style={{ ...td, fontSize: 10, borderLeft: wi === 0 ? '2px solid #818cf826' : undefined }}>{cntBadge(wRows.filter(r => wVal(r, wk.key, 'week') > 0).length, denom)}<span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/{denom}</span></td>
                             })
                           })}

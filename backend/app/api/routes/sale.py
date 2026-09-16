@@ -538,8 +538,15 @@ def sale_weekly_summary(refresh: bool = False):
         sm_df = StoreRepository().get_all_stores(active_only=False)
         sm_df.columns = [c.lower() for c in sm_df.columns]
         opening_dates: list = []
-        if "opening_date" in sm_df.columns and "location" in sm_df.columns:
-            stores_only = sm_df[sm_df["location"].astype(str).str.upper() == "STORE"]
+        if "opening_date" in sm_df.columns:
+            # Filter to STORE locations only; column may be "location" or renamed "site_id"
+            loc_col = "location" if "location" in sm_df.columns else (
+                "site_id" if "site_id" in sm_df.columns and sm_df["site_id"].dtype == object else None
+            )
+            if loc_col:
+                stores_only = sm_df[sm_df[loc_col].astype(str).str.upper() == "STORE"]
+            else:
+                stores_only = sm_df
             od = pd.to_datetime(stores_only["opening_date"], errors="coerce").dropna()
             opening_dates = sorted(od.tolist())
         total_stores_ever = len(opening_dates)

@@ -547,6 +547,9 @@ def sale_weekly_summary(refresh: bool = False):
                 stores_only = sm_df[sm_df[loc_col].astype(str).str.upper() == "STORE"]
             else:
                 stores_only = sm_df
+            # Only ACTIVE stores contribute to the denominator
+            if "store_status" in stores_only.columns:
+                stores_only = stores_only[stores_only["store_status"].fillna("").str.upper() == "ACTIVE"]
             od = pd.to_datetime(stores_only["opening_date"], errors="coerce").dropna()
             opening_dates = sorted(od.tolist())
         total_stores_ever = len(opening_dates)

@@ -1543,15 +1543,35 @@ function onSearch(v){
       groups[key].push([s.lat, s.lon])
     })
 
+    const isGeo = boundaryBy === 'state' || boundaryBy === 'city'
     Object.entries(groups).forEach(([key, pts]) => {
       if (pts.length < 3) return
-      const hull = bufferedHull(pts, 0.45)
+      const hull = bufferedHull(pts, isGeo ? 0.2 : 0.45)
       const col = getBoundaryColor(key)
       const poly = L.polygon(hull, {
-        color: col, weight: 2.5, opacity: 0.85,
-        fillColor: col, fillOpacity: 0.1, dashArray: '7 5',
+        color: col,
+        weight: isGeo ? 3 : 2.5,
+        opacity: isGeo ? 1 : 0.85,
+        // State/City: no fill — only outline so overlaps don't block each other
+        fillOpacity: isGeo ? 0 : 0.1,
+        dashArray: isGeo ? '1 0' : '7 5',   // solid line for state/city, dashed for zone/cluster
       })
-      poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip' })
+      // State/City: marker with name label at centroid
+      if (isGeo) {
+        const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
+        const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
+        const lbl = L.marker([cx, cy], {
+          icon: L.divIcon({
+            className: '',
+            iconAnchor: [40, 8],
+            html: `<div style="background:${col};color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;white-space:nowrap;opacity:0.9">${key}</div>`,
+          }),
+          interactive: false,
+        }).addTo(leafletMap.current)
+        boundsLayersRef.current.push(lbl)
+      } else {
+        poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip' })
+      }
       poly.addTo(leafletMap.current)
       boundsLayersRef.current.push(poly)
     })

@@ -921,7 +921,7 @@ function haversineKm(a: MapStore, b: MapStore): number {
 
 function fmtDuration(roadKm: number): string {
   const hrs = roadKm / 50
-  return hrs < 1 ? `${Math.round(hrs * 60)}min` : `${hrs.toFixed(1)}h`
+  return hrs < 1 ? `${Math.round(hrs * 60)} min` : `${hrs.toFixed(1)} hr`
 }
 
 function convexHull(pts: [number,number][]): [number,number][] {
@@ -1141,7 +1141,7 @@ let map, markers=[], distLayer=null, dragFrom=null;
 
 function getColor(s){return colorBy==='zone'?(ZONE_COLORS[s.zone]||FB):(CLUSTER_COLORS[s.cluster]||FB)}
 function haversine(a,b){const R=6371,dL=(b.lat-a.lat)*Math.PI/180,dN=(b.lon-a.lon)*Math.PI/180,aa=Math.sin(dL/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa))}
-function fmtT(km){const h=km/50;return h<1?Math.round(h*60)+'min':h.toFixed(1)+'h'}
+function fmtT(km){const h=km/50;return h<1?Math.round(h*60)+' min':h.toFixed(1)+' hr'}
 
 map=L.map('map',{zoomControl:true,scrollWheelZoom:true,maxBounds:[[6,67],[38,99]],minZoom:5});
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
@@ -1172,9 +1172,9 @@ function renderDist(){
   distPoints.forEach((pt,i)=>{
     if(i>0)chips.innerHTML+=\`<span style="font-size:10px;color:#ef444488;margin:0 2px">→</span>\`;
     const chip=document.createElement('span');
-    chip.className='chip'+(pt.isWarehouse?' wh':'');
+      chip.className='chip'+(pt.isWarehouse?' wh':'');
     chip.draggable=true;
-    chip.innerHTML=\`<span style="font-size:8px;color:#475569">⠿</span>\${pt.isWarehouse?'🏭 ':''}\${pt.code}\${pt.name?' '+pt.name:''}<span class="rm" onclick="removePoint('\${pt.code}')">✕</span>\`;
+    chip.innerHTML='<span style="font-size:8px;color:#475569">⠿</span>'+(pt.isWarehouse?'🏭 ':'')+pt.code+(pt.name?' '+pt.name:'')+'<span class="rm" onclick="removePoint(\''+pt.code+'\')">✕</span>';
     chip.ondragstart=()=>{dragFrom=i};
     chip.ondragover=e=>e.preventDefault();
     chip.ondrop=()=>{if(dragFrom!==null&&dragFrom!==i){const arr=[...distPoints];const[item]=arr.splice(dragFrom,1);arr.splice(i,0,item);distPoints=arr;dragFrom=null;renderDist();}};
@@ -1194,10 +1194,11 @@ function renderDist(){
       totalRoad+=road;
       L.polyline([[prev.lat,prev.lon],[pt.lat,pt.lon]],{color:col,weight:2.5,dashArray:'8 6',opacity:0.9}).addTo(group);
       const ml=(prev.lat+pt.lat)/2, mn=(prev.lon+pt.lon)/2;
-      L.marker([ml,mn],{icon:L.divIcon({className:'',iconAnchor:[70,14],html:\`<div style="background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid \${col}">\${Math.round(km)}km · ~\${Math.round(road)}km road · \${fmtT(road)}</div>\`})}).addTo(group);
+      var lbl='<div style="background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid '+col+'">'+Math.round(km)+'km · ~'+Math.round(road)+'km road · '+fmtT(road)+'</div>';
+      L.marker([ml,mn],{icon:L.divIcon({className:'',iconAnchor:[70,14],html:lbl})}).addTo(group);
       const seg=document.createElement('span');
-      seg.className='seg'; seg.style.cssText=\`background:\${col}15;border:1px solid \${col}44;color:\${col}\`;
-      seg.textContent=\`\${prev.code}→\${pt.code}: \${Math.round(km)}km · ~\${Math.round(road)}km road · \${fmtT(road)}\`;
+      seg.className='seg'; seg.style.cssText='background:'+col+'15;border:1px solid '+col+'44;color:'+col;
+      seg.textContent=prev.code+'→'+pt.code+': '+Math.round(km)+'km · ~'+Math.round(road)+'km road · '+fmtT(road);
       segs.appendChild(seg);
     });
     distPoints.filter(p=>p.isWarehouse).forEach(pt=>{

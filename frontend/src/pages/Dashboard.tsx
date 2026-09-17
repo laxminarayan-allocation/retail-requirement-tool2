@@ -1083,8 +1083,8 @@ function StoreMapCard() {
     win.document.write(`<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 <title>CityKart Store Map</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:#0f172a; color:#e2e8f0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
@@ -1226,8 +1226,7 @@ function onSearch(v){
   dd.style.display='block';
 }
 document.addEventListener('click',e=>{if(!e.target.closest('#search')&&!e.target.closest('#dropdown'))document.getElementById('dropdown').style.display='none';});
-renderMarkers();
-renderDist();
+setTimeout(function(){map.invalidateSize();renderMarkers();renderDist();},200);
 <\/script>
 </body></html>`)
     win.document.close()

@@ -1518,8 +1518,66 @@ function onSearch(v){
     const L = (window as any).L; if (!L) return
     boundsLayersRef.current.forEach(l => l.remove()); boundsLayersRef.current = []
 
-    // For zone/cluster: respect activeBoundaryKeys (selected filter chips)
-    // For state/city: always use showAllBounds
+    // ── State: real GeoJSON India state borders ──────────────────────────────
+    if (boundaryBy === 'state' && showAllBounds) {
+      const storeStateNames = new Set(
+        stores.map(s => s.state?.trim().toUpperCase()).filter(Boolean)
+      )
+      // Name map: GeoJSON title-case → store uppercase (common variations)
+      const normalize = (n: string) => n.toUpperCase()
+        .replace('UTTARAKHAND', 'UTTARAKHAND')
+        .replace('ODISHA', 'ODISHA').replace('ORISSA', 'ODISHA')
+        .replace('JAMMU AND KASHMIR', 'J&K').replace('JAMMU & KASHMIR', 'J&K')
+        .replace('DELHI', 'DELHI').replace('NCT OF DELHI', 'DELHI')
+      fetch('https://cdn.jsdelivr.net/gh/geohacker/india@master/state/india_state.geojson')
+        .then(r => r.json())
+        .then((gj: any) => {
+          if (!leafletMap.current) return
+          const layer = L.geoJSON(gj, {
+            filter: (f: any) => {
+              const name = normalize(f.properties.NAME_1 || f.properties.ST_NM || f.properties.name || '')
+              return storeStateNames.has(name) || storeStateNames.has(f.properties.NAME_1?.toUpperCase())
+            },
+            style: (f: any) => {
+              const rawName = f.properties.NAME_1 || f.properties.ST_NM || ''
+              const col = hashColor(rawName)
+              return {
+                // Outer halo pass — drawn via pane trick: use a wrapper
+                color: col, weight: 2.5, opacity: 0.9,
+                fillColor: col, fillOpacity: 0.05,
+                dashArray: undefined,
+                lineCap: 'round', lineJoin: 'round',
+              }
+            },
+            onEachFeature: (f: any, lyr: any) => {
+              const rawName = f.properties.NAME_1 || f.properties.ST_NM || ''
+              const col = hashColor(rawName)
+              // Outer cream halo polyline on top of fill
+              lyr.on('add', () => {
+                const map = leafletMap.current; if (!map) return
+                // Halo
+                const halo = L.geoJSON(f, {
+                  style: () => ({ color: '#d4c9a8', weight: 7, opacity: 0.4, fillOpacity: 0, dashArray: undefined })
+                }).addTo(map)
+                // Inner colored line
+                const line = L.geoJSON(f, {
+                  style: () => ({ color: col, weight: 2, opacity: 1, fillOpacity: 0, dashArray: undefined, lineCap: 'round', lineJoin: 'round' })
+                }).addTo(map)
+                boundsLayersRef.current.push(halo, line)
+              })
+              lyr.bindTooltip(`<b>${rawName}</b>`, { sticky: true, direction: 'top' })
+            },
+          })
+          // Don't add base layer (fill only for picking), just the halo+line added in onEachFeature
+          // Actually add it for the fill + tooltip
+          layer.addTo(leafletMap.current)
+          boundsLayersRef.current.push(layer)
+        })
+        .catch(() => {}) // silent fail — fallback stays empty
+      return
+    }
+
+    // ── Zone / Cluster: convex hull ─────────────────────────────────────────
     let keysToShow: string[]
     if (boundaryBy === 'zone') {
       if (activeBoundaryKeys.size > 0) keysToShow = Array.from(activeBoundaryKeys)
@@ -1530,59 +1588,35 @@ function onSearch(v){
       else if (showAllBounds) keysToShow = allClusters
       else return
     } else {
+      // City — convex hull with double stroke
       if (!showAllBounds) return
-      const allKeys = new Set(stores.map(s => boundaryBy === 'state' ? s.state : s.city).filter(k => k && k !== '-'))
+      const allKeys = new Set(stores.map(s => s.city).filter(k => k && k !== '-'))
       keysToShow = Array.from(allKeys).sort()
     }
 
     const groups: Record<string, [number,number][]> = {}
     stores.forEach(s => {
-      const key = boundaryBy === 'zone' ? s.zone : boundaryBy === 'cluster' ? s.cluster : boundaryBy === 'state' ? s.state : s.city
+      const key = boundaryBy === 'zone' ? s.zone : boundaryBy === 'cluster' ? s.cluster : s.city
       if (!key || key === '-' || !keysToShow.includes(key)) return
       if (!groups[key]) groups[key] = []
       groups[key].push([s.lat, s.lon])
     })
 
-    const isGeo = boundaryBy === 'state' || boundaryBy === 'city'
+    const isCity = boundaryBy === 'city'
     Object.entries(groups).forEach(([key, pts]) => {
       if (pts.length < 3) return
-      const hull = bufferedHull(pts, isGeo ? 0.2 : 0.45)
+      const hull = bufferedHull(pts, isCity ? 0.15 : 0.45)
       const col = getBoundaryColor(key)
 
-      if (isGeo) {
-        // Real-map double-stroke border effect
-        // Layer 1: thick light outer glow (white/cream halo)
-        const outer = L.polygon(hull, {
-          color: '#e2d9c8', weight: 6, opacity: 0.55,
-          fillOpacity: 0, dashArray: undefined,
-          lineCap: 'round', lineJoin: 'round',
-        }).addTo(leafletMap.current)
-        // Layer 2: thin colored line on top
-        const inner = L.polygon(hull, {
-          color: col, weight: 2, opacity: 0.95,
-          fillOpacity: 0,
-          dashArray: '6 3',
-          lineCap: 'round', lineJoin: 'round',
-        }).addTo(leafletMap.current)
-
-        // Name badge at centroid
+      if (isCity) {
+        const outer = L.polygon(hull, { color: '#e2d9c8', weight: 6, opacity: 0.45, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' }).addTo(leafletMap.current)
+        const inner = L.polygon(hull, { color: col, weight: 2, opacity: 0.95, fillOpacity: 0, dashArray: '5 3', lineCap: 'round', lineJoin: 'round' }).addTo(leafletMap.current)
         const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
         const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
-        const lbl = L.marker([cx, cy], {
-          icon: L.divIcon({
-            className: '',
-            iconAnchor: [32, 9],
-            html: `<div style="background:#0f172acc;color:${col};font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;white-space:nowrap;border:1px solid ${col}88;letter-spacing:0.5px">${key}</div>`,
-          }),
-          interactive: false,
-        }).addTo(leafletMap.current)
-
+        const lbl = L.marker([cx, cy], { icon: L.divIcon({ className: '', iconAnchor: [30, 9], html: `<div style="background:#0f172acc;color:${col};font-size:8px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;border:1px solid ${col}66">${key}</div>` }), interactive: false }).addTo(leafletMap.current)
         boundsLayersRef.current.push(outer, inner, lbl)
       } else {
-        const poly = L.polygon(hull, {
-          color: col, weight: 2.5, opacity: 0.85,
-          fillColor: col, fillOpacity: 0.1, dashArray: '7 5',
-        })
+        const poly = L.polygon(hull, { color: col, weight: 2.5, opacity: 0.85, fillColor: col, fillOpacity: 0.1, dashArray: '7 5' })
         poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip' })
         poly.addTo(leafletMap.current)
         boundsLayersRef.current.push(poly)

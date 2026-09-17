@@ -887,7 +887,12 @@ interface DrillStore { code: string; name: string; status: string; grade: string
 interface DrillState { split: string; value: string }
 
 // ── Store Map ─────────────────────────────────────────────────────────────────
-interface MapStore { code: string; name: string; lat: number; lon: number; zone: string; cluster: string; status: string; grade: string; state: string; city: string }
+interface MapStore { code: string; name: string; lat: number; lon: number; zone: string; cluster: string; status: string; grade: string; state: string; city: string; isWarehouse?: boolean }
+
+const WAREHOUSES: MapStore[] = [
+  { code: '123', name: 'KHETAWAS DC', lat: 28.574, lon: 76.534, zone: 'NORTH', cluster: '-', status: 'ACTIVE', grade: '-', state: 'HARYANA', city: 'REWARI', isWarehouse: true },
+  { code: '420', name: 'FARUKHNAGAR DC', lat: 28.458, lon: 76.817, zone: 'NCR', cluster: '-', status: 'ACTIVE', grade: '-', state: 'HARYANA', city: 'GURUGRAM', isWarehouse: true },
+]
 
 const ZONE_COLORS: Record<string, string> = {
   'NORTH': '#2563eb', 'BIHAR': '#d97706', 'BIHAR-PUJA': '#ea580c',
@@ -912,6 +917,11 @@ function haversineKm(a: MapStore, b: MapStore): number {
   const dLon = (b.lon - a.lon) * Math.PI / 180
   const aa = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2
   return R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa))
+}
+
+function fmtDuration(roadKm: number): string {
+  const hrs = roadKm / 50
+  return hrs < 1 ? `${Math.round(hrs * 60)}min` : `${hrs.toFixed(1)}h`
 }
 
 function convexHull(pts: [number,number][]): [number,number][] {
@@ -1038,24 +1048,44 @@ function StoreMapCard() {
   const [selectedZones, setSelectedZones] = useState<Set<string>>(new Set())
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set())
   const [distMode, setDistMode] = useState(false)
-  const [distA, setDistA] = useState<MapStore | null>(null)
-  const [distB, setDistB] = useState<MapStore | null>(null)
+  const [distPoints, setDistPoints] = useState<MapStore[]>([])
+  const [distSearch, setDistSearch] = useState('')
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMap = useRef<any>(null)
   const markersRef = useRef<any[]>([])
   const boundsLayersRef = useRef<any[]>([])
   const distLayerRef = useRef<any>(null)
   const distModeRef = useRef(false)
-  const distARef = useRef<MapStore | null>(null)
+  const distPointsRef = useRef<MapStore[]>([])
   const onClickRef = useRef<((s: MapStore) => void) | null>(null)
 
   useEffect(() => { distModeRef.current = distMode }, [distMode])
-  useEffect(() => { distARef.current = distA }, [distA])
+  useEffect(() => { distPointsRef.current = distPoints }, [distPoints])
+
+  function addDistPoint(s: MapStore) {
+    setDistPoints(prev => prev.find(p => p.code === s.code) ? prev : [...prev, s])
+  }
+  function removeDistPoint(code: string) {
+    setDistPoints(prev => prev.filter(p => p.code !== code))
+  }
+
   onClickRef.current = (s: MapStore) => {
     if (!distModeRef.current) return
-    if (!distARef.current) { setDistA(s) }
-    else if (distARef.current.code !== s.code) { setDistB(s) }
+    addDistPoint(s)
   }
+
+  // store search results (max 8)
+  const distSearchResults = distSearch.trim().length >= 1
+    ? stores.filter(s =>
+        s.code.toLowerCase().includes(distSearch.toLowerCase()) ||
+        s.name.toLowerCase().includes(distSearch.toLowerCase()) ||
+        s.city.toLowerCase().includes(distSearch.toLowerCase())
+      ).slice(0, 8)
+    : []
+
+  // legacy aliases for compat (used in existing derived vars below)
+  const distA = distPoints[0] ?? null
+  const distB = distPoints[1] ?? null
 
   useEffect(() => {
     http.get('/dashboard/store-map-data')
@@ -1178,34 +1208,61 @@ function StoreMapCard() {
     })
   }, [activeBoundaryKeys, showAllBounds, stores, colorBy, loading])
 
-  // Distance line
+  // Distance line — multi-segment
   useEffect(() => {
     if (!leafletMap.current) return
     const L = (window as any).L; if (!L) return
     if (distLayerRef.current) { distLayerRef.current.remove(); distLayerRef.current = null }
-    if (!distA || !distB) return
-    const km = haversineKm(distA, distB)
-    const roadKm = km * 1.3
-    const hrs = roadKm / 50
+    if (distPoints.length < 2) return
     const group = L.layerGroup()
-    L.polyline([[distA.lat, distA.lon], [distB.lat, distB.lon]], {
-      color: '#ef4444', weight: 2.5, dashArray: '8 6', opacity: 0.9,
-    }).addTo(group)
-    const midLat = (distA.lat + distB.lat) / 2, midLon = (distA.lon + distB.lon) / 2
-    L.marker([midLat, midLon], {
-      icon: L.divIcon({
-        className: '', iconAnchor: [80, 14],
-        html: `<div style="background:#1e293b;color:#fff;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;border:1.5px solid #ef4444;box-shadow:0 2px 10px #0008">
-          📏 ${Math.round(km)} km straight &nbsp;|&nbsp; ~${Math.round(roadKm)} km road &nbsp;|&nbsp; ~${hrs<1 ? Math.round(hrs*60)+'min' : hrs.toFixed(1)+'h drive'}
-        </div>`,
-      })
-    }).addTo(group)
+    const segColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#818cf8']
+    let totalStraight = 0
+    distPoints.forEach((pt, i) => {
+      if (i === 0) return
+      const prev = distPoints[i - 1]
+      const km = haversineKm(prev, pt)
+      const roadKm = km * 1.3
+      totalStraight += km
+      const col = segColors[(i - 1) % segColors.length]
+      L.polyline([[prev.lat, prev.lon], [pt.lat, pt.lon]], {
+        color: col, weight: 2.5, dashArray: '8 6', opacity: 0.9,
+      }).addTo(group)
+      const midLat = (prev.lat + pt.lat) / 2, midLon = (prev.lon + pt.lon) / 2
+      L.marker([midLat, midLon], {
+        icon: L.divIcon({
+          className: '', iconAnchor: [70, 14],
+          html: `<div style="background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid ${col};box-shadow:0 2px 8px #0008">
+            ${Math.round(km)}km · ~${Math.round(roadKm)}km road · ${fmtDuration(roadKm)}
+          </div>`,
+        })
+      }).addTo(group)
+    })
+    // Warehouse markers (pin icon)
+    distPoints.forEach((pt) => {
+      if (!pt.isWarehouse) return
+      L.marker([pt.lat, pt.lon], {
+        icon: L.divIcon({
+          className: '', iconAnchor: [14, 28],
+          html: `<div style="font-size:22px;filter:drop-shadow(0 2px 4px #000)">🏭</div>`,
+        })
+      }).addTo(group)
+    })
     group.addTo(leafletMap.current)
     distLayerRef.current = group
-  }, [distA, distB])
+  }, [distPoints])
 
   const legendMap = colorBy === 'zone' ? ZONE_COLORS : CLUSTER_COLORS
   const usedKeys = Array.from(new Set(filteredStores.map(s => colorBy === 'zone' ? s.zone : s.cluster))).filter(k => k && k !== '-')
+  // Multi-segment totals
+  const segments = distPoints.length >= 2
+    ? distPoints.slice(1).map((pt, i) => {
+        const km = haversineKm(distPoints[i], pt)
+        return { from: distPoints[i], to: pt, km, roadKm: km * 1.3 }
+      })
+    : []
+  const totalStraightKm = segments.reduce((s, seg) => s + seg.km, 0)
+  const totalRoadKm = segments.reduce((s, seg) => s + seg.roadKm, 0)
+  // legacy
   const distKm = distA && distB ? Math.round(haversineKm(distA, distB)) : null
   const distRoadKm = distKm ? Math.round(distKm * 1.3) : null
   const distHrs = distRoadKm ? distRoadKm / 50 : null
@@ -1259,7 +1316,7 @@ function StoreMapCard() {
         }}>⬡ Boundary</button>
 
         {/* Distance mode */}
-        <button onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistA(null); setDistB(null) } }} style={{
+        <button onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistPoints([]); setDistSearch('') } }} style={{
           fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
           background: distMode ? '#ef444422' : 'transparent',
           border: `1px solid ${distMode ? '#ef4444' : '#334155'}`,
@@ -1303,16 +1360,104 @@ function StoreMapCard() {
         </div>
       )}
 
-      {/* Distance info bar */}
+      {/* Distance panel */}
       {distMode && (
-        <div style={{ background: '#0f172a', border: '1px solid #ef4444', borderRadius: 6, padding: '7px 12px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ color: '#fbbf24', fontWeight: 700 }}>A: {distA ? `${distA.name||distA.code} (${distA.city})` : 'Map pe Store A click karo'}</span>
-          <span style={{ color: '#475569' }}>→</span>
-          <span style={{ color: '#f87171', fontWeight: 700 }}>B: {distB ? `${distB.name||distB.code} (${distB.city})` : 'Store B click karo'}</span>
-          {distKm && <span style={{ marginLeft: 'auto', color: '#fff', fontWeight: 800, fontSize: 13 }}>
-            📏 {distKm} km &nbsp;|&nbsp; ~{distRoadKm} km road &nbsp;|&nbsp; ~{distHrs! < 1 ? Math.round(distHrs!*60)+'min' : distHrs!.toFixed(1)+'h'}
-          </span>}
-          {distA && <button onClick={() => { setDistA(null); setDistB(null) }} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 3, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}>Reset</button>}
+        <div style={{ background: '#0a1220', border: '1px solid #ef444466', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Row 1: Warehouse quick-add + store search */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700, letterSpacing: '.05em' }}>ADD:</span>
+            {WAREHOUSES.map(wh => (
+              <button key={wh.code} onClick={() => addDistPoint(wh)}
+                title={`${wh.name} (site ${wh.code})`}
+                style={{ fontSize: 9, fontWeight: 700, padding: '3px 9px', borderRadius: 5, cursor: 'pointer',
+                  background: distPoints.find(p => p.code === wh.code) ? '#34d39922' : '#0f2a1a',
+                  border: `1px solid ${distPoints.find(p => p.code === wh.code) ? '#34d399' : '#15803d'}`,
+                  color: distPoints.find(p => p.code === wh.code) ? '#34d399' : '#4ade80' }}>
+                🏭 {wh.name}
+              </button>
+            ))}
+            {/* Store code / name search */}
+            <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
+              <input value={distSearch} onChange={e => setDistSearch(e.target.value)}
+                placeholder="🔍 Store code / name / city…"
+                style={{ width: '100%', background: '#1e293b', border: '1px solid #334155', borderRadius: 5,
+                  color: '#e2e8f0', fontSize: 11, padding: '4px 10px', outline: 'none', boxSizing: 'border-box' }} />
+              {distSearchResults.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1e293b',
+                  border: '1px solid #334155', borderRadius: 5, zIndex: 999, maxHeight: 200, overflowY: 'auto', marginTop: 2 }}>
+                  {distSearchResults.map(s => (
+                    <div key={s.code} onClick={() => { addDistPoint(s); setDistSearch('') }}
+                      style={{ padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#e2e8f0',
+                        borderBottom: '1px solid #334155', display: 'flex', gap: 8, alignItems: 'center' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#0f172a')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#7dd3fc', fontSize: 10 }}>{s.code}</span>
+                      <span style={{ flex: 1 }}>{s.name}</span>
+                      <span style={{ fontSize: 9, color: '#64748b' }}>{s.city}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {distPoints.length > 0 && (
+              <button onClick={() => { setDistPoints([]); setDistSearch('') }}
+                style={{ fontSize: 9, padding: '3px 8px', borderRadius: 4, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}>
+                Reset
+              </button>
+            )}
+          </div>
+
+          {/* Row 2: Selected point chips */}
+          {distPoints.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>ROUTE:</span>
+              {distPoints.map((pt, i) => (
+                <span key={pt.code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {i > 0 && <span style={{ fontSize: 10, color: '#ef444488' }}>→</span>}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 6, cursor: 'default',
+                    background: pt.isWarehouse ? '#14532d33' : '#1e293b',
+                    border: `1px solid ${pt.isWarehouse ? '#4ade80' : '#475569'}`,
+                    color: pt.isWarehouse ? '#4ade80' : '#7dd3fc' }}>
+                    {pt.isWarehouse ? '🏭' : ''}{pt.code} {pt.isWarehouse ? pt.name.replace(' DC','') : ''}
+                    <span onClick={() => removeDistPoint(pt.code)}
+                      style={{ marginLeft: 2, color: '#64748b', cursor: 'pointer', fontSize: 9 }}>✕</span>
+                  </span>
+                </span>
+              ))}
+              {distPoints.length < 2 && (
+                <span style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic' }}>
+                  {distPoints.length === 0 ? 'Warehouse ya store add karo' : '→ ab dusra point add karo'}
+                </span>
+              )}
+            </div>
+          )}
+          {distPoints.length === 0 && (
+            <div style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic' }}>
+              Warehouse buttons se ya search se stores add karo — ya map pe click karo. 2+ points ke baad distance dikhega.
+            </div>
+          )}
+
+          {/* Row 3: Segment distances */}
+          {segments.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid #1e293b', paddingTop: 6 }}>
+              {segments.map((seg, i) => {
+                const segColors = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#818cf8']
+                const col = segColors[i % segColors.length]
+                return (
+                  <span key={i} style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+                    background: col + '15', border: `1px solid ${col}44`, color: col, whiteSpace: 'nowrap' }}>
+                    {seg.from.code}→{seg.to.code}: {Math.round(seg.km)}km · ~{Math.round(seg.roadKm)}km road · {fmtDuration(seg.roadKm)}
+                  </span>
+                )
+              })}
+              {segments.length > 1 && (
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                  Total: ~{Math.round(totalRoadKm)} km road · {fmtDuration(totalRoadKm)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1320,8 +1465,8 @@ function StoreMapCard() {
       <div style={{ position: 'relative' }}>
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#64748b' }}>Loading map…</div>}
         <div ref={mapRef} style={{ height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />
-        {distMode && !distA && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#fbbf24', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Map pe Store A click karo</div>}
-        {distMode && distA && !distB && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#f87171', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Ab Store B click karo</div>}
+        {distMode && distPoints.length === 0 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#fbbf24', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Map pe koi bhi store click karo (ya upar search/warehouse use karo)</div>}
+        {distMode && distPoints.length === 1 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#f87171', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Ab dusra point add karo (map click / search)</div>}
       </div>
 
       {/* Legend */}

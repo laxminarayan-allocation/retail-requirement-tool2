@@ -1050,6 +1050,7 @@ function StoreMapCard() {
   const [distMode, setDistMode] = useState(false)
   const [distPoints, setDistPoints] = useState<MapStore[]>([])
   const [distSearch, setDistSearch] = useState('')
+  const [mapFullscreen, setMapFullscreen] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMap = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -1062,6 +1063,16 @@ function StoreMapCard() {
 
   useEffect(() => { distModeRef.current = distMode }, [distMode])
   useEffect(() => { distPointsRef.current = distPoints }, [distPoints])
+
+  // Escape key exits fullscreen; invalidateSize after transition
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMapFullscreen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  useEffect(() => {
+    setTimeout(() => { leafletMap.current?.invalidateSize() }, 50)
+  }, [mapFullscreen])
 
   function addDistPoint(s: MapStore) {
     setDistPoints(prev => prev.find(p => p.code === s.code) ? prev : [...prev, s])
@@ -1769,16 +1780,20 @@ function onSearch(v){
       )}
 
       {/* Map */}
-      <div style={{ position: 'relative' }}>
-        <button onClick={openMapWindow} title="Open map in new window"
-          style={{ position: 'absolute', top: 8, right: 8, zIndex: 500, fontSize: 10, fontWeight: 700,
+      <div style={mapFullscreen ? { position: 'fixed', inset: 0, zIndex: 9900, background: '#0f172a', display: 'flex', flexDirection: 'column' } : { position: 'relative' }}>
+        {/* Fullscreen toggle button */}
+        <button onClick={() => setMapFullscreen(f => !f)}
+          title={mapFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen map'}
+          style={{ position: 'absolute', top: 8, right: 8, zIndex: 9910, fontSize: 10, fontWeight: 700,
             padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-            background: '#0f172aee', border: '1px solid #334155', color: '#94a3b8',
+            background: mapFullscreen ? '#1e3a5f' : '#0f172aee',
+            border: mapFullscreen ? '1px solid #38bdf8' : '1px solid #334155',
+            color: mapFullscreen ? '#38bdf8' : '#94a3b8',
             display: 'flex', alignItems: 'center', gap: 5 }}>
-          ⛶ New Window
+          {mapFullscreen ? '✕ Exit' : '⛶ Fullscreen'}
         </button>
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#64748b' }}>Loading map…</div>}
-        <div ref={mapRef} style={{ height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />
+        <div ref={mapRef} style={mapFullscreen ? { flex: 1, minHeight: 0 } : { height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />
         {distMode && distPoints.length === 0 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#fbbf24', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Map pe koi bhi store click karo (ya upar search/warehouse use karo)</div>}
         {distMode && distPoints.length === 1 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#f87171', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Ab dusra point add karo (map click / search)</div>}
       </div>

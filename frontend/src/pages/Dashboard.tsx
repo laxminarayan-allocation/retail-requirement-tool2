@@ -946,12 +946,97 @@ function bufferedHull(pts: [number,number][], buf = 0.5): [number,number][] {
   })
 }
 
+// ── Zone Multi-Select Dropdown ────────────────────────────────────────────────
+function ZoneDropdown({ allKeys, selected, onToggle, colorMap, label }: {
+  allKeys: string[]; selected: Set<string>
+  onToggle: (k: string) => void; colorMap: Record<string, string>; label: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = allKeys.filter(k => k.toLowerCase().includes(search.toLowerCase()))
+  const selCount = selected.size
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        fontSize: 10, padding: '3px 10px 3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+        background: selCount > 0 ? '#818cf822' : 'transparent',
+        border: `1px solid ${selCount > 0 ? '#818cf8' : '#334155'}`,
+        color: selCount > 0 ? '#818cf8' : '#64748b',
+        display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+      }}>
+        <span>{label}</span>
+        {selCount > 0 && <span style={{ background: '#818cf8', color: '#fff', borderRadius: 8, padding: '0 5px', fontSize: 9, fontWeight: 700 }}>{selCount}</span>}
+        <span style={{ fontSize: 8, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '110%', left: 0, zIndex: 9999,
+          background: '#1e293b', border: '1px solid #334155', borderRadius: 6,
+          boxShadow: '0 8px 24px #0006', minWidth: 200, maxHeight: 280, display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Search */}
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid #334155' }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={`Search ${label.toLowerCase()}…`}
+              style={{
+                width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 4,
+                color: '#e2e8f0', fontSize: 11, padding: '4px 8px', outline: 'none',
+              }}
+            />
+          </div>
+          {/* Select All / Clear */}
+          <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid #1e3a5f' }}>
+            <button onClick={() => filtered.forEach(k => !selected.has(k) && onToggle(k))} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, border: '1px solid #334155', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>All</button>
+            <button onClick={() => Array.from(selected).forEach(k => onToggle(k))} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, border: '1px solid #334155', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>Clear</button>
+            <span style={{ fontSize: 9, color: '#475569', marginLeft: 'auto', alignSelf: 'center' }}>{filtered.length} items</span>
+          </div>
+          {/* Options */}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filtered.map(k => {
+              const col = colorMap[k] ?? FALLBACK_COLOR
+              const active = selected.has(k)
+              return (
+                <div key={k} onClick={() => onToggle(k)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer',
+                  background: active ? '#0f172a' : 'transparent',
+                  borderLeft: active ? `3px solid ${col}` : '3px solid transparent',
+                  transition: 'background 0.1s',
+                }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: col, border: '1.5px solid #fff', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: active ? '#e2e8f0' : '#94a3b8', fontWeight: active ? 700 : 400, flex: 1 }}>{k}</span>
+                  {active && <span style={{ fontSize: 9, color: col }}>✓</span>}
+                </div>
+              )
+            })}
+            {filtered.length === 0 && <div style={{ padding: '10px', fontSize: 10, color: '#475569', textAlign: 'center' }}>No match</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StoreMapCard() {
   const [stores, setStores] = useState<MapStore[]>([])
   const [loading, setLoading] = useState(true)
   const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
   const [filterStatus, setFilterStatus] = useState<'all' | 'ACTIVE' | 'UPCOMING_STORE'>('all')
-  const [showBounds, setShowBounds] = useState(false)
+  // Zone/Cluster multi-select filter (empty = show all)
+  const [selectedZones, setSelectedZones] = useState<Set<string>>(new Set())
+  const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set())
   const [distMode, setDistMode] = useState(false)
   const [distA, setDistA] = useState<MapStore | null>(null)
   const [distB, setDistB] = useState<MapStore | null>(null)
@@ -979,7 +1064,28 @@ function StoreMapCard() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Init map once
+  // Derived: all available zones/clusters
+  const allZones = Array.from(new Set(stores.map(s => s.zone).filter(z => z && z !== '-'))).sort()
+  const allClusters = Array.from(new Set(stores.map(s => s.cluster).filter(c => c && c !== '-'))).sort()
+
+  // Toggle helpers
+  const toggleZone = (k: string) => setSelectedZones(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const toggleCluster = (k: string) => setSelectedClusters(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+
+  // Filtered stores: apply zone/cluster selection + status filter
+  const filteredStores = stores.filter(s => {
+    if (filterStatus !== 'all' && s.status !== filterStatus) return false
+    if (selectedZones.size > 0 && !selectedZones.has(s.zone)) return false
+    if (selectedClusters.size > 0 && !selectedClusters.has(s.cluster)) return false
+    return true
+  })
+
+  // Active boundary keys: zones or clusters selected (auto-show boundary when any selected)
+  const activeBoundaryKeys = colorBy === 'zone'
+    ? (selectedZones.size > 0 ? selectedZones : new Set<string>())
+    : (selectedClusters.size > 0 ? selectedClusters : new Set<string>())
+
+  // Init map once; destroy on unmount
   useEffect(() => {
     if (loading || !mapRef.current || leafletMap.current) return
     const L = (window as any).L
@@ -988,10 +1094,13 @@ function StoreMapCard() {
       zoomControl: true, scrollWheelZoom: true,
       maxBounds: [[6, 67], [38, 99]], maxBoundsViscosity: 1.0, minZoom: 5,
     }).setView([24, 83], 5)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 18, subdomains: 'abcd',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
     }).addTo(leafletMap.current)
+    return () => {
+      if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null }
+    }
   }, [loading])
 
   // Markers
@@ -999,8 +1108,7 @@ function StoreMapCard() {
     if (loading || !leafletMap.current) return
     const L = (window as any).L; if (!L) return
     markersRef.current.forEach(m => m.remove()); markersRef.current = []
-    const visible = filterStatus === 'all' ? stores : stores.filter(s => s.status === filterStatus)
-    visible.forEach(s => {
+    filteredStores.forEach(s => {
       const col = getColor(s, colorBy)
       const isUpcoming = s.status === 'UPCOMING_STORE'
       const isA = distA?.code === s.code, isB = distB?.code === s.code
@@ -1027,35 +1135,48 @@ function StoreMapCard() {
       marker.addTo(leafletMap.current)
       markersRef.current.push(marker)
     })
-  }, [stores, colorBy, filterStatus, loading, distMode, distA, distB])
+  }, [filteredStores, colorBy, loading, distMode, distA, distB])
 
-  // Zone / Cluster boundaries
+  // Boundaries — auto-show for selected zones/clusters; show all if none selected + explicit toggle
+  const [showAllBounds, setShowAllBounds] = useState(false)
   useEffect(() => {
     if (!leafletMap.current) return
     const L = (window as any).L; if (!L) return
     boundsLayersRef.current.forEach(l => l.remove()); boundsLayersRef.current = []
-    if (!showBounds || stores.length === 0) return
+
+    // Decide which keys to draw boundary for
     const colorMap = colorBy === 'zone' ? ZONE_COLORS : CLUSTER_COLORS
+    let keysToShow: string[]
+    if (activeBoundaryKeys.size > 0) {
+      keysToShow = Array.from(activeBoundaryKeys)
+    } else if (showAllBounds) {
+      keysToShow = colorBy === 'zone' ? allZones : allClusters
+    } else {
+      return
+    }
+
     const groups: Record<string, [number,number][]> = {}
+    // Use ALL stores (not filtered) for hull computation so boundary is always full
     stores.forEach(s => {
       const key = colorBy === 'zone' ? s.zone : s.cluster
-      if (!key || key === '-') return
+      if (!key || key === '-' || !keysToShow.includes(key)) return
       if (!groups[key]) groups[key] = []
       groups[key].push([s.lat, s.lon])
     })
+
     Object.entries(groups).forEach(([key, pts]) => {
       if (pts.length < 3) return
       const hull = bufferedHull(pts, 0.45)
       const col = colorMap[key] ?? FALLBACK_COLOR
       const poly = L.polygon(hull, {
         color: col, weight: 2.5, opacity: 0.85,
-        fillColor: col, fillOpacity: 0.07, dashArray: '7 5',
+        fillColor: col, fillOpacity: 0.1, dashArray: '7 5',
       })
-      poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip', offset: [0,0] })
+      poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip' })
       poly.addTo(leafletMap.current)
       boundsLayersRef.current.push(poly)
     })
-  }, [showBounds, stores, colorBy, loading])
+  }, [activeBoundaryKeys, showAllBounds, stores, colorBy, loading])
 
   // Distance line
   useEffect(() => {
@@ -1084,16 +1205,16 @@ function StoreMapCard() {
   }, [distA, distB])
 
   const legendMap = colorBy === 'zone' ? ZONE_COLORS : CLUSTER_COLORS
-  const usedKeys = Array.from(new Set(stores.map(s => colorBy === 'zone' ? s.zone : s.cluster))).filter(k => k && k !== '-')
-  const visibleCount = filterStatus === 'all' ? stores.length : stores.filter(s => s.status === filterStatus).length
+  const usedKeys = Array.from(new Set(filteredStores.map(s => colorBy === 'zone' ? s.zone : s.cluster))).filter(k => k && k !== '-')
   const distKm = distA && distB ? Math.round(haversineKm(distA, distB)) : null
   const distRoadKm = distKm ? Math.round(distKm * 1.3) : null
   const distHrs = distRoadKm ? distRoadKm / 50 : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Controls */}
+      {/* Row 1: Color mode + Status + Dropdowns */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {/* Color by */}
         <div style={{ display: 'flex', gap: 3 }}>
           {(['zone','cluster'] as const).map(m => (
             <button key={m} onClick={() => setColorBy(m)} style={{
@@ -1104,6 +1225,8 @@ function StoreMapCard() {
             }}>{m === 'zone' ? 'Zone' : 'Cluster'}</button>
           ))}
         </div>
+
+        {/* Status filter */}
         <div style={{ display: 'flex', gap: 3 }}>
           {([['all','All'],['ACTIVE','Active'],['UPCOMING_STORE','Upcoming']] as const).map(([v,l]) => (
             <button key={v} onClick={() => setFilterStatus(v as any)} style={{
@@ -1114,20 +1237,71 @@ function StoreMapCard() {
             }}>{l}</button>
           ))}
         </div>
-        <button onClick={() => setShowBounds(b => !b)} style={{
+
+        {/* Zone multi-select dropdown */}
+        <ZoneDropdown
+          allKeys={allZones} selected={selectedZones} onToggle={toggleZone}
+          colorMap={ZONE_COLORS} label="Zone"
+        />
+
+        {/* Cluster multi-select dropdown */}
+        <ZoneDropdown
+          allKeys={allClusters} selected={selectedClusters} onToggle={toggleCluster}
+          colorMap={CLUSTER_COLORS} label="Cluster"
+        />
+
+        {/* Show all boundaries toggle */}
+        <button onClick={() => setShowAllBounds(b => !b)} style={{
           fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: showBounds ? '#34d39922' : 'transparent',
-          border: `1px solid ${showBounds ? '#34d399' : '#334155'}`,
-          color: showBounds ? '#34d399' : '#475569',
+          background: showAllBounds ? '#34d39922' : 'transparent',
+          border: `1px solid ${showAllBounds ? '#34d399' : '#334155'}`,
+          color: showAllBounds ? '#34d399' : '#475569',
         }}>⬡ Boundary</button>
+
+        {/* Distance mode */}
         <button onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistA(null); setDistB(null) } }} style={{
           fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
           background: distMode ? '#ef444422' : 'transparent',
           border: `1px solid ${distMode ? '#ef4444' : '#334155'}`,
           color: distMode ? '#ef4444' : '#475569',
         }}>📏 Distance</button>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{visibleCount} stores</span>
+
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>
+          {filteredStores.length}{filteredStores.length < stores.length ? `/${stores.length}` : ''} stores
+        </span>
       </div>
+
+      {/* Active filter chips */}
+      {(selectedZones.size > 0 || selectedClusters.size > 0) && (
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 9, color: '#475569', marginRight: 2 }}>Filter:</span>
+          {Array.from(selectedZones).map(k => (
+            <span key={k} onClick={() => toggleZone(k)} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700,
+              padding: '2px 7px 2px 5px', borderRadius: 10, cursor: 'pointer',
+              background: (ZONE_COLORS[k] ?? FALLBACK_COLOR) + '22',
+              border: `1px solid ${ZONE_COLORS[k] ?? FALLBACK_COLOR}`,
+              color: ZONE_COLORS[k] ?? FALLBACK_COLOR,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: ZONE_COLORS[k] ?? FALLBACK_COLOR, display: 'inline-block' }} />
+              {k} ×
+            </span>
+          ))}
+          {Array.from(selectedClusters).map(k => (
+            <span key={k} onClick={() => toggleCluster(k)} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700,
+              padding: '2px 7px 2px 5px', borderRadius: 10, cursor: 'pointer',
+              background: (CLUSTER_COLORS[k] ?? FALLBACK_COLOR) + '22',
+              border: `1px solid ${CLUSTER_COLORS[k] ?? FALLBACK_COLOR}`,
+              color: CLUSTER_COLORS[k] ?? FALLBACK_COLOR,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: CLUSTER_COLORS[k] ?? FALLBACK_COLOR, display: 'inline-block' }} />
+              {k} ×
+            </span>
+          ))}
+          <span onClick={() => { setSelectedZones(new Set()); setSelectedClusters(new Set()) }} style={{ fontSize: 9, color: '#64748b', cursor: 'pointer', textDecoration: 'underline' }}>Clear all</span>
+        </div>
+      )}
 
       {/* Distance info bar */}
       {distMode && (
@@ -1135,8 +1309,8 @@ function StoreMapCard() {
           <span style={{ color: '#fbbf24', fontWeight: 700 }}>A: {distA ? `${distA.name||distA.code} (${distA.city})` : 'Map pe Store A click karo'}</span>
           <span style={{ color: '#475569' }}>→</span>
           <span style={{ color: '#f87171', fontWeight: 700 }}>B: {distB ? `${distB.name||distB.code} (${distB.city})` : 'Store B click karo'}</span>
-          {distKm && <span style={{ marginLeft: 'auto', color: '#fff', fontWeight: 800, fontSize: 13, letterSpacing: 0.3 }}>
-            📏 {distKm} km (straight) &nbsp;|&nbsp; ~{distRoadKm} km road &nbsp;|&nbsp; ~{distHrs! < 1 ? Math.round(distHrs!*60)+'min' : distHrs!.toFixed(1)+'h drive'}
+          {distKm && <span style={{ marginLeft: 'auto', color: '#fff', fontWeight: 800, fontSize: 13 }}>
+            📏 {distKm} km &nbsp;|&nbsp; ~{distRoadKm} km road &nbsp;|&nbsp; ~{distHrs! < 1 ? Math.round(distHrs!*60)+'min' : distHrs!.toFixed(1)+'h'}
           </span>}
           {distA && <button onClick={() => { setDistA(null); setDistB(null) }} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 3, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}>Reset</button>}
         </div>
@@ -1153,7 +1327,9 @@ function StoreMapCard() {
       {/* Legend */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {usedKeys.map(k => (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9 }}>
+          <div key={k} onClick={() => colorBy === 'zone' ? toggleZone(k) : toggleCluster(k)}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, cursor: 'pointer',
+              opacity: (colorBy === 'zone' ? selectedZones : selectedClusters).size > 0 && !(colorBy === 'zone' ? selectedZones : selectedClusters).has(k) ? 0.35 : 1 }}>
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: legendMap[k] ?? FALLBACK_COLOR, border: '2px solid #fff', flexShrink: 0 }} />
             <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{k}</span>
           </div>
@@ -1161,11 +1337,11 @@ function StoreMapCard() {
         <div style={{ borderLeft: '1px solid #334155', paddingLeft: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9 }}>
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#6b7280', border: '2px solid #fff', flexShrink: 0 }} />
-            <span style={{ color: '#64748b' }}>Active (solid)</span>
+            <span style={{ color: '#64748b' }}>Active</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9 }}>
             <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#6b7280', border: '2px dashed #fff', flexShrink: 0 }} />
-            <span style={{ color: '#64748b' }}>Upcoming (dashed)</span>
+            <span style={{ color: '#64748b' }}>Upcoming</span>
           </div>
         </div>
       </div>

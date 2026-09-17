@@ -185,23 +185,16 @@ def _safe_oracle_stats() -> dict:
         zone_upcoming_dist: dict = {}
         try:
             if "zone" in store_df.columns:
-                zone_dist = store_df["zone"].fillna("—").value_counts().to_dict()
-            if _sod is not None and "store_status" in _sod.columns:
-                upcoming_z = _sod[_sod["store_status"].str.upper() == "UPCOMING_STORE"].copy()
-                zone_col_z = next((c for c in ("zone", "region_type") if c in upcoming_z.columns), None)
-                if zone_col_z:
-                    raw_dist = upcoming_z[zone_col_z].fillna("").value_counts().to_dict()
-                    real_values = {k: v for k, v in raw_dist.items() if k.strip() and k.strip() not in ("-", "—", "")}
-                    if real_values:
-                        zone_upcoming_dist = real_values
-                if not zone_upcoming_dist and "ref_store" in upcoming_z.columns and "zone" in store_df.columns:
-                    # vectorized: build lookup without iterrows
-                    ref_to_zone = dict(zip(store_df["store_name"].fillna("").astype(str),
-                                          store_df["zone"].fillna("").astype(str)))
-                    upcoming_z["_zone"] = upcoming_z["ref_store"].fillna("").astype(str).str.strip().map(ref_to_zone).fillna("")
-                    zone_upcoming_dist = {k: v for k, v in
-                                          upcoming_z["_zone"].value_counts().to_dict().items()
-                                          if k.strip() and k.strip() not in ("-", "—", "")}
+                all_stores_df = StoreRepository().get_all_stores(active_only=False)
+                if "zone" in all_stores_df.columns and "store_status" in all_stores_df.columns:
+                    active_zone_df = all_stores_df[all_stores_df["store_status"].str.upper() == "ACTIVE"]
+                    upcoming_zone_df = all_stores_df[all_stores_df["store_status"].str.upper() == "UPCOMING_STORE"]
+                    zone_dist = {k: v for k, v in active_zone_df["zone"].fillna("").value_counts().to_dict().items()
+                                 if str(k).strip() and str(k).strip() not in ("-", "—", "")}
+                    zone_upcoming_dist = {k: v for k, v in upcoming_zone_df["zone"].fillna("").value_counts().to_dict().items()
+                                          if str(k).strip() and str(k).strip() not in ("-", "—", "")}
+                else:
+                    zone_dist = store_df["zone"].fillna("—").value_counts().to_dict()
         except Exception as _ze:
             logger.warning("zone dist failed: %s", _ze)
 
@@ -245,9 +238,15 @@ def _safe_oracle_stats() -> dict:
                 closed_df = _sod[_sod["store_status"].str.upper() == "CLOSED"].copy()
                 if "store_grade" in closed_df.columns:
                     closed_grade_dist = closed_df["store_grade"].fillna("—").value_counts().to_dict()
-                zone_col_c = next((c for c in ("zone", "region_type") if c in closed_df.columns), None)
-                if zone_col_c:
-                    closed_zone_dist = {k: v for k, v in closed_df[zone_col_c].fillna("—").value_counts().to_dict().items() if str(k).strip() not in ("-", "—", "")}
+                # Get zone from store_master (T_STORE_OPENING_DATE has no zone col)
+                try:
+                    _all_sm = StoreRepository().get_all_stores(active_only=False)
+                    if "zone" in _all_sm.columns and "store_status" in _all_sm.columns:
+                        _closed_sm = _all_sm[_all_sm["store_status"].str.upper().isin(["CLOSED", "IN-ACTIVE", "INACTIVE"])]
+                        closed_zone_dist = {k: v for k, v in _closed_sm["zone"].fillna("").value_counts().to_dict().items()
+                                            if str(k).strip() and str(k).strip() not in ("-", "—", "")}
+                except Exception:
+                    pass
                 if "store_tag" in closed_df.columns:
                     closed_tag_dist = closed_df["store_tag"].fillna("-").value_counts().to_dict()
                 if "state" in closed_df.columns:

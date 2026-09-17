@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/database", tags=["Database"])
 
 _repo = MetadataRepository()
+_refresh_status: dict = {}  # key -> {status, started_at, error, rows?}
 
 
 def _require_oracle() -> None:
@@ -536,6 +537,43 @@ async def update_schedule(body: ScheduleBody):
     from app.core.db_scheduler import set_schedule_time
     set_schedule_time(body.time)
     return APIResponse.ok(data={"time": body.time})
+
+
+@router.post("/output/refresh/{owner}/{object_name}", response_model=APIResponse)
+async def refresh_single_file(owner: str, object_name: str):
+    """Trigger immediate full refresh of a single parquet file. Runs in background thread."""
+    import threading, time as _time
+    from app.core.parquet_cache import write_cache
+    from app.repositories.base_repository import fetch_df
+    from app.db.connection import get_connection
+
+    _require_oracle()
+    key = f"{owner.upper()}__{object_name.upper()}"
+    _refresh_status[key] = {"status": "running", "started_at": _time.time(), "error": None}
+
+    def _do():
+        try:
+            sql = f'SELECT * FROM "{owner.upper()}"."{object_name.upper()}"'
+            with get_connection() as conn:
+                df = fetch_df(conn, sql, label=f"{owner}.{object_name}")
+            write_cache(owner, object_name, df)
+            _refresh_status[key] = {"status": "done", "started_at": _refresh_status[key]["started_at"], "error": None, "rows": len(df)}
+        except Exception as exc:
+            _refresh_status[key] = {"status": "error", "started_at": _refresh_status[key]["started_at"], "error": str(exc)}
+
+    threading.Thread(target=_do, daemon=True, name=f"refresh-{key}").start()
+    return APIResponse.ok(
+        message=f"Refresh started for {owner.upper()}.{object_name.upper()}",
+        data={"key": key, "status": "running"}
+    )
+
+
+@router.get("/output/refresh-status/{owner}/{object_name}", response_model=APIResponse)
+async def get_refresh_status(owner: str, object_name: str):
+    """Check refresh status for a single file."""
+    key = f"{owner.upper()}__{object_name.upper()}"
+    st = _refresh_status.get(key, {"status": "idle"})
+    return APIResponse.ok(data={"key": key, **st})
 
 
 @router.post("/output/refresh-all", response_model=APIResponse)

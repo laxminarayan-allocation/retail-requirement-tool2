@@ -972,15 +972,38 @@ function DownloadedFilesPanel() {
     const key = `${owner}__${obj}`
     if (refreshStatus[key] === 'refreshing') return
     setRefreshStatus(prev => ({ ...prev, [key]: 'refreshing' }))
+    setAutoRunLog(`⟳ Refreshing ${owner}.${obj}…`)
     try {
-      const url = `/database/table/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}/preview?limit=200&force_refresh=true`
-      await http.get(url, { timeout: 300000 })
-      setRefreshStatus(prev => ({ ...prev, [key]: 'done' }))
-      loadList()
-      setTimeout(() => setRefreshStatus(prev => ({ ...prev, [key]: 'idle' })), 3000)
-    } catch {
+      // Start background refresh
+      await http.post(`/database/output/refresh/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}`)
+      // Poll status every 3s
+      const poll = setInterval(async () => {
+        try {
+          const r = await http.get(`/database/output/refresh-status/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}`)
+          const st = r.data?.data?.status
+          const rows = r.data?.data?.rows
+          const err = r.data?.data?.error
+          if (st === 'done') {
+            clearInterval(poll)
+            setRefreshStatus(prev => ({ ...prev, [key]: 'done' }))
+            setAutoRunLog(`✓ ${owner}.${obj} refreshed — ${rows?.toLocaleString() ?? '?'} rows`)
+            loadList()
+            setTimeout(() => { setRefreshStatus(prev => ({ ...prev, [key]: 'idle' })); setAutoRunLog('') }, 4000)
+          } else if (st === 'error') {
+            clearInterval(poll)
+            setRefreshStatus(prev => ({ ...prev, [key]: 'error' }))
+            setAutoRunLog(`✗ ${owner}.${obj} failed: ${err}`)
+            setTimeout(() => setRefreshStatus(prev => ({ ...prev, [key]: 'idle' })), 4000)
+          } else {
+            setAutoRunLog(`⟳ Refreshing ${owner}.${obj}… (running)`)
+          }
+        } catch { /* ignore poll error */ }
+      }, 3000)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed'
       setRefreshStatus(prev => ({ ...prev, [key]: 'error' }))
-      setTimeout(() => setRefreshStatus(prev => ({ ...prev, [key]: 'idle' })), 3000)
+      setAutoRunLog(`✗ ${owner}.${obj}: ${msg}`)
+      setTimeout(() => setRefreshStatus(prev => ({ ...prev, [key]: 'idle' })), 4000)
     }
   }
 

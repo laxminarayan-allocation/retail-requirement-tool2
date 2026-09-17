@@ -284,12 +284,26 @@ def _safe_oracle_stats() -> dict:
                 closed_city_dist = {k: v for k, v in closed_city_df[city_col].fillna("—").value_counts().to_dict().items() if str(k).strip() not in ("-", "—", "")}
                 # Unique state/city across active + upcoming
                 # Normalize known short-form aliases (e.g. "JH" == "JHARKHAND" in data)
-                _STATE_NORM = {"JH": "JHARKHAND", "RJ": "RAJASTHAN", "MH": "MAHARASHTRA",
-                               "UP": "UP", "MP": "MP", "HR": "HARYANA", "PB": "PUNJAB",
-                               "GJ": "GUJARAT", "AP": "ANDHRA PRADESH", "TN": "TAMIL NADU",
-                               "KA": "KARNATAKA", "KL": "KERALA", "WB": "WEST BENGAL",
-                               "OR": "ODISHA", "OD": "ODISHA", "CG": "CHHATTISGARH",
-                               "UK": "UTTARAKHAND"}
+                _STATE_NORM = {
+                    # Short codes
+                    "JH": "JHARKHAND", "RJ": "RAJASTHAN", "MH": "MAHARASHTRA",
+                    "UP": "UP", "MP": "MP", "HR": "HARYANA", "PB": "PUNJAB",
+                    "GJ": "GUJARAT", "AP": "ANDHRA PRADESH", "TN": "TAMIL NADU",
+                    "KA": "KARNATAKA", "KL": "KERALA", "WB": "WEST BENGAL",
+                    "OR": "ODISHA", "OD": "ODISHA", "CG": "CHHATTISGARH",
+                    "UK": "UTTARAKHAND", "CH": "CHHATTISGARH", "AR": "ARUNACHAL PRADESH",
+                    # J&K variants
+                    "KASHMIR": "JAMMU AND KASHMIR", "JAMMU": "JAMMU AND KASHMIR",
+                    "J&K": "JAMMU AND KASHMIR", "JAMMU & KASHMIR": "JAMMU AND KASHMIR",
+                    # Delhi
+                    "NEW DELHI": "DELHI",
+                    # Odisha variants
+                    "ORISSA": "ODISHA",
+                    # City incorrectly listed as state
+                    "GURGAON": "HARYANA",
+                    # Invalid/placeholder values
+                    "-": None,
+                }
                 au_df = _sod[_sod["store_status"].str.upper().isin(["ACTIVE", "UPCOMING_STORE"])].copy()
                 if "state" in au_df.columns:
                     au_df["state"] = au_df["state"].str.strip().str.upper().map(
@@ -943,10 +957,26 @@ async def allocation_mc():
 
 # ── State name normalisation (old / unofficial → official) ───────────────────
 _STATE_NORM: dict[str, str] = {
-    "ORISSA":      "ODISHA",
-    "JH":          "JHARKHAND",
-    "UTTARANCHAL": "UTTARAKHAND",
-    "PONDICHERRY": "PUDUCHERRY",
+    "ORISSA":           "ODISHA",
+    "OR":               "ODISHA",
+    "OD":               "ODISHA",
+    "JH":               "JHARKHAND",
+    "UTTARANCHAL":      "UTTARAKHAND",
+    "UK":               "UTTARAKHAND",
+    "PONDICHERRY":      "PUDUCHERRY",
+    # J&K variants
+    "KASHMIR":          "JAMMU AND KASHMIR",
+    "JAMMU":            "JAMMU AND KASHMIR",
+    "J&K":              "JAMMU AND KASHMIR",
+    "JAMMU & KASHMIR":  "JAMMU AND KASHMIR",
+    # Short codes
+    "CH":               "CHHATTISGARH",
+    "CG":               "CHHATTISGARH",
+    "AR":               "ARUNACHAL PRADESH",
+    # Delhi
+    "NEW DELHI":        "DELHI",
+    # City incorrectly listed as state
+    "GURGAON":          "HARYANA",
 }
 
 

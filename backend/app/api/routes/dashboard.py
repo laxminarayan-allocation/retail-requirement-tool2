@@ -279,8 +279,18 @@ def _safe_oracle_stats() -> dict:
                 store_city_upcoming_dist = upcoming_city[city_col].fillna("—").value_counts().to_dict()
                 closed_city_dist = {k: v for k, v in closed_city_df[city_col].fillna("—").value_counts().to_dict().items() if str(k).strip() not in ("-", "—", "")}
                 # Unique state/city across active + upcoming
-                au_df = _sod[_sod["store_status"].str.upper().isin(["ACTIVE", "UPCOMING_STORE"])]
+                # Normalize known short-form aliases (e.g. "JH" == "JHARKHAND" in data)
+                _STATE_NORM = {"JH": "JHARKHAND", "RJ": "RAJASTHAN", "MH": "MAHARASHTRA",
+                               "UP": "UP", "MP": "MP", "HR": "HARYANA", "PB": "PUNJAB",
+                               "GJ": "GUJARAT", "AP": "ANDHRA PRADESH", "TN": "TAMIL NADU",
+                               "KA": "KARNATAKA", "KL": "KERALA", "WB": "WEST BENGAL",
+                               "OR": "ODISHA", "OD": "ODISHA", "CG": "CHHATTISGARH",
+                               "UK": "UTTARAKHAND"}
+                au_df = _sod[_sod["store_status"].str.upper().isin(["ACTIVE", "UPCOMING_STORE"])].copy()
                 if "state" in au_df.columns:
+                    au_df["state"] = au_df["state"].str.strip().str.upper().map(
+                        lambda s: _STATE_NORM.get(s, s) if pd.notna(s) else s
+                    )
                     unique_state_count = int(au_df["state"].dropna().nunique())
                 unique_city_count = int(au_df[city_col].dropna().nunique())
                 if "state" in active_city.columns:

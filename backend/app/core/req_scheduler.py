@@ -60,18 +60,13 @@ def register_views_in_master_data() -> None:
 
 def _fetch_one(owner: str, obj: str) -> None:
     try:
-        from app.db.oracle import get_pool
+        from app.db.connection import get_connection
+        from app.repositories.base_repository import fetch_df
         from app.core.parquet_cache import write_cache
-        import oracledb
 
-        pool = get_pool()
-        with pool.acquire() as conn:
-            sql = f"SELECT * FROM {owner}.{obj}"
-            with conn.cursor() as cur:
-                cur.execute(sql)
-                cols = [c[0].lower() for c in cur.description]
-                import pandas as pd
-                df = pd.DataFrame(cur.fetchall(), columns=cols)
+        sql = f"SELECT * FROM {owner}.{obj}"
+        with get_connection() as conn:
+            df = fetch_df(conn, sql, label=f"{owner}.{obj}")
         write_cache(owner, obj, df)
         logger.info("req_scheduler: refreshed %s.%s → %d rows", owner, obj, len(df))
     except Exception as exc:

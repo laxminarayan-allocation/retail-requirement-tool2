@@ -1064,6 +1064,7 @@ function StoreMapCard() {
   const leafletMap = useRef<any>(null)
   const markersRef = useRef<any[]>([])
   const boundsLayersRef = useRef<any[]>([])
+  const ckBoundaryRef = useRef<any>(null)
   const distLayerRef = useRef<any>(null)
   const distModeRef = useRef(false)
   const distPointsRef = useRef<MapStore[]>([])
@@ -1447,6 +1448,26 @@ function onSearch(v){
       if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null }
     }
   }, [loading])
+
+  // CityKart overall boundary — always shown, covers ALL stores, auto-updates on stores change
+  useEffect(() => {
+    if (!leafletMap.current || stores.length === 0) return
+    const L = (window as any).L; if (!L) return
+    if (ckBoundaryRef.current) { ckBoundaryRef.current.remove(); ckBoundaryRef.current = null }
+    const pts: [number,number][] = stores.filter(s => s.lat && s.lon).map(s => [s.lat, s.lon])
+    if (pts.length < 3) return
+    const hull = bufferedHull(pts, 0.8)
+    const poly = L.polygon(hull, {
+      color: '#38bdf8', weight: 2, opacity: 0.7,
+      fillColor: '#38bdf8', fillOpacity: 0.04,
+      dashArray: '12 6',
+    })
+    poly.bindTooltip('<b>CityKart Network</b><br>' + stores.length + ' stores', {
+      permanent: false, direction: 'center',
+    })
+    poly.addTo(leafletMap.current)
+    ckBoundaryRef.current = poly
+  }, [stores, loading])
 
   // Markers
   useEffect(() => {

@@ -467,9 +467,10 @@ function StateCityCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
                   <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
                   <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
                 </div>
-                <span style={{ color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
-                  <span style={{ color: '#38bdf8' }}>{a}</span>{u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
-                </span>
+                <div style={{ display: 'flex', gap: 0, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
+                  <span style={{ width: 28, textAlign: 'right', color: '#38bdf8' }}>{a > 0 ? a : ''}</span>
+                  <span style={{ width: 26, textAlign: 'right', color: '#f59e0b' }}>{u > 0 ? `+${u}` : ''}</span>
+                </div>
               </div>
             )
           })}
@@ -1366,9 +1367,10 @@ export default function Dashboard() {
                         <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
                         <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
                       </div>
-                      <span style={{ fontSize: 9, flexShrink: 0, fontVariantNumeric: 'tabular-nums', minWidth: 28, textAlign: 'right' }}>
-                        <span style={{ color: '#38bdf8' }}>{a}</span>{u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
-                      </span>
+                      <div style={{ display: 'flex', gap: 0, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
+                        <span style={{ width: 28, textAlign: 'right', color: '#38bdf8' }}>{a > 0 ? a : ''}</span>
+                        <span style={{ width: 26, textAlign: 'right', color: '#f59e0b' }}>{u > 0 ? `+${u}` : ''}</span>
+                      </div>
                     </div>
                   )
                 })}

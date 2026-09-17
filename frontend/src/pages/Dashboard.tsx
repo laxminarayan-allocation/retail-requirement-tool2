@@ -1469,26 +1469,47 @@ function onSearch(v){
 
   // Boundaries — auto-show for selected zones/clusters; show all if none selected + explicit toggle
   const [showAllBounds, setShowAllBounds] = useState(false)
+  const [boundaryBy, setBoundaryBy] = useState<'zone' | 'cluster' | 'state' | 'city'>('zone')
+
+  // Auto-color for state/city (hash-based)
+  function hashColor(str: string): string {
+    let h = 0
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xfffffff
+    const hue = h % 360
+    return `hsl(${hue},60%,50%)`
+  }
+
+  function getBoundaryColor(key: string): string {
+    if (boundaryBy === 'zone') return ZONE_COLORS[key] ?? FALLBACK_COLOR
+    if (boundaryBy === 'cluster') return CLUSTER_COLORS[key] ?? FALLBACK_COLOR
+    return hashColor(key)
+  }
+
   useEffect(() => {
     if (!leafletMap.current) return
     const L = (window as any).L; if (!L) return
     boundsLayersRef.current.forEach(l => l.remove()); boundsLayersRef.current = []
 
-    // Decide which keys to draw boundary for
-    const colorMap = colorBy === 'zone' ? ZONE_COLORS : CLUSTER_COLORS
+    // For zone/cluster: respect activeBoundaryKeys (selected filter chips)
+    // For state/city: always use showAllBounds
     let keysToShow: string[]
-    if (activeBoundaryKeys.size > 0) {
-      keysToShow = Array.from(activeBoundaryKeys)
-    } else if (showAllBounds) {
-      keysToShow = colorBy === 'zone' ? allZones : allClusters
+    if (boundaryBy === 'zone') {
+      if (activeBoundaryKeys.size > 0) keysToShow = Array.from(activeBoundaryKeys)
+      else if (showAllBounds) keysToShow = allZones
+      else return
+    } else if (boundaryBy === 'cluster') {
+      if (activeBoundaryKeys.size > 0) keysToShow = Array.from(activeBoundaryKeys)
+      else if (showAllBounds) keysToShow = allClusters
+      else return
     } else {
-      return
+      if (!showAllBounds) return
+      const allKeys = new Set(stores.map(s => boundaryBy === 'state' ? s.state : s.city).filter(k => k && k !== '-'))
+      keysToShow = Array.from(allKeys).sort()
     }
 
     const groups: Record<string, [number,number][]> = {}
-    // Use ALL stores (not filtered) for hull computation so boundary is always full
     stores.forEach(s => {
-      const key = colorBy === 'zone' ? s.zone : s.cluster
+      const key = boundaryBy === 'zone' ? s.zone : boundaryBy === 'cluster' ? s.cluster : boundaryBy === 'state' ? s.state : s.city
       if (!key || key === '-' || !keysToShow.includes(key)) return
       if (!groups[key]) groups[key] = []
       groups[key].push([s.lat, s.lon])
@@ -1497,7 +1518,7 @@ function onSearch(v){
     Object.entries(groups).forEach(([key, pts]) => {
       if (pts.length < 3) return
       const hull = bufferedHull(pts, 0.45)
-      const col = colorMap[key] ?? FALLBACK_COLOR
+      const col = getBoundaryColor(key)
       const poly = L.polygon(hull, {
         color: col, weight: 2.5, opacity: 0.85,
         fillColor: col, fillOpacity: 0.1, dashArray: '7 5',
@@ -1506,7 +1527,7 @@ function onSearch(v){
       poly.addTo(leafletMap.current)
       boundsLayersRef.current.push(poly)
     })
-  }, [activeBoundaryKeys, showAllBounds, stores, colorBy, loading])
+  }, [activeBoundaryKeys, showAllBounds, boundaryBy, stores, colorBy, loading])
 
   // Distance line — multi-segment
   useEffect(() => {
@@ -1607,13 +1628,23 @@ function onSearch(v){
           colorMap={CLUSTER_COLORS} label="Cluster"
         />
 
-        {/* Show all boundaries toggle */}
-        <button onClick={() => setShowAllBounds(b => !b)} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: showAllBounds ? '#34d39922' : 'transparent',
-          border: `1px solid ${showAllBounds ? '#34d399' : '#334155'}`,
-          color: showAllBounds ? '#34d399' : '#475569',
-        }}>⬡ Boundary</button>
+        {/* Boundary toggle + by selector */}
+        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <button onClick={() => setShowAllBounds(b => !b)} style={{
+            fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+            background: showAllBounds ? '#34d39922' : 'transparent',
+            border: `1px solid ${showAllBounds ? '#34d399' : '#334155'}`,
+            color: showAllBounds ? '#34d399' : '#475569',
+          }}>⬡ Boundary</button>
+          {(['zone','cluster','state','city'] as const).map(m => (
+            <button key={m} onClick={() => { setBoundaryBy(m); setShowAllBounds(true) }} style={{
+              fontSize: 9, padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: boundaryBy === m && showAllBounds ? '#34d39933' : 'transparent',
+              border: `1px solid ${boundaryBy === m && showAllBounds ? '#34d399' : '#1e293b'}`,
+              color: boundaryBy === m && showAllBounds ? '#34d399' : '#475569',
+            }}>{m[0].toUpperCase() + m.slice(1)}</button>
+          ))}
+        </div>
 
         {/* Distance mode */}
         <button onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistPoints([]); setDistSearch('') } }} style={{

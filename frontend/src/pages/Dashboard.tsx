@@ -1078,7 +1078,7 @@ function StoreMapCard() {
   function openMapWindow() {
     const storesJson = JSON.stringify(stores)
     const distJson   = JSON.stringify(distPoints)
-    const win = window.open('', '_blank', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no')
+    const win = window.open('', 'ck_store_map', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html><head>
 <meta charset="utf-8">

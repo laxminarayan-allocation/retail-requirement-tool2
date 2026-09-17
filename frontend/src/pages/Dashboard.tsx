@@ -1078,146 +1078,289 @@ function StoreMapCard() {
   function openMapWindow() {
     const storesJson = JSON.stringify(stores)
     const distJson   = JSON.stringify(distPoints)
-    const html = [
-      '<!DOCTYPE html><html><head>',
-      '<meta charset="utf-8"><title>CityKart Store Map</title>',
-      '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>',
-      '<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>',
-      '<style>',
-      '* { margin:0; padding:0; box-sizing:border-box; }',
-      'body { background:#0f172a; color:#e2e8f0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }',
-      '#toolbar { display:flex; gap:8px; padding:8px 12px; background:#0a1220; border-bottom:1px solid #1e293b; align-items:center; flex-wrap:wrap; flex-shrink:0; }',
-      '#toolbar h2 { font-size:13px; font-weight:700; color:#7dd3fc; margin-right:8px; }',
-      '.btn { font-size:10px; font-weight:700; padding:3px 10px; border-radius:5px; cursor:pointer; border:1px solid #334155; background:transparent; color:#94a3b8; }',
-      '.btn.active { background:#ef444422; border-color:#ef4444; color:#ef4444; }',
-      '#search { background:#1e293b; border:1px solid #334155; border-radius:5px; color:#e2e8f0; font-size:11px; padding:4px 10px; outline:none; width:200px; }',
-      '#dropdown { position:absolute; top:100%; left:0; background:#1e293b; border:1px solid #334155; border-radius:5px; z-index:9999; width:260px; max-height:200px; overflow-y:auto; display:none; margin-top:2px; }',
-      '.dd-item { padding:5px 10px; cursor:pointer; font-size:11px; border-bottom:1px solid #0f172a; display:flex; gap:8px; align-items:center; }',
-      '.dd-item:hover { background:#0f172a; }',
-      '#map { flex:1; min-height:0; }',
-      '#distbar { background:#0a1220; border-top:1px solid #ef444466; padding:6px 12px; font-size:10px; display:none; flex-wrap:wrap; gap:8px; align-items:center; flex-shrink:0; }',
-      '.chip { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; background:#1e293b; border:1px solid #475569; color:#7dd3fc; cursor:grab; user-select:none; }',
-      '.chip.wh { background:#14532d33; border-color:#4ade80; color:#4ade80; }',
-      '.seg { font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; white-space:nowrap; }',
-      '#total { font-size:11px; font-weight:800; color:#fff; margin-left:auto; white-space:nowrap; }',
-      '</style></head><body>',
-      '<div id="toolbar">',
-      '  <h2>CityKart Store Map</h2>',
-      '  <button class="btn" onclick="setColor(\'zone\')">Zone</button>',
-      '  <button class="btn" onclick="setColor(\'cluster\')">Cluster</button>',
-      '  <button class="btn" onclick="setStatus(\'all\')">All</button>',
-      '  <button class="btn" onclick="setStatus(\'ACTIVE\')">Active</button>',
-      '  <button class="btn" onclick="setStatus(\'UPCOMING_STORE\')">Upcoming</button>',
-      '  <div style="width:1px;height:20px;background:#334155"></div>',
-      '  <button class="btn active" id="btnDist" onclick="toggleDist()">Distance</button>',
-      '  <button class="btn" onclick="addWH(\'123\',\'KHETAWAS DC\',28.574,76.534)">KHETAWAS</button>',
-      '  <button class="btn" onclick="addWH(\'420\',\'FARUKHNAGAR DC\',28.458,76.817)">FARUKHNAGAR</button>',
-      '  <div style="position:relative">',
-      '    <input id="search" placeholder="Store code / name / city" oninput="onSearch(this.value)" autocomplete="off"/>',
-      '    <div id="dropdown"></div>',
-      '  </div>',
-      '  <button class="btn" onclick="resetDist()">Reset</button>',
-      '  <span id="stcount" style="font-size:10px;color:#64748b;margin-left:4px"></span>',
-      '</div>',
-      '<div id="map"></div>',
-      '<div id="distbar">',
-      '  <span style="font-size:9px;color:#64748b;font-weight:700">ROUTE:</span>',
-      '  <span id="chips"></span><span id="segs"></span><span id="total"></span>',
-      '</div>',
-      '<script>',
-      'var STORES=' + storesJson + ';',
-      'var DIST_INIT=' + distJson + ';',
-      'var ZC={NORTH:"#2563eb",BIHAR:"#d97706","BIHAR-PUJA":"#ea580c",EAST:"#16a34a","NORTH EAST":"#7c3aed",NCR:"#db2777",JK:"#0891b2"};',
-      'var CC={BR1:"#b45309",BR2:"#d97706",BR3:"#ea580c",BR4:"#dc2626",BR5:"#991b1b",UP1:"#1d4ed8",UP2:"#2563eb",UP3:"#4338ca",UP4:"#6d28d9",UP5:"#7c3aed",UP6:"#9333ea",CH1:"#15803d",JH1:"#16a34a",MP1:"#0e7490",NCR:"#be185d",NE:"#0891b2",OD:"#4d7c0f",NSO:"#a16207"};',
-      'var FB="#6b7280";',
-      'var colorBy="zone",filterStatus="all",distMode=true,distPoints=DIST_INIT.slice();',
-      'var leafMap,markers=[],distLayer=null,dragFrom=null;',
-      'function gc(s){return colorBy==="zone"?(ZC[s.zone]||FB):(CC[s.cluster]||FB)}',
-      'function hav(a,b){var R=6371,dL=(b.lat-a.lat)*Math.PI/180,dN=(b.lon-a.lon)*Math.PI/180,aa=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa))}',
-      'function fmt(km){var h=km/50;return h<1?Math.round(h*60)+" min":h.toFixed(1)+" hr"}',
-      'window.onload=function(){',
-      '  leafMap=L.map("map",{zoomControl:true,scrollWheelZoom:true,maxBounds:[[6,67],[38,99]],minZoom:4});',
-      '  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:18}).addTo(leafMap);',
-      '  leafMap.setView([24,82],5);',
-      '  setTimeout(function(){leafMap.invalidateSize();renderMarkers();renderDist();},300);',
-      '};',
-      'function renderMarkers(){',
-      '  markers.forEach(function(m){m.remove()});markers=[];',
-      '  var vis=STORES.filter(function(s){return filterStatus==="all"||s.status===filterStatus});',
-      '  document.getElementById("stcount").textContent=vis.length+" stores";',
-      '  vis.forEach(function(s){',
-      '    var col=gc(s),up=s.status==="UPCOMING_STORE";',
-      '    var icon=L.divIcon({className:"",iconAnchor:[7,7],html:"<div style=\\"width:14px;height:14px;border-radius:50%;background:"+col+";border:2px solid "+(up?"transparent":"#fff")+";box-shadow:0 1px 4px #0008\\"></div>"});',
-      '    var m=L.marker([s.lat,s.lon],{icon:icon}).addTo(leafMap);',
-      '    m.bindTooltip("<b>"+s.code+"</b> "+s.name+"<br>"+s.city+" · "+s.zone,{direction:"top",offset:[0,-8]});',
-      '    m.on("click",function(){if(distMode)addPoint(s)});',
-      '    markers.push(m);',
-      '  });',
-      '}',
-      'function renderDist(){',
-      '  if(distLayer){distLayer.remove();distLayer=null;}',
-      '  var bar=document.getElementById("distbar");',
-      '  if(distPoints.length<1){bar.style.display="none";return;}',
-      '  bar.style.display="flex";',
-      '  var chips=document.getElementById("chips"); chips.innerHTML="";',
-      '  distPoints.forEach(function(pt,i){',
-      '    if(i>0){var arr=document.createElement("span");arr.style.cssText="font-size:10px;color:#ef444488;margin:0 4px";arr.textContent="→";chips.appendChild(arr);}',
-      '    var chip=document.createElement("span");',
-      '    chip.className="chip"+(pt.isWarehouse?" wh":"");',
-      '    chip.draggable=true;',
-      '    chip.innerHTML="<span style=\\"font-size:8px;color:#475569\\">⠿</span>"+(pt.isWarehouse?"🏭 ":"")+pt.code+(pt.name?" "+pt.name:"")+"<span onclick=\\"removePoint(\'"+pt.code+"\')\\" style=\\"margin-left:4px;color:#64748b;cursor:pointer;font-size:9px\\">✕</span>";',
-      '    chip.addEventListener("dragstart",function(){dragFrom=i});',
-      '    chip.addEventListener("dragover",function(e){e.preventDefault()});',
-      '    chip.addEventListener("drop",function(){if(dragFrom!==null&&dragFrom!==i){var arr=distPoints.slice();var item=arr.splice(dragFrom,1)[0];arr.splice(i,0,item);distPoints=arr;dragFrom=null;renderDist();}});',
-      '    chip.addEventListener("dragend",function(){dragFrom=null});',
-      '    chips.appendChild(chip);',
-      '  });',
-      '  if(distPoints.length>=2){',
-      '    var segs=document.getElementById("segs"); segs.innerHTML="";',
-      '    var SC=["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#818cf8"];',
-      '    var totalRoad=0; var group=L.layerGroup();',
-      '    distPoints.forEach(function(pt,i){',
-      '      if(i===0)return;',
-      '      var prev=distPoints[i-1],km=hav(prev,pt),road=km*1.3,col=SC[(i-1)%SC.length];',
-      '      totalRoad+=road;',
-      '      L.polyline([[prev.lat,prev.lon],[pt.lat,pt.lon]],{color:col,weight:2.5,dashArray:"8 6",opacity:0.9}).addTo(group);',
-      '      var ml=(prev.lat+pt.lat)/2,mn=(prev.lon+pt.lon)/2;',
-      '      var lbl="<div style=\\"background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid "+col+"\\">"+Math.round(km)+"km · ~"+Math.round(road)+"km road · "+fmt(road)+"</div>";',
-      '      L.marker([ml,mn],{icon:L.divIcon({className:"",iconAnchor:[70,14],html:lbl})}).addTo(group);',
-      '      var seg=document.createElement("span"); seg.className="seg";',
-      '      seg.style.cssText="background:"+col+"15;border:1px solid "+col+"44;color:"+col;',
-      '      seg.textContent=prev.code+"→"+pt.code+": "+Math.round(km)+"km · ~"+Math.round(road)+"km road · "+fmt(road);',
-      '      segs.appendChild(seg);',
-      '    });',
-      '    distPoints.filter(function(p){return p.isWarehouse}).forEach(function(pt){',
-      '      L.marker([pt.lat,pt.lon],{icon:L.divIcon({className:"",iconAnchor:[14,28],html:"<div style=\\"font-size:22px\\">🏭</div>"})}).addTo(group);',
-      '    });',
-      '    group.addTo(leafMap); distLayer=group;',
-      '    document.getElementById("total").textContent=distPoints.length>2?"Total: ~"+Math.round(totalRoad)+" km road · "+fmt(totalRoad):"";',
-      '  } else { document.getElementById("segs").innerHTML=""; document.getElementById("total").textContent=""; }',
-      '}',
-      'function addPoint(s){if(!distPoints.find(function(p){return p.code===s.code})){distPoints.push(s);renderDist();}}',
-      'function addWH(code,name,lat,lon){addPoint({code:code,name:name,lat:lat,lon:lon,isWarehouse:true,zone:"",cluster:"",status:"",grade:"",state:"",city:""});}',
-      'function removePoint(code){distPoints=distPoints.filter(function(p){return p.code!==code});renderDist();}',
-      'function resetDist(){distPoints=[];renderDist();}',
-      'function toggleDist(){distMode=!distMode;document.getElementById("btnDist").className="btn"+(distMode?" active":"");}',
-      'function setColor(m){colorBy=m;renderMarkers();}',
-      'function setStatus(s){filterStatus=s;renderMarkers();}',
-      'function onSearch(v){',
-      '  var dd=document.getElementById("dropdown");',
-      '  if(!v.trim()){dd.style.display="none";return;}',
-      '  var res=STORES.filter(function(s){return s.code.toLowerCase().indexOf(v.toLowerCase())>=0||s.name.toLowerCase().indexOf(v.toLowerCase())>=0||s.city.toLowerCase().indexOf(v.toLowerCase())>=0}).slice(0,8);',
-      '  if(!res.length){dd.style.display="none";return;}',
-      '  dd.innerHTML=res.map(function(s){return "<div class=\\"dd-item\\" onclick=\\"addPoint(STORES.find(function(x){return x.code===\'"+s.code+"\'}))||true;document.getElementById(\'search\').value=\'\';document.getElementById(\'dropdown\').style.display=\'none\'\\"><b style=\\"color:#7dd3fc;font-size:10px\\">"+s.code+"</b><span>"+s.name+"</span><span style=\\"font-size:9px;color:#64748b\\">"+s.city+"</span></div>";}).join("");',
-      '  dd.style.display="block";',
-      '}',
-      'document.addEventListener("click",function(e){if(!e.target.closest("#search")&&!e.target.closest("#dropdown"))document.getElementById("dropdown").style.display="none";});',
-      '<\/script></body></html>',
-    ].join('\n')
+    const html = `<!DOCTYPE html><html><head>
+<meta charset="utf-8"><title>CityKart Store Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f172a;color:#e2e8f0;font-family:sans-serif;display:flex;flex-direction:column;height:100vh}
+#tb{display:flex;gap:6px;padding:7px 10px;background:#0a1220;border-bottom:1px solid #1e293b;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.btn{font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;cursor:pointer;border:1px solid #334155;background:transparent;color:#94a3b8;white-space:nowrap}
+.btn.on{border-color:#38bdf8;color:#38bdf8;background:#38bdf822}
+.btn.dist-on{border-color:#ef4444;color:#ef4444;background:#ef444422}
+.btn.bound-on{border-color:#34d399;color:#34d399;background:#34d39922}
+.btn.sat-on{border-color:#fbbf24;color:#fbbf24;background:#fbbf2422}
+.sep{width:1px;height:18px;background:#334155;flex-shrink:0}
+#srch{background:#1e293b;border:1px solid #334155;border-radius:5px;color:#e2e8f0;font-size:11px;padding:4px 9px;outline:none;width:180px}
+.ddwrap{position:relative}
+#dd{position:absolute;top:100%;left:0;background:#1e293b;border:1px solid #334155;border-radius:5px;z-index:9999;width:260px;max-height:200px;overflow-y:auto;display:none;margin-top:2px}
+.ddi{padding:5px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid #0f172a;display:flex;gap:8px;align-items:center}
+.ddi:hover{background:#0f172a}
+.zdrop{position:relative}
+.zmenu{position:absolute;top:100%;left:0;background:#1e293b;border:1px solid #334155;border-radius:5px;z-index:9998;min-width:140px;max-height:240px;overflow-y:auto;display:none;margin-top:2px;padding:4px 0}
+.zitem{padding:4px 10px;cursor:pointer;font-size:10px;display:flex;align-items:center;gap:6px}
+.zitem:hover{background:#0f172a}
+#map{flex:1;min-height:0}
+#distbar{background:#0a1220;border-top:1px solid #ef444466;padding:6px 10px;font-size:10px;display:none;flex-wrap:wrap;gap:6px;align-items:center;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#1e293b;border:1px solid #475569;color:#7dd3fc;cursor:grab;user-select:none}
+.chip.wh{background:#14532d33;border-color:#4ade80;color:#4ade80}
+.seg{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;white-space:nowrap}
+#tot{font-size:11px;font-weight:800;color:#fff;margin-left:auto;white-space:nowrap}
+</style></head><body>
+<div id="tb">
+  <span style="font-size:12px;font-weight:700;color:#7dd3fc;margin-right:4px">CityKart Map</span>
+  <div class="sep"></div>
+  <button class="btn on" id="bZ" onclick="setColor('zone')">Zone</button>
+  <button class="btn" id="bC" onclick="setColor('cluster')">Cluster</button>
+  <div class="sep"></div>
+  <button class="btn on" id="bAll" onclick="setStatus('all')">All</button>
+  <button class="btn" id="bAct" onclick="setStatus('ACTIVE')">Active</button>
+  <button class="btn" id="bUp" onclick="setStatus('UPCOMING_STORE')">Upcoming</button>
+  <div class="sep"></div>
+  <div class="zdrop"><button class="btn" id="bZone" onclick="toggleMenu('zmZ')">Zone ▾</button><div class="zmenu" id="zmZ"></div></div>
+  <div class="zdrop"><button class="btn" id="bClust" onclick="toggleMenu('zmC')">Cluster ▾</button><div class="zmenu" id="zmC"></div></div>
+  <button class="btn" id="bBound" onclick="toggleBound()">⬡ Boundary</button>
+  <button class="btn" id="bSat" onclick="toggleSat()">🛰 Satellite</button>
+  <div class="sep"></div>
+  <button class="btn dist-on" id="bDist" onclick="toggleDist()">📏 Distance</button>
+  <button class="btn" onclick="addWH('123','KHETAWAS DC',28.574,76.534)">🏭 KHETAWAS</button>
+  <button class="btn" onclick="addWH('420','FARUKHNAGAR DC',28.458,76.817)">🏭 FARUKHNAGAR</button>
+  <div class="ddwrap">
+    <input id="srch" placeholder="🔍 Store code / name / city" oninput="onSearch(this.value)" autocomplete="off"/>
+    <div id="dd"></div>
+  </div>
+  <button class="btn" onclick="resetDist()">Reset Route</button>
+  <span id="cnt" style="font-size:10px;color:#64748b;margin-left:2px"></span>
+</div>
+<div id="map"></div>
+<div id="distbar">
+  <span style="font-size:9px;color:#64748b;font-weight:700">ROUTE:</span>
+  <span style="font-size:8px;color:#475569;font-style:italic">drag to reorder</span>
+  <span id="chips"></span><span id="segs"></span><span id="tot"></span>
+</div>
+<script>
+var STORES=${storesJson};
+var DIST_INIT=${distJson};
+var ZC={NORTH:"#2563eb",BIHAR:"#d97706","BIHAR-PUJA":"#ea580c",EAST:"#16a34a","NORTH EAST":"#7c3aed",NCR:"#db2777",JK:"#0891b2"};
+var CC={BR1:"#b45309",BR2:"#d97706",BR3:"#ea580c",BR4:"#dc2626",BR5:"#991b1b",UP1:"#1d4ed8",UP2:"#2563eb",UP3:"#4338ca",UP4:"#6d28d9",UP5:"#7c3aed",UP6:"#9333ea",CH1:"#15803d",JH1:"#16a34a",MP1:"#0e7490",NCR:"#be185d",NE:"#0891b2",OD:"#4d7c0f",NSO:"#a16207"};
+var FB="#6b7280";
+var colorBy="zone",filterStatus="all",distMode=true,showBound=false,satMode=false;
+var selZones=new Set(),selClusters=new Set();
+var distPoints=DIST_INIT.slice();
+var leafMap,markers=[],distLayer=null,boundLayers=[],dragFrom=null;
+var allZones=[],allClusters=[];
+var tileOSM,tileSat,tileLabels;
+
+function gc(s){return colorBy==="zone"?(ZC[s.zone]||FB):(CC[s.cluster]||FB)}
+function hav(a,b){var R=6371,dL=(b.lat-a.lat)*Math.PI/180,dN=(b.lon-a.lon)*Math.PI/180,aa=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa))}
+function fmt(km){var h=km/50;return h<1?Math.round(h*60)+" min":h.toFixed(1)+" hr"}
+
+function convexHull(pts){
+  if(pts.length<3)return pts;
+  var sorted=pts.slice().sort(function(a,b){return a[1]-b[1]||a[0]-b[0]});
+  var cross=function(O,A,B){return(A[0]-O[0])*(B[1]-O[1])-(A[1]-O[1])*(B[0]-O[0])};
+  var lower=[];
+  for(var i=0;i<sorted.length;i++){while(lower.length>=2&&cross(lower[lower.length-2],lower[lower.length-1],sorted[i])<=0)lower.pop();lower.push(sorted[i]);}
+  var upper=[];
+  for(var i=sorted.length-1;i>=0;i--){while(upper.length>=2&&cross(upper[upper.length-2],upper[upper.length-1],sorted[i])<=0)upper.pop();upper.push(sorted[i]);}
+  lower.pop();upper.pop();
+  return lower.concat(upper);
+}
+function bufferedHull(pts){
+  var hull=convexHull(pts);if(hull.length<2)return hull;
+  var cx=0,cy=0;hull.forEach(function(p){cx+=p[0];cy+=p[1]});cx/=hull.length;cy/=hull.length;
+  return hull.map(function(p){var dl=p[0]-cx,dn=p[1]-cy,d=Math.sqrt(dl*dl+dn*dn)||1;return[p[0]+dl/d*0.4,p[1]+dn/d*0.4]});
+}
+
+window.onload=function(){
+  leafMap=L.map("map",{zoomControl:true,scrollWheelZoom:true,maxBounds:[[6,67],[38,99]],minZoom:4});
+  tileOSM=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:18});
+  tileSat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:"© Esri",maxZoom:18});
+  tileLabels=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"",maxZoom:18,opacity:0.4});
+  tileOSM.addTo(leafMap);
+  leafMap.setView([24,82],5);
+  var zs=new Set(),cs=new Set();
+  STORES.forEach(function(s){if(s.zone&&s.zone!=="-")zs.add(s.zone);if(s.cluster&&s.cluster!=="-")cs.add(s.cluster);});
+  allZones=Array.from(zs).sort();allClusters=Array.from(cs).sort();
+  buildMenus();
+  setTimeout(function(){leafMap.invalidateSize();render();renderDist();},300);
+  document.addEventListener("click",function(e){
+    if(!e.target.closest(".zdrop")&&!e.target.closest(".ddwrap")){
+      document.querySelectorAll(".zmenu").forEach(function(m){m.style.display="none"});
+      document.getElementById("dd").style.display="none";
+    }
+  });
+};
+
+function buildMenus(){
+  var zmZ=document.getElementById("zmZ");zmZ.innerHTML="";
+  allZones.forEach(function(z){
+    var d=document.createElement("div");d.className="zitem";
+    var col=ZC[z]||FB;
+    d.innerHTML="<span style='width:10px;height:10px;border-radius:50%;background:"+col+";display:inline-block;flex-shrink:0'></span><span>"+z+"</span>";
+    d.style.color=selZones.has(z)?col:"#94a3b8";
+    d.style.background=selZones.has(z)?col+"22":"";
+    d.onclick=function(){if(selZones.has(z))selZones.delete(z);else selZones.add(z);buildMenus();render();};
+    zmZ.appendChild(d);
+  });
+  var zmC=document.getElementById("zmC");zmC.innerHTML="";
+  allClusters.forEach(function(c){
+    var d=document.createElement("div");d.className="zitem";
+    var col=CC[c]||FB;
+    d.innerHTML="<span style='width:10px;height:10px;border-radius:50%;background:"+col+";display:inline-block;flex-shrink:0'></span><span>"+c+"</span>";
+    d.style.color=selClusters.has(c)?col:"#94a3b8";
+    d.style.background=selClusters.has(c)?col+"22":"";
+    d.onclick=function(){if(selClusters.has(c))selClusters.delete(c);else selClusters.add(c);buildMenus();render();};
+    zmC.appendChild(d);
+  });
+  document.getElementById("bZone").style.cssText=selZones.size?"border-color:#38bdf8;color:#38bdf8;background:#38bdf822":"";
+  document.getElementById("bClust").style.cssText=selClusters.size?"border-color:#38bdf8;color:#38bdf8;background:#38bdf822":"";
+}
+function toggleMenu(id){
+  var m=document.getElementById(id);
+  m.style.display=m.style.display==="block"?"none":"block";
+  var other=id==="zmZ"?"zmC":"zmZ";
+  document.getElementById(other).style.display="none";
+}
+
+function filteredStores(){
+  return STORES.filter(function(s){
+    if(filterStatus!=="all"&&s.status!==filterStatus)return false;
+    if(selZones.size>0&&!selZones.has(s.zone))return false;
+    if(selClusters.size>0&&!selClusters.has(s.cluster))return false;
+    return true;
+  });
+}
+
+function render(){
+  markers.forEach(function(m){m.remove()});markers=[];
+  boundLayers.forEach(function(l){l.remove()});boundLayers=[];
+  var vis=filteredStores();
+  document.getElementById("cnt").textContent=vis.length+"/"+STORES.length+" stores";
+  vis.forEach(function(s){
+    var col=gc(s),up=s.status==="UPCOMING_STORE";
+    var html="<div style='width:14px;height:14px;border-radius:50%;background:"+col+";border:2px solid "+(up?"transparent":"#fff")+";outline:"+(up?"2px dashed "+col:"none")+";box-shadow:0 1px 4px #0008'></div>";
+    var icon=L.divIcon({className:"",iconAnchor:[7,7],html:html});
+    var m=L.marker([s.lat,s.lon],{icon:icon}).addTo(leafMap);
+    m.bindTooltip("<b>"+s.code+"</b> "+s.name+"<br>"+s.city+" · "+s.zone,{direction:"top",offset:[0,-8]});
+    m.on("click",function(){if(distMode)addPoint(s)});
+    markers.push(m);
+  });
+  if(showBound)renderBoundaries(vis);
+}
+
+function renderBoundaries(vis){
+  var cmap=colorBy==="zone"?ZC:CC;
+  var key=colorBy==="zone"?"zone":"cluster";
+  var groups={};
+  vis.forEach(function(s){
+    var k=s[key];if(!k||k==="-")return;
+    if(!groups[k])groups[k]=[];
+    groups[k].push([s.lat,s.lon]);
+  });
+  Object.keys(groups).forEach(function(k){
+    var pts=groups[k];if(pts.length<2)return;
+    var hull=bufferedHull(pts);
+    if(hull.length<3)return;
+    var col=cmap[k]||FB;
+    var poly=L.polygon(hull,{color:col,weight:2,fillColor:col,fillOpacity:0.08,dashArray:"6 4"}).addTo(leafMap);
+    poly.bindTooltip(k,{permanent:false,direction:"center"});
+    boundLayers.push(poly);
+  });
+}
+
+function renderDist(){
+  if(distLayer){distLayer.remove();distLayer=null;}
+  var bar=document.getElementById("distbar");
+  if(distPoints.length<1){bar.style.display="none";return;}
+  bar.style.display="flex";
+  var chips=document.getElementById("chips");chips.innerHTML="";
+  distPoints.forEach(function(pt,i){
+    if(i>0){var a=document.createElement("span");a.style.cssText="font-size:10px;color:#ef444488;margin:0 3px";a.textContent="→";chips.appendChild(a);}
+    var chip=document.createElement("span");
+    chip.className="chip"+(pt.isWarehouse?" wh":"");chip.draggable=true;
+    chip.innerHTML="<span style='font-size:8px;color:#475569'>⠿</span>"+(pt.isWarehouse?"🏭 ":"")+pt.code+(pt.name?" "+pt.name:"")+"<span onclick='removePoint(\""+pt.code+"\")' style='margin-left:4px;color:#64748b;cursor:pointer;font-size:9px'>✕</span>";
+    chip.addEventListener("dragstart",function(){dragFrom=i});
+    chip.addEventListener("dragover",function(e){e.preventDefault()});
+    chip.addEventListener("drop",function(){
+      if(dragFrom!==null&&dragFrom!==i){
+        var arr=distPoints.slice();var item=arr.splice(dragFrom,1)[0];arr.splice(i,0,item);
+        distPoints=arr;dragFrom=null;renderDist();
+      }
+    });
+    chip.addEventListener("dragend",function(){dragFrom=null});
+    chips.appendChild(chip);
+  });
+  if(distPoints.length>=2){
+    var segs=document.getElementById("segs");segs.innerHTML="";
+    var SC=["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#818cf8"];
+    var totalRoad=0;var group=L.layerGroup();
+    distPoints.forEach(function(pt,i){
+      if(i===0)return;
+      var prev=distPoints[i-1],km=hav(prev,pt),road=km*1.3,col=SC[(i-1)%SC.length];
+      totalRoad+=road;
+      L.polyline([[prev.lat,prev.lon],[pt.lat,pt.lon]],{color:col,weight:2.5,dashArray:"8 6",opacity:0.9}).addTo(group);
+      var ml=(prev.lat+pt.lat)/2,mn=(prev.lon+pt.lon)/2;
+      var lbl="<div style='background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid "+col+"'>"+Math.round(km)+"km · ~"+Math.round(road)+"km road · "+fmt(road)+"</div>";
+      L.marker([ml,mn],{icon:L.divIcon({className:"",iconAnchor:[70,14],html:lbl})}).addTo(group);
+      var seg=document.createElement("span");seg.className="seg";
+      seg.style.cssText="background:"+col+"15;border:1px solid "+col+"44;color:"+col;
+      seg.textContent=prev.code+"→"+pt.code+": "+Math.round(km)+"km · ~"+Math.round(road)+"km road · "+fmt(road);
+      segs.appendChild(seg);
+    });
+    distPoints.filter(function(p){return p.isWarehouse}).forEach(function(pt){
+      L.marker([pt.lat,pt.lon],{icon:L.divIcon({className:"",iconAnchor:[14,28],html:"<div style='font-size:22px'>🏭</div>"})}).addTo(group);
+    });
+    group.addTo(leafMap);distLayer=group;
+    document.getElementById("tot").textContent=distPoints.length>2?"Total: ~"+Math.round(totalRoad)+" km road · "+fmt(totalRoad):"";
+  } else {document.getElementById("segs").innerHTML="";document.getElementById("tot").textContent="";}
+}
+
+function addPoint(s){if(!distPoints.find(function(p){return p.code===s.code})){distPoints.push(s);renderDist();}}
+function addWH(code,name,lat,lon){addPoint({code:code,name:name,lat:lat,lon:lon,isWarehouse:true,zone:"",cluster:"",status:"",grade:"",state:"",city:""});}
+function removePoint(code){distPoints=distPoints.filter(function(p){return p.code!==code});renderDist();}
+function resetDist(){distPoints=[];renderDist();}
+function toggleDist(){distMode=!distMode;document.getElementById("bDist").className="btn"+(distMode?" dist-on":"");}
+function toggleBound(){
+  showBound=!showBound;
+  document.getElementById("bBound").className="btn"+(showBound?" bound-on":"");
+  render();
+}
+function toggleSat(){
+  satMode=!satMode;
+  document.getElementById("bSat").className="btn"+(satMode?" sat-on":"");
+  if(satMode){leafMap.removeLayer(tileOSM);tileSat.addTo(leafMap);tileLabels.addTo(leafMap);}
+  else{leafMap.removeLayer(tileSat);leafMap.removeLayer(tileLabels);tileOSM.addTo(leafMap);}
+}
+function setColor(m){
+  colorBy=m;
+  document.getElementById("bZ").className="btn"+(m==="zone"?" on":"");
+  document.getElementById("bC").className="btn"+(m==="cluster"?" on":"");
+  render();
+}
+function setStatus(s){
+  filterStatus=s;
+  ["bAll","bAct","bUp"].forEach(function(id){document.getElementById(id).className="btn"});
+  document.getElementById(s==="all"?"bAll":s==="ACTIVE"?"bAct":"bUp").className="btn on";
+  render();
+}
+function onSearch(v){
+  var dd=document.getElementById("dd");
+  if(!v.trim()){dd.style.display="none";return;}
+  var vl=v.toLowerCase();
+  var res=STORES.filter(function(s){return s.code.toLowerCase().indexOf(vl)>=0||s.name.toLowerCase().indexOf(vl)>=0||s.city.toLowerCase().indexOf(vl)>=0}).slice(0,8);
+  if(!res.length){dd.style.display="none";return;}
+  dd.innerHTML=res.map(function(s){
+    return "<div class='ddi' onclick='addPoint(STORES.find(function(x){return x.code===\""+s.code+"\"}));document.getElementById(\"srch\").value=\"\";document.getElementById(\"dd\").style.display=\"none\"'><b style='color:#7dd3fc;font-size:10px'>"+s.code+"</b><span>"+s.name+"</span><span style='font-size:9px;color:#64748b'>"+s.city+"</span></div>";
+  }).join("");
+  dd.style.display="block";
+}
+<\/script></body></html>`
     const blob = new Blob([html], { type: 'text/html' })
     const url  = URL.createObjectURL(blob)
-    const win  = window.open(url, '_blank', 'width=1280,height=820,menubar=no,toolbar=no,location=no,status=no')
-    if (win) setTimeout(() => URL.revokeObjectURL(url), 10000)
+    window.open(url, '_blank', 'width=1280,height=820,menubar=no,toolbar=no,location=no,status=no')
+    setTimeout(() => URL.revokeObjectURL(url), 15000)
   }
 
   // store search results (max 8)

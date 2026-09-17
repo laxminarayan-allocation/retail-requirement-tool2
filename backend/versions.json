@@ -1,5 +1,41 @@
 [
   {
+    "id": "v1.3.60-auto",
+    "version": "1.3.60",
+    "date": "2026-09-16",
+    "type": "fix",
+    "title": "4 updates (2026-09-16)",
+    "desc": "• fix: filter ACTIVE stores only for sale dashboard store-count denominator\n• fix: use per-week store_count from opening_date for sale dashboard denominator\n• feat: add Refresh All Daily button (admin only) in Database Explorer\n• fix: db_scheduler catch-up missed daily refresh on backend startup",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "0d92477228dccb033781d713197194f137bb28fd",
+    "auto": true
+  },
+  {
+    "id": "v1.3.61-auto",
+    "version": "1.3.61",
+    "date": "2026-09-15",
+    "type": "fix",
+    "title": "10 updates (2026-09-15)",
+    "desc": "• feat: add Data Sources tab in Admin Panel showing Oracleâ†’parquet map per section\n• fix: replace anchor CSV download with fetch+blob to send auth header\n• feat: Attr1 Hold â€” replace text inputs with searchable MultiSelect dropdowns\n• feat: Store Hold â€” replace text input with searchable MultiSelect dropdown\n• fix: sale store-summary OOM crash on 76M row parquet\n• fix: warehouse inventory crash â€” item master column mismatch\n• fix: weekly-summary W09 appearing twice (cross-month week split)\n• perf: cache weekly-summary result + bisect for active_count_on\n• perf: cache store-summary result + optimize pivot row loop\n• feat: add start.py + register in Source Viewer",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "b2ef64db0c245e066b20e021a9c26d10b023a026",
+    "auto": true
+  },
+  {
+    "id": "v1.3.62-auto",
+    "version": "1.3.62",
+    "date": "2026-09-12",
+    "type": "feature",
+    "title": "32 updates (2026-09-12)",
+    "desc": "• feat: enhance Data Structure tool â€” search, schema chips, 5 detail tabs, ER diagram\n• feat: Sale Dashboard â€” merge 2Y Weekly tab + per-period store count\n• feat: merge 2Y Weekly into Sale Dashboard as inline tab\n• feat: NSO-format store names in Sale Dashboard + 2yr sale_raw range\n• feat: 2-year weekly sale page + store name fix in sale dashboard\n• fix: sale dashboard store names â€” join on SITE_CODE not LOCATION\n• feat: sale dashboard â€” 8-week range, Max Wk multi-select (W1-W8)\n• feat: sale dashboard â€” store count row, MTD/LM columns, top-N max week\n• feat: sale dashboard â€” 6-week rolling window with week collapse/expand\n• feat: Sale Dashboard â€” store x date MTD pivot table\n• fix: source viewer use d.success instead of d.ok for API response check\n• feat: add Source Viewer page for admin â€” view backend Python route files\n• fix: remove duplicate parquet merge in stores-by â€” store_master already has UPCOMING_STORE\n• fix: show only ACTIVE/UPCOMING_STORE in zone modal + add store master CSV download\n• feat: admin-only backend pages + NSO column order save confirmation\n• feat: add ZONE column to store_master DataStore via LEFT JOIN V_STORE_MASTER\n• feat: parquet-first repos, global NSO col order, Sale Dashboard admin-only\n• perf: parquet-first + 23h TTL cache across all repositories\n• perf: StoreRepository loads from parquet first, warms at startup\n• feat: NSO column order saved globally per user (backend SQLite)\n• feat: Sale Dashboard â€” under construction, admin-only visibility\n• feat: NSO Dashboard drag & drop column reordering\n• fix: parquet_store â€” atomic rename + SALE Raw/PBS SQL column fixes\n• feat: add Parquet Data Store â€” Oracle â†’ local cache layer\n• fix: define auth header inside SchedulerTab component\n• feat: add Run Days selector (Daily / Mon-Sat / Mon-Fri) to Pipeline Scheduler\n• refactor: move Pipeline Scheduler inside Option Listing as a tab\n• feat: Pipeline Scheduler page with live log, Run Now, and time config\n• feat: add MC Search as Step 1 in pipeline + Oracle Queries page\n• feat: pipeline scheduler calls Load from Oracle before running 8 steps\n• feat: add daily 09:00 IST auto-scheduler for all 8 pipeline steps\n• feat: move Results as tab inside Simulation (Calculation page)",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "a38dabd56de2209cd4010e86bf7b6f75060d501a",
+    "auto": true
+  },
+  {
     "id": "v1.3.58-auto",
     "version": "1.3.58",
     "date": "2026-09-12",

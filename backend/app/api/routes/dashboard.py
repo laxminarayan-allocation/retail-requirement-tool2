@@ -1292,6 +1292,65 @@ async def stores_by_split(split: str, value: str):
         return APIResponse.fail(str(exc))
 
 
+@router.get("/store-map-data", response_model=APIResponse)
+async def store_map_data():
+    """Return store locations with lat/lon, zone, cluster for map rendering."""
+    try:
+        import re as _re
+        from app.core.parquet_cache import has_output, read_cache as _rc
+        from app.repositories.store_repository import StoreRepository
+
+        sod = _rc("MISRETAIL", "T_STORE_OPENING_DATE") if has_output("MISRETAIL", "T_STORE_OPENING_DATE") else None
+        if sod is None:
+            return APIResponse.ok(data={"stores": []})
+
+        sod = sod.copy()
+        sod.columns = [c.lower() for c in sod.columns]
+
+        def _parse(s) -> float | None:
+            if pd.isna(s): return None
+            m = _re.search(r"([\d.]+)", str(s))
+            v = float(m.group(1)) if m else 0.0
+            return v if v > 1 else None
+
+        # In data: "latitude" col contains ° E (longitude), "longitude" col contains ° N (latitude)
+        sod["_lon"] = sod["latitude"].apply(_parse)
+        sod["_lat"] = sod["longitude"].apply(_parse)
+
+        # Join zone from store_master (sod has no zone col)
+        sm = StoreRepository().get_all_stores(active_only=False)
+        sm2 = sm[["store_name", "zone", "store_name_f"]].copy()
+        sm2["store_name"] = sm2["store_name"].astype(str)
+        sod["site_code"] = sod["site_code"].astype(str)
+        merged = sod.merge(sm2, left_on="site_code", right_on="store_name", how="left")
+
+        city_col = next((c for c in ("city_name", "city", "store_city") if c in merged.columns), None)
+
+        stores = []
+        for r in merged.to_dict("records"):
+            lat = r.get("_lat")
+            lon = r.get("_lon")
+            if not lat or not lon: continue
+            if not (8 <= lat <= 37 and 68 <= lon <= 98): continue
+            status = str(r.get("store_status", "")).strip().upper()
+            stores.append({
+                "code":    str(r.get("site_code", "")),
+                "name":    str(r.get("store_name_f") or r.get("store_name") or r.get("initial_name") or ""),
+                "lat":     round(lat, 6),
+                "lon":     round(lon, 6),
+                "zone":    str(r.get("zone") or "").strip() or "-",
+                "cluster": str(r.get("cluster_type") or "").strip() or "-",
+                "status":  status,
+                "grade":   str(r.get("store_grade") or ""),
+                "state":   str(r.get("state") or ""),
+                "city":    str(r.get(city_col) or "") if city_col else "",
+            })
+        return APIResponse.ok(data={"stores": stores, "count": len(stores)})
+    except Exception as exc:
+        logger.warning("store-map-data failed: %s", exc)
+        return APIResponse.fail(str(exc))
+
+
 @router.get("/store-master-csv")
 def store_master_csv():
     """Download full store master as CSV."""

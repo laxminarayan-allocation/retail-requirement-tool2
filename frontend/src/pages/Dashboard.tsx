@@ -886,6 +886,293 @@ function DashboardSkeleton() {
 interface DrillStore { code: string; name: string; status: string; grade: string; zone: string; state: string; area: number | null; opening_date?: string }
 interface DrillState { split: string; value: string }
 
+// ── Store Map ─────────────────────────────────────────────────────────────────
+interface MapStore { code: string; name: string; lat: number; lon: number; zone: string; cluster: string; status: string; grade: string; state: string; city: string }
+
+const ZONE_COLORS: Record<string, string> = {
+  'NORTH': '#2563eb', 'BIHAR': '#d97706', 'BIHAR-PUJA': '#ea580c',
+  'EAST': '#16a34a', 'NORTH EAST': '#7c3aed', 'NCR': '#db2777', 'JK': '#0891b2',
+}
+const CLUSTER_COLORS: Record<string, string> = {
+  'BR1':'#b45309','BR2':'#d97706','BR3':'#ea580c','BR4':'#dc2626','BR5':'#991b1b',
+  'UP1':'#1d4ed8','UP2':'#2563eb','UP3':'#4338ca','UP4':'#6d28d9','UP5':'#7c3aed','UP6':'#9333ea',
+  'CH1':'#15803d','JH1':'#16a34a','MP1':'#0e7490','NCR':'#be185d',
+  'NE':'#0891b2','OD':'#4d7c0f','NSO':'#a16207',
+}
+const FALLBACK_COLOR = '#6b7280'
+
+function getColor(store: MapStore, mode: 'zone' | 'cluster'): string {
+  if (mode === 'zone') return ZONE_COLORS[store.zone] ?? FALLBACK_COLOR
+  return CLUSTER_COLORS[store.cluster] ?? FALLBACK_COLOR
+}
+
+function haversineKm(a: MapStore, b: MapStore): number {
+  const R = 6371
+  const dLat = (b.lat - a.lat) * Math.PI / 180
+  const dLon = (b.lon - a.lon) * Math.PI / 180
+  const aa = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa))
+}
+
+function convexHull(pts: [number,number][]): [number,number][] {
+  if (pts.length < 3) return pts
+  const sorted = [...pts].sort((a,b) => a[1]-b[1] || a[0]-b[0])
+  const cross = (O: [number,number], A: [number,number], B: [number,number]) =>
+    (A[0]-O[0])*(B[1]-O[1]) - (A[1]-O[1])*(B[0]-O[0])
+  const lower: [number,number][] = []
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop()
+    lower.push(p)
+  }
+  const upper: [number,number][] = []
+  for (let i = sorted.length-1; i >= 0; i--) {
+    const p = sorted[i]
+    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop()
+    upper.push(p)
+  }
+  lower.pop(); upper.pop()
+  return [...lower, ...upper]
+}
+
+function bufferedHull(pts: [number,number][], buf = 0.5): [number,number][] {
+  const hull = convexHull(pts)
+  if (hull.length < 2) return hull
+  const cx = hull.reduce((s,p) => s+p[0], 0) / hull.length
+  const cy = hull.reduce((s,p) => s+p[1], 0) / hull.length
+  return hull.map(([lat,lon]): [number,number] => {
+    const dlat = lat-cx, dlon = lon-cy
+    const d = Math.sqrt(dlat*dlat + dlon*dlon) || 1
+    return [lat + dlat/d*buf, lon + dlon/d*buf]
+  })
+}
+
+function StoreMapCard() {
+  const [stores, setStores] = useState<MapStore[]>([])
+  const [loading, setLoading] = useState(true)
+  const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'ACTIVE' | 'UPCOMING_STORE'>('all')
+  const [showBounds, setShowBounds] = useState(false)
+  const [distMode, setDistMode] = useState(false)
+  const [distA, setDistA] = useState<MapStore | null>(null)
+  const [distB, setDistB] = useState<MapStore | null>(null)
+  const mapRef = useRef<HTMLDivElement>(null)
+  const leafletMap = useRef<any>(null)
+  const markersRef = useRef<any[]>([])
+  const boundsLayersRef = useRef<any[]>([])
+  const distLayerRef = useRef<any>(null)
+  const distModeRef = useRef(false)
+  const distARef = useRef<MapStore | null>(null)
+  const onClickRef = useRef<((s: MapStore) => void) | null>(null)
+
+  useEffect(() => { distModeRef.current = distMode }, [distMode])
+  useEffect(() => { distARef.current = distA }, [distA])
+  onClickRef.current = (s: MapStore) => {
+    if (!distModeRef.current) return
+    if (!distARef.current) { setDistA(s) }
+    else if (distARef.current.code !== s.code) { setDistB(s) }
+  }
+
+  useEffect(() => {
+    http.get('/dashboard/store-map-data')
+      .then(r => { if (r.data.success) setStores(r.data.data.stores ?? []) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Init map once
+  useEffect(() => {
+    if (loading || !mapRef.current || leafletMap.current) return
+    const L = (window as any).L
+    if (!L) return
+    leafletMap.current = L.map(mapRef.current, {
+      zoomControl: true, scrollWheelZoom: true,
+      maxBounds: [[6, 67], [38, 99]], maxBoundsViscosity: 1.0, minZoom: 5,
+    }).setView([24, 83], 5)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+      maxZoom: 18, subdomains: 'abcd',
+    }).addTo(leafletMap.current)
+  }, [loading])
+
+  // Markers
+  useEffect(() => {
+    if (loading || !leafletMap.current) return
+    const L = (window as any).L; if (!L) return
+    markersRef.current.forEach(m => m.remove()); markersRef.current = []
+    const visible = filterStatus === 'all' ? stores : stores.filter(s => s.status === filterStatus)
+    visible.forEach(s => {
+      const col = getColor(s, colorBy)
+      const isUpcoming = s.status === 'UPCOMING_STORE'
+      const isA = distA?.code === s.code, isB = distB?.code === s.code
+      const marker = L.circleMarker([s.lat, s.lon], {
+        radius: isA || isB ? 12 : isUpcoming ? 8 : 9,
+        fillColor: isA ? '#fbbf24' : isB ? '#f87171' : col,
+        color: '#ffffff', weight: isA || isB ? 3 : 2,
+        opacity: 1, fillOpacity: 1,
+        dashArray: isUpcoming && !isA && !isB ? '5 3' : undefined,
+      })
+      if (distMode) {
+        marker.on('click', () => { if (onClickRef.current) onClickRef.current(s) })
+        marker.bindTooltip(`${s.name || s.code} · ${s.city}`, { direction: 'top', offset: [0,-6] })
+      } else {
+        marker.bindPopup(
+          `<div style="font-size:12px;min-width:170px;line-height:1.7">
+            <div style="font-size:14px;font-weight:800;color:${col};margin-bottom:2px">${s.name || s.code} <span style="font-size:10px;color:#888;font-weight:400">#${s.code}</span></div>
+            <div><span style="color:#888">Zone:</span> <b>${s.zone}</b> &nbsp;·&nbsp; <span style="color:#888">Cluster:</span> <b>${s.cluster}</b></div>
+            <div><span style="color:#888">Grade:</span> ${s.grade} &nbsp;·&nbsp; ${isUpcoming ? '<span style="color:#f59e0b">⬡ Upcoming</span>' : '<span style="color:#16a34a">● Active</span>'}</div>
+            <div style="margin-top:2px;color:#555">📍 ${s.city}, ${s.state}</div>
+          </div>`
+        )
+      }
+      marker.addTo(leafletMap.current)
+      markersRef.current.push(marker)
+    })
+  }, [stores, colorBy, filterStatus, loading, distMode, distA, distB])
+
+  // Zone / Cluster boundaries
+  useEffect(() => {
+    if (!leafletMap.current) return
+    const L = (window as any).L; if (!L) return
+    boundsLayersRef.current.forEach(l => l.remove()); boundsLayersRef.current = []
+    if (!showBounds || stores.length === 0) return
+    const colorMap = colorBy === 'zone' ? ZONE_COLORS : CLUSTER_COLORS
+    const groups: Record<string, [number,number][]> = {}
+    stores.forEach(s => {
+      const key = colorBy === 'zone' ? s.zone : s.cluster
+      if (!key || key === '-') return
+      if (!groups[key]) groups[key] = []
+      groups[key].push([s.lat, s.lon])
+    })
+    Object.entries(groups).forEach(([key, pts]) => {
+      if (pts.length < 3) return
+      const hull = bufferedHull(pts, 0.45)
+      const col = colorMap[key] ?? FALLBACK_COLOR
+      const poly = L.polygon(hull, {
+        color: col, weight: 2.5, opacity: 0.85,
+        fillColor: col, fillOpacity: 0.07, dashArray: '7 5',
+      })
+      poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip', offset: [0,0] })
+      poly.addTo(leafletMap.current)
+      boundsLayersRef.current.push(poly)
+    })
+  }, [showBounds, stores, colorBy, loading])
+
+  // Distance line
+  useEffect(() => {
+    if (!leafletMap.current) return
+    const L = (window as any).L; if (!L) return
+    if (distLayerRef.current) { distLayerRef.current.remove(); distLayerRef.current = null }
+    if (!distA || !distB) return
+    const km = haversineKm(distA, distB)
+    const roadKm = km * 1.3
+    const hrs = roadKm / 50
+    const group = L.layerGroup()
+    L.polyline([[distA.lat, distA.lon], [distB.lat, distB.lon]], {
+      color: '#ef4444', weight: 2.5, dashArray: '8 6', opacity: 0.9,
+    }).addTo(group)
+    const midLat = (distA.lat + distB.lat) / 2, midLon = (distA.lon + distB.lon) / 2
+    L.marker([midLat, midLon], {
+      icon: L.divIcon({
+        className: '', iconAnchor: [80, 14],
+        html: `<div style="background:#1e293b;color:#fff;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;border:1.5px solid #ef4444;box-shadow:0 2px 10px #0008">
+          📏 ${Math.round(km)} km straight &nbsp;|&nbsp; ~${Math.round(roadKm)} km road &nbsp;|&nbsp; ~${hrs<1 ? Math.round(hrs*60)+'min' : hrs.toFixed(1)+'h drive'}
+        </div>`,
+      })
+    }).addTo(group)
+    group.addTo(leafletMap.current)
+    distLayerRef.current = group
+  }, [distA, distB])
+
+  const legendMap = colorBy === 'zone' ? ZONE_COLORS : CLUSTER_COLORS
+  const usedKeys = Array.from(new Set(stores.map(s => colorBy === 'zone' ? s.zone : s.cluster))).filter(k => k && k !== '-')
+  const visibleCount = filterStatus === 'all' ? stores.length : stores.filter(s => s.status === filterStatus).length
+  const distKm = distA && distB ? Math.round(haversineKm(distA, distB)) : null
+  const distRoadKm = distKm ? Math.round(distKm * 1.3) : null
+  const distHrs = distRoadKm ? distRoadKm / 50 : null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 3 }}>
+          {(['zone','cluster'] as const).map(m => (
+            <button key={m} onClick={() => setColorBy(m)} style={{
+              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: colorBy === m ? '#818cf822' : 'transparent',
+              border: `1px solid ${colorBy === m ? '#818cf8' : '#334155'}`,
+              color: colorBy === m ? '#818cf8' : '#475569',
+            }}>{m === 'zone' ? 'Zone' : 'Cluster'}</button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 3 }}>
+          {([['all','All'],['ACTIVE','Active'],['UPCOMING_STORE','Upcoming']] as const).map(([v,l]) => (
+            <button key={v} onClick={() => setFilterStatus(v as any)} style={{
+              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: filterStatus === v ? '#06b6d422' : 'transparent',
+              border: `1px solid ${filterStatus === v ? '#06b6d4' : '#334155'}`,
+              color: filterStatus === v ? '#06b6d4' : '#475569',
+            }}>{l}</button>
+          ))}
+        </div>
+        <button onClick={() => setShowBounds(b => !b)} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: showBounds ? '#34d39922' : 'transparent',
+          border: `1px solid ${showBounds ? '#34d399' : '#334155'}`,
+          color: showBounds ? '#34d399' : '#475569',
+        }}>⬡ Boundary</button>
+        <button onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistA(null); setDistB(null) } }} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: distMode ? '#ef444422' : 'transparent',
+          border: `1px solid ${distMode ? '#ef4444' : '#334155'}`,
+          color: distMode ? '#ef4444' : '#475569',
+        }}>📏 Distance</button>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{visibleCount} stores</span>
+      </div>
+
+      {/* Distance info bar */}
+      {distMode && (
+        <div style={{ background: '#0f172a', border: '1px solid #ef4444', borderRadius: 6, padding: '7px 12px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ color: '#fbbf24', fontWeight: 700 }}>A: {distA ? `${distA.name||distA.code} (${distA.city})` : 'Map pe Store A click karo'}</span>
+          <span style={{ color: '#475569' }}>→</span>
+          <span style={{ color: '#f87171', fontWeight: 700 }}>B: {distB ? `${distB.name||distB.code} (${distB.city})` : 'Store B click karo'}</span>
+          {distKm && <span style={{ marginLeft: 'auto', color: '#fff', fontWeight: 800, fontSize: 13, letterSpacing: 0.3 }}>
+            📏 {distKm} km (straight) &nbsp;|&nbsp; ~{distRoadKm} km road &nbsp;|&nbsp; ~{distHrs! < 1 ? Math.round(distHrs!*60)+'min' : distHrs!.toFixed(1)+'h drive'}
+          </span>}
+          {distA && <button onClick={() => { setDistA(null); setDistB(null) }} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 3, border: '1px solid #334155', background: 'transparent', color: '#64748b', cursor: 'pointer' }}>Reset</button>}
+        </div>
+      )}
+
+      {/* Map */}
+      <div style={{ position: 'relative' }}>
+        {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#64748b' }}>Loading map…</div>}
+        <div ref={mapRef} style={{ height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />
+        {distMode && !distA && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#fbbf24', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Map pe Store A click karo</div>}
+        {distMode && distA && !distB && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#f87171', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Ab Store B click karo</div>}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {usedKeys.map(k => (
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9 }}>
+            <div style={{ width: 11, height: 11, borderRadius: '50%', background: legendMap[k] ?? FALLBACK_COLOR, border: '2px solid #fff', flexShrink: 0 }} />
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{k}</span>
+          </div>
+        ))}
+        <div style={{ borderLeft: '1px solid #334155', paddingLeft: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9 }}>
+            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#6b7280', border: '2px solid #fff', flexShrink: 0 }} />
+            <span style={{ color: '#64748b' }}>Active (solid)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9 }}>
+            <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#6b7280', border: '2px dashed #fff', flexShrink: 0 }} />
+            <span style={{ color: '#64748b' }}>Upcoming (dashed)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => void }) {
   const [stores, setStores] = useState<DrillStore[]>([])
   const [count, setCount] = useState(0)
@@ -1027,6 +1314,7 @@ export default function Dashboard() {
   const [drillDown, setDrillDown] = useState<DrillState | null>(null)
   const [dashTab, setDashTab] = useState<'store-network' | 'allocation'>('store-network')
   const effectiveDashTab = (!showAllocation && dashTab === 'allocation') ? 'store-network' : dashTab
+  const [networkView, setNetworkView] = useState<'cards' | 'map'>('cards')
   const [expandedCards, setExpandedCards] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('dash_expanded_cards') ?? '[]')) } catch { return new Set() }
   })
@@ -1235,7 +1523,17 @@ export default function Dashboard() {
       {/* ── Store Network section ── */}
       {effectiveDashTab === 'store-network' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
+          {(['cards','map'] as const).map(v => (
+            <button key={v} onClick={() => setNetworkView(v)} style={{
+              fontSize: 10, padding: '2px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: networkView === v ? '#4ade8022' : 'transparent',
+              border: `1px solid ${networkView === v ? '#4ade80' : '#334155'}`,
+              color: networkView === v ? '#4ade80' : '#475569',
+            }}>{v === 'cards' ? '📊 Cards' : '🗺 Map'}</button>
+          ))}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
             <button
@@ -1264,7 +1562,8 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
-        <div style={{ width: '100%' }}>
+        {networkView === 'map' && <StoreMapCard />}
+        <div style={{ width: '100%', display: networkView === 'map' ? 'none' : undefined }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, width: '100%', alignItems: 'start' }}>
           {/* Combined Active + Upcoming + Total */}
           <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '10px 12px', borderLeft: '3px solid #818cf8', display: 'flex', flexDirection: 'column', gap: 6, ...cardSpan('network') }}>

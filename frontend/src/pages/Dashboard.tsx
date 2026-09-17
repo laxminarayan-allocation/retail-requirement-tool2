@@ -1259,12 +1259,6 @@ export default function Dashboard() {
               <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8 }}>Store Network</div>
               <ExpandBtn id="network" expanded={expandedCards.has('network')} onToggle={toggleCard} />
               <div style={{ fontSize: 26, fontWeight: 900, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_all_stores)}</div>
-              {(oracle.unique_state_count > 0 || oracle.unique_city_count > 0) && (
-                <div style={{ marginLeft: 4, display: 'flex', gap: 6, fontSize: 9, color: 'var(--text-muted)', alignSelf: 'center' }}>
-                  {oracle.unique_state_count > 0 && <span title="Unique states (Active + Upcoming)"><span style={{ color: '#818cf8', fontWeight: 700 }}>{oracle.unique_state_count}</span> st</span>}
-                  {oracle.unique_city_count > 0 && <span title="Unique cities (Active + Upcoming)"><span style={{ color: '#818cf8', fontWeight: 700 }}>{oracle.unique_city_count}</span> ct</span>}
-                </div>
-              )}
             </div>
             {/* Stacked bar — Active | Upcoming | Closed */}
             {(() => {
@@ -1283,6 +1277,23 @@ export default function Dashboard() {
               <div style={{ flex: 3, paddingRight: 10 }}>
                 <div style={{ fontSize: 9, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Active</div>
                 <div style={{ fontSize: 30, fontWeight: 900, color: '#38bdf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_stores)}</div>
+                {(oracle.unique_state_count > 0 || oracle.unique_city_count > 0) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                    {oracle.unique_state_count > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>States</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.unique_state_count}</div>
+                      </div>
+                    )}
+                    {oracle.unique_state_count > 0 && oracle.unique_city_count > 0 && <div style={{ width: 1, background: 'var(--card-bg)', alignSelf: 'stretch' }} />}
+                    {oracle.unique_city_count > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Cities</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.unique_city_count}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
                   <div>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>TY Open</div>

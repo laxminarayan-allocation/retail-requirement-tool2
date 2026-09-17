@@ -885,6 +885,71 @@ interface DlWinState {
   rows: number
 }
 
+// ── Used In mapping: owner__object → page names ───────────────────────────────
+const USED_IN: Record<string, string[]> = {
+  'CK_A2166__STORE_MASTER_NSO':            ['Distribution', 'NSO', 'Sale', 'Simulation'],
+  'CK_A2166__V_ALL_WITH_NSO':              ['NSO'],
+  'CK_A2166__V_ART_PIVOT':                 ['Requirements'],
+  'CK_A2166__V_ART_PIVOT_V2':              ['Requirements'],
+  'CK_A2166__V_ART_REQ_APPS':              ['Distribution', 'Requirements'],
+  'CK_A2166__V_ART_REQ_GM':               ['Distribution', 'Requirements'],
+  'CK_A2166__V_BARCODE_PIVOT':             ['Requirements'],
+  'CK_A2166__V_BARCODE_REQ_APPS_GRC_V2':  ['Distribution', 'Requirements'],
+  'CK_A2166__V_BARCODE_REQ_APPS_WMS_V2':  ['Distribution', 'Requirements'],
+  'CK_A2166__V_LIST_PBS_REQ':              ['Requirements'],
+  'CK_A2166__V_LIST_PIVOT':               ['Requirements'],
+  'CK_A2166__V_MC_PIVOT':                  ['Requirements'],
+  'CK_A2166__V_MC_PIVOT_V2':               ['Requirements'],
+  'CK_A2166__V_MC_REQ_APPS_2':             ['Distribution', 'Requirements', 'Simulation'],
+  'CK_A2166__V_MC_REQ_GM':                ['Distribution', 'Requirements'],
+  'CK_A2166__V_MC_STOCK':                  ['Master Data'],
+  'CK_A2166__V_MC_MDQ_STR':               ['Master Data'],
+  'CK_A2166__V_MRP_PIVOT':                 ['Requirements'],
+  'CK_A2166__V_MRP_REQ_APPS':              ['Distribution', 'Requirements'],
+  'CK_A2166__V_NSO':                       ['NSO'],
+  'CK_A2166__V_OPTION_PIVOT':              ['Requirements'],
+  'CK_A2166__V_OPTION_REQ_APPS':           ['Distribution', 'Requirements'],
+  'CK_A2166__V_SIZE_PIVOT':                ['Requirements'],
+  'CK_A2166__V_SPARKY_PBS_REQ':            ['Requirements'],
+  'CK_A2166__V_SPARKY_PIVOT':              ['Requirements'],
+  'CK_A2166__V_STORE_NAMES':               ['Requirements'],
+  'CK_A2166__V_SZ_REQ_APPS':              ['Distribution', 'Requirements'],
+  'CK_A2166__V_TABLE_REQ_APPS':            ['Requirements'],
+  'CK_A2166__V_WH_STOCK':                  ['Requirements'],
+  'CK_A2166__T_ALLOCATION_FOR_ALL_DIVISION': ['Dashboard', 'Requirements'],
+  'CK_A2166__T_STK_REPORT_DC_STOCK':       ['Warehouse'],
+  'CK_A2166__T_STORE_OPENING_DATE':        ['Dashboard', 'Distribution'],
+  'CK_A2166__T_CLR_CONCEPT_AW26_V1':       ['Distribution'],
+  'CK_A2166__T_GRID':                      ['Option Listing'],
+  'CK_A2166__V_ITEM_MASTER':               ['Distribution', 'Option Listing', 'Warehouse'],
+  'CK_A2166__ITEM_MV_FILTER_META_V2':      ['Requirements'],
+}
+
+// Pivot files are created by backend (req_dashboard pivot endpoint), not directly from Oracle
+const PIVOT_OBJECTS = new Set([
+  'V_ART_PIVOT', 'V_ART_PIVOT_V2', 'V_BARCODE_PIVOT', 'V_LIST_PIVOT',
+  'V_MC_PIVOT', 'V_MC_PIVOT_V2', 'V_MRP_PIVOT', 'V_OPTION_PIVOT',
+  'V_SIZE_PIVOT', 'V_SPARKY_PIVOT',
+])
+
+function getFileSource(owner: string, obj: string): { label: string; color: string } {
+  if (owner === 'QUERY') return { label: 'SQL Query', color: '#fbbf24' }
+  if (PIVOT_OBJECTS.has(obj)) return { label: 'Backend Pivot', color: '#a78bfa' }
+  return { label: 'Oracle', color: '#34d399' }
+}
+
+const PAGE_CHIP_COLOR: Record<string, string> = {
+  'Dashboard':    '#38bdf8',
+  'Requirements': '#a78bfa',
+  'Distribution': '#fb923c',
+  'NSO':          '#f472b6',
+  'Sale':         '#4ade80',
+  'Simulation':   '#facc15',
+  'Warehouse':    '#67e8f9',
+  'Master Data':  '#94a3b8',
+  'Option Listing':'#f97316',
+}
+
 function DownloadedFilesPanel() {
   const isMobile = useIsMobile()
   const { user } = useAuth()
@@ -1306,19 +1371,21 @@ function DownloadedFilesPanel() {
           <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '16px 0', textAlign: 'center' }}>No match</div>
         )}
         {filteredFiles.length > 0 && (
-          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720, fontSize: 12, tableLayout: 'fixed' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1000, fontSize: 12, tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: 28 }} />
               <col style={{ width: 200 }} />
-              <col style={{ width: 80 }} />
-              <col style={{ width: 80 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 70 }} />
               <col style={{ width: 110 }} />
+              <col style={{ width: 95 }} />
+              <col style={{ width: 200 }} />
+              <col style={{ width: 90 }} />
               <col style={{ width: 200 }} />
             </colgroup>
             <thead style={{ position: 'sticky', top: 0, zIndex: 3 }}>
               <tr>
-                {[['', ''], ['NAME', 'name'], ['ROWS', 'rows'], ['SIZE', 'size'], ['AGE', 'age'], ['FREQ', 'freq'], ['ACTIONS', '']].map(([label, key]) => (
+                {[['', ''], ['NAME', 'name'], ['ROWS', 'rows'], ['SIZE', 'size'], ['AGE', 'age'], ['FREQ', 'freq'], ['SOURCE', ''], ['USED IN', ''], ['ACTIONS', '']].map(([label, key]) => (
                   <th key={label} onClick={key ? () => toggleSort(key as SortKey) : undefined}
                     style={{
                       padding: '7px 10px', fontSize: 10, fontWeight: 700,
@@ -1401,6 +1468,38 @@ function DownloadedFilesPanel() {
                   </button>
                 </td>
 
+                {/* Source */}
+                {(() => {
+                  const src = getFileSource(f.owner, f.object)
+                  return (
+                    <td style={{ ...TD }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+                        border: `1px solid ${src.color}44`, color: src.color, background: `${src.color}15`,
+                        whiteSpace: 'nowrap' }}>
+                        {src.label}
+                      </span>
+                    </td>
+                  )
+                })()}
+
+                {/* Used In */}
+                <td style={{ ...TD, overflow: 'visible' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                    {(USED_IN[key] ?? []).length === 0
+                      ? <span style={{ fontSize: 9, color: '#475569', fontStyle: 'italic' }}>—</span>
+                      : (USED_IN[key] ?? []).map(page => (
+                          <span key={page} style={{
+                            fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6,
+                            border: `1px solid ${PAGE_CHIP_COLOR[page] ?? '#64748b'}44`,
+                            color: PAGE_CHIP_COLOR[page] ?? '#94a3b8',
+                            background: `${PAGE_CHIP_COLOR[page] ?? '#64748b'}12`,
+                            whiteSpace: 'nowrap',
+                          }}>{page}</span>
+                        ))
+                    }
+                  </div>
+                </td>
+
                 {/* Actions */}
                 <td style={{ ...TD }}>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1429,7 +1528,7 @@ function DownloadedFilesPanel() {
               {/* SQL block inline (QUERY rows only) */}
               {f.owner === 'QUERY' && isOpen && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 0, borderBottom: '1px solid #1e293b' }}>
+                  <td colSpan={9} style={{ padding: 0, borderBottom: '1px solid #1e293b' }}>
                     <div style={{ background: '#080f1a', padding: '8px 12px' }}>
                       <SqlTextBlock file={f} onSaved={(sql) => {
                         setFiles(prev => prev.map(x =>

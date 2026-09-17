@@ -1419,7 +1419,7 @@ function StoreMapCard() {
                     background: pt.isWarehouse ? '#14532d33' : '#1e293b',
                     border: `1px solid ${pt.isWarehouse ? '#4ade80' : '#475569'}`,
                     color: pt.isWarehouse ? '#4ade80' : '#7dd3fc' }}>
-                    {pt.isWarehouse ? '🏭' : ''}{pt.code} {pt.isWarehouse ? pt.name.replace(' DC','') : ''}
+                    {pt.isWarehouse ? '🏭 ' : ''}{pt.code}{pt.name ? ` ${pt.name}` : ''}
                     <span onClick={() => removeDistPoint(pt.code)}
                       style={{ marginLeft: 2, color: '#64748b', cursor: 'pointer', fontSize: 9 }}>✕</span>
                   </span>

@@ -65,20 +65,31 @@ def _seconds_until(hhmm: str) -> float:
     return (target - now).total_seconds()
 
 
+def _object_exists(conn, owner: str, obj: str) -> bool:
+    """Check if table/view exists in Oracle for this user."""
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM ALL_OBJECTS WHERE OWNER=:1 AND OBJECT_NAME=:2 AND OBJECT_TYPE IN ('TABLE','VIEW','MATERIALIZED VIEW')",
+            [owner.upper(), obj.upper()]
+        )
+        return (cur.fetchone() or [0])[0] > 0
+    except Exception:
+        return False
+
+
 def _fetch_one(owner: str, obj: str) -> None:
     try:
-        from app.db.oracle import get_pool
+        from app.db.connection import get_connection
+        from app.repositories.base_repository import fetch_df
         from app.core.parquet_cache import write_cache
-        import oracledb
-        import pandas as pd
 
-        pool = get_pool()
-        with pool.acquire() as conn:
-            sql = f"SELECT * FROM {owner}.{obj}"
-            with conn.cursor() as cur:
-                cur.execute(sql)
-                cols = [c[0].lower() for c in cur.description]
-                df = pd.DataFrame(cur.fetchall(), columns=cols)
+        with get_connection() as conn:
+            if not _object_exists(conn, owner, obj):
+                logger.info("db_scheduler: skip %s.%s — not found in Oracle", owner, obj)
+                return
+            sql = f"SELECT * FROM {owner.upper()}.{obj.upper()}"
+            df = fetch_df(conn, sql, label=f"{owner}.{obj}")
         write_cache(owner, obj, df)
         logger.info("db_scheduler: refreshed %s.%s → %d rows", owner, obj, len(df))
     except Exception as exc:

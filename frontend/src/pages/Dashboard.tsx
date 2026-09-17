@@ -393,8 +393,10 @@ function StateCityCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
   const [viewMode, setViewMode] = useState<'state' | 'city' | 'combo'>('state')
   const stateDist = oracle.store_state_distribution ?? {}
   const stateUpDist = oracle.store_state_upcoming ?? {}
+  const stateClDist = oracle.closed_state_distribution ?? {}
   const cityDist = oracle.store_city_distribution ?? {}
   const cityUpDist = oracle.store_city_upcoming ?? {}
+  const cityClDist = oracle.closed_city_distribution ?? {}
   const stateCityDist = oracle.state_city_distribution ?? {}
   const hasCityData = Object.keys(cityDist).length > 0
   const hasComboData = Object.keys(stateCityDist).length > 0
@@ -409,10 +411,12 @@ function StateCityCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
 
   const activeDist = viewMode === 'city' ? cityDist : stateDist
   const upcomingDist = viewMode === 'city' ? cityUpDist : stateUpDist
-  const allKeys = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+  const closedDistSC = viewMode === 'city' ? cityClDist : stateClDist
+  const hasClosedSC = Object.keys(closedDistSC).length > 0
+  const allKeys = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist), ...Object.keys(closedDistSC)]))
     .filter(k => k !== '—' && k !== '-')
     .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
-  const mx = Math.max(...allKeys.map(k => (activeDist[k] ?? 0) + (upcomingDist[k] ?? 0)), 1)
+  const mx = Math.max(...allKeys.map(k => (activeDist[k] ?? 0) + (upcomingDist[k] ?? 0) + (closedDistSC[k] ?? 0)), 1)
 
   // combo: states sorted by total city count desc
   const comboStates = Object.keys(stateCityDist)
@@ -451,10 +455,12 @@ function StateCityCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
           <div style={{ display: 'flex', gap: 8, fontSize: 9, marginBottom: 6 }}>
             <span style={{ color: '#38bdf8' }}>● Active</span>
             <span style={{ color: '#f59e0b' }}>● Upcoming</span>
+            {hasClosedSC && <span style={{ color: '#f87171' }}>● Closed</span>}
           </div>
           {allKeys.map(key => {
             const a = activeDist[key] ?? 0
             const u = upcomingDist[key] ?? 0
+            const c = closedDistSC[key] ?? 0
             return (
               <div key={key} onClick={() => onDrill(viewMode, key)} title={`Click to see all ${key} stores`}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }}
@@ -466,10 +472,12 @@ function StateCityCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
                 <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
                   <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
                   <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
+                  <div style={{ width: `${(c / mx) * 100}%`, height: '100%', background: '#f87171', opacity: 0.7 }} />
                 </div>
                 <div style={{ display: 'flex', gap: 0, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
                   <span style={{ width: 28, textAlign: 'right', color: '#38bdf8' }}>{a > 0 ? a : ''}</span>
                   <span style={{ width: 26, textAlign: 'right', color: '#f59e0b' }}>{u > 0 ? `+${u}` : ''}</span>
+                  {hasClosedSC && <span style={{ width: 24, textAlign: 'right', color: '#f87171' }}>{c > 0 ? `-${c}` : ''}</span>}
                 </div>
               </div>
             )
@@ -1342,9 +1350,11 @@ export default function Dashboard() {
           {Object.keys(oracle.store_zone_distribution ?? {}).length > 0 && (() => {
             const activeDist = oracle.store_zone_distribution ?? {}
             const upcomingDist = oracle.store_zone_upcoming ?? {}
-            const allZones = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+            const closedZoneDist = oracle.closed_zone_distribution ?? {}
+            const hasClosedZ = Object.keys(closedZoneDist).length > 0
+            const allZones = Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist), ...Object.keys(closedZoneDist)]))
               .sort((a, b) => ((activeDist[b] ?? 0) + (upcomingDist[b] ?? 0)) - ((activeDist[a] ?? 0) + (upcomingDist[a] ?? 0)))
-            const mx = Math.max(...allZones.map(z => (activeDist[z] ?? 0) + (upcomingDist[z] ?? 0)), 1)
+            const mx = Math.max(...allZones.map(z => (activeDist[z] ?? 0) + (upcomingDist[z] ?? 0) + (closedZoneDist[z] ?? 0)), 1)
             return (
               <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #818cf8', minWidth: 0, overflow: 'hidden', ...cardSpan('zone') }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1355,21 +1365,25 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', gap: 8, fontSize: 9 }}>
                     <span style={{ color: '#38bdf8' }}>● Active</span>
                     <span style={{ color: '#f59e0b' }}>● Upcoming</span>
+                    {hasClosedZ && <span style={{ color: '#f87171' }}>● Closed</span>}
                   </div>
                 </div>
                 {allZones.map(zone => {
                   const a = activeDist[zone] ?? 0
                   const u = upcomingDist[zone] ?? 0
+                  const c = closedZoneDist[zone] ?? 0
                   return (
                     <div key={zone} onClick={() => setDrillDown({ split: 'zone', value: zone })} title={`Click to see all ${zone} stores`} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }} onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                       <span style={{ width: 56, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 8 }}>{zone}</span>
                       <div style={{ flex: 1, minWidth: 10, height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
                         <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: '#38bdf8' }} />
                         <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b' }} />
+                        <div style={{ width: `${(c / mx) * 100}%`, height: '100%', background: '#f87171', opacity: 0.7 }} />
                       </div>
                       <div style={{ display: 'flex', gap: 0, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontSize: 9 }}>
                         <span style={{ width: 28, textAlign: 'right', color: '#38bdf8' }}>{a > 0 ? a : ''}</span>
                         <span style={{ width: 26, textAlign: 'right', color: '#f59e0b' }}>{u > 0 ? `+${u}` : ''}</span>
+                        {hasClosedZ && <span style={{ width: 24, textAlign: 'right', color: '#f87171' }}>{c > 0 ? `-${c}` : ''}</span>}
                       </div>
                     </div>
                   )

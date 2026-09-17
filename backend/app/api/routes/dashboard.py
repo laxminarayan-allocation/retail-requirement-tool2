@@ -126,10 +126,22 @@ def _safe_oracle_stats() -> dict:
                 last_opened_name = ", ".join(str(n) for n in names)
                 last_opened_date = max_date.strftime("%d %b %Y")
 
+        # Closed stores count
+        closed_stores = 0
+        try:
+            if _sod is not None:
+                col_status = next((c for c in _sod.columns if c.lower() == "store_status"), None)
+                if col_status:
+                    closed_stores = int((_sod[col_status].str.upper() == "CLOSED").sum())
+        except Exception as exc:
+            logger.warning("closed store count failed: %s", exc)
+
         total_all_stores = active_stores + upcoming_stores
         status_dist: dict = {"ACTIVE": active_stores}
         if upcoming_stores:
             status_dist["UPCOMING"] = upcoming_stores
+        if closed_stores:
+            status_dist["CLOSED"] = closed_stores
 
         # NSO: active stores opened on/after the 1st of two months ago (dynamic)
         # Aug → 01-Jun, Sep → 01-Jul, Jan → 01-Nov of prior year, etc.
@@ -220,16 +232,57 @@ def _safe_oracle_stats() -> dict:
         except Exception as _te:
             logger.warning("store_tag dist failed: %s", _te)
 
+        # Closed store distributions
+        closed_grade_dist: dict = {}
+        closed_zone_dist: dict = {}
+        closed_tag_dist: dict = {}
+        closed_state_dist: dict = {}
+        closed_city_dist: dict = {}
+        cal_year_closed_dist: dict = {}
+        fin_year_closed_dist: dict = {}
+        try:
+            if _sod is not None and "store_status" in _sod.columns:
+                closed_df = _sod[_sod["store_status"].str.upper() == "CLOSED"].copy()
+                if "store_grade" in closed_df.columns:
+                    closed_grade_dist = closed_df["store_grade"].fillna("—").value_counts().to_dict()
+                zone_col_c = next((c for c in ("zone", "region_type") if c in closed_df.columns), None)
+                if zone_col_c:
+                    closed_zone_dist = {k: v for k, v in closed_df[zone_col_c].fillna("—").value_counts().to_dict().items() if str(k).strip() not in ("-", "—", "")}
+                if "store_tag" in closed_df.columns:
+                    closed_tag_dist = closed_df["store_tag"].fillna("-").value_counts().to_dict()
+                if "state" in closed_df.columns:
+                    closed_state_dist = closed_df["state"].fillna("—").value_counts().to_dict()
+                # Use last_bill_date for FY/CY distribution of closed stores
+                date_col_c = "last_bill_date" if "last_bill_date" in closed_df.columns else "opening_date"
+                if date_col_c in closed_df.columns:
+                    od_c = pd.to_datetime(closed_df[date_col_c], errors="coerce")
+                    valid_c = closed_df[od_c.notna()].copy()
+                    valid_c["_cy"] = od_c[od_c.notna()].dt.year.astype(str)
+                    cal_year_closed_dist = valid_c["_cy"].value_counts().sort_index().to_dict()
+                    valid_c["_fy"] = od_c[od_c.notna()].apply(_fy_label)
+                    fin_year_closed_dist = valid_c["_fy"].value_counts().sort_index().to_dict()
+        except Exception as _cle:
+            logger.warning("closed dist failed: %s", _cle)
+
         store_city_dist: dict = {}
         store_city_upcoming_dist: dict = {}
         state_city_dist: dict = {}   # {state: {city: count}}
+        unique_state_count: int = 0
+        unique_city_count: int = 0
         try:
             city_col = next((c for c in ("city", "store_city", "city_name") if _sod is not None and c in _sod.columns), None)
             if _sod is not None and "store_status" in _sod.columns and city_col:
                 active_city = _sod[_sod["store_status"].str.upper() == "ACTIVE"]
                 upcoming_city = _sod[_sod["store_status"].str.upper() == "UPCOMING_STORE"]
+                closed_city_df = _sod[_sod["store_status"].str.upper() == "CLOSED"]
                 store_city_dist = active_city[city_col].fillna("—").value_counts().to_dict()
                 store_city_upcoming_dist = upcoming_city[city_col].fillna("—").value_counts().to_dict()
+                closed_city_dist = {k: v for k, v in closed_city_df[city_col].fillna("—").value_counts().to_dict().items() if str(k).strip() not in ("-", "—", "")}
+                # Unique state/city across active + upcoming
+                au_df = _sod[_sod["store_status"].str.upper().isin(["ACTIVE", "UPCOMING_STORE"])]
+                if "state" in au_df.columns:
+                    unique_state_count = int(au_df["state"].dropna().nunique())
+                unique_city_count = int(au_df[city_col].dropna().nunique())
                 if "state" in active_city.columns:
                     for state_val, grp in active_city.groupby("state"):
                         sk = str(state_val).strip()
@@ -325,6 +378,16 @@ def _safe_oracle_stats() -> dict:
             "store_city_distribution": {str(k): int(v) for k, v in store_city_dist.items()},
             "store_city_upcoming": {str(k): int(v) for k, v in store_city_upcoming_dist.items()},
             "state_city_distribution": state_city_dist,
+            "closed_stores": closed_stores,
+            "closed_grade_distribution": {str(k): int(v) for k, v in sorted(closed_grade_dist.items())},
+            "closed_zone_distribution": {str(k): int(v) for k, v in closed_zone_dist.items()},
+            "closed_tag_distribution": {str(k): int(v) for k, v in closed_tag_dist.items()},
+            "closed_state_distribution": {str(k): int(v) for k, v in closed_state_dist.items()},
+            "closed_city_distribution": {str(k): int(v) for k, v in closed_city_dist.items()},
+            "store_cal_year_closed": {str(k): int(v) for k, v in cal_year_closed_dist.items()},
+            "store_fin_year_closed": {str(k): int(v) for k, v in fin_year_closed_dist.items()},
+            "unique_state_count": unique_state_count,
+            "unique_city_count": unique_city_count,
         }
         _oracle_cache.update(result)
         _oracle_cache_ts = time.time()
@@ -371,6 +434,16 @@ def _safe_oracle_stats() -> dict:
             "store_city_distribution": {},
             "store_city_upcoming": {},
             "state_city_distribution": {},
+            "closed_stores": 0,
+            "closed_grade_distribution": {},
+            "closed_zone_distribution": {},
+            "closed_tag_distribution": {},
+            "closed_state_distribution": {},
+            "closed_city_distribution": {},
+            "store_cal_year_closed": {},
+            "store_fin_year_closed": {},
+            "unique_state_count": 0,
+            "unique_city_count": 0,
         }
 
 

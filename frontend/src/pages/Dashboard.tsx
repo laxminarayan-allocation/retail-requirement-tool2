@@ -159,6 +159,16 @@ interface OracleStats {
   store_city_distribution: Record<string, number>
   store_city_upcoming: Record<string, number>
   state_city_distribution: Record<string, Record<string, number>>
+  closed_stores: number
+  closed_grade_distribution: Record<string, number>
+  closed_zone_distribution: Record<string, number>
+  closed_tag_distribution: Record<string, number>
+  closed_state_distribution: Record<string, number>
+  closed_city_distribution: Record<string, number>
+  store_cal_year_closed: Record<string, number>
+  store_fin_year_closed: Record<string, number>
+  unique_state_count: number
+  unique_city_count: number
 }
 
 interface DivBreak { division: string; total_req: number; stores: number; rows: number }
@@ -524,10 +534,11 @@ function GradeCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: Or
   const [tab, setTab] = useState<'grade' | 'zone'>('grade')
   const activeGrade = Object.entries(oracle.store_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
   const upcomingGrade = Object.entries(oracle.upcoming_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
+  const closedGrade = Object.entries(oracle.closed_grade_distribution ?? {}).filter(([k]) => k !== '—' && k !== '-')
   const zoneGrade = oracle.zone_grade_distribution ?? {}
   if (activeGrade.length === 0 && upcomingGrade.length === 0) return null
 
-  const allGrades = Array.from(new Set([...activeGrade.map(([k]) => k), ...upcomingGrade.map(([k]) => k)]))
+  const allGrades = Array.from(new Set([...activeGrade.map(([k]) => k), ...upcomingGrade.map(([k]) => k), ...closedGrade.map(([k]) => k)]))
     .sort((a, b) => {
       const ai = GRADE_ORDER.indexOf(a); const bi = GRADE_ORDER.indexOf(b)
       if (ai === -1 && bi === -1) return a.localeCompare(b)
@@ -536,7 +547,9 @@ function GradeCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: Or
     })
   const activeMap = Object.fromEntries(activeGrade)
   const upcomingMap = Object.fromEntries(upcomingGrade)
-  const maxGrade = Math.max(...allGrades.map(g => (activeMap[g] ?? 0) + (upcomingMap[g] ?? 0)), 1)
+  const closedMap = Object.fromEntries(closedGrade)
+  const maxGrade = Math.max(...allGrades.map(g => (activeMap[g] ?? 0) + (upcomingMap[g] ?? 0) + (closedMap[g] ?? 0)), 1)
+  const hasClosedGrade = closedGrade.length > 0
 
   const zones = Object.keys(zoneGrade).filter(z => z && z !== '—' && z !== '-').sort()
   const hasZoneGrade = zones.length > 0
@@ -564,11 +577,13 @@ function GradeCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: Or
       <div style={{ display: 'flex', gap: 8, fontSize: 9, marginBottom: 8 }}>
         <span style={{ color: '#38bdf8' }}>● Active</span>
         {tab === 'grade' && <span style={{ color: '#f59e0b' }}>● Upcoming</span>}
+        {tab === 'grade' && hasClosedGrade && <span style={{ color: '#f87171' }}>● Closed</span>}
       </div>
 
       {tab === 'grade' && allGrades.map(grade => {
         const aVal = activeMap[grade] ?? 0
         const uVal = upcomingMap[grade] ?? 0
+        const cVal = closedMap[grade] ?? 0
         const color = GRADE_COLORS[grade] ?? '#64748b'
         return (
           <div key={grade} onClick={() => onDrill('grade', grade)} title={`Click to see all Grade ${grade} stores`}
@@ -578,18 +593,16 @@ function GradeCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle: Or
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
               <span style={{ width: 22, fontWeight: 700, fontSize: 11, color, flexShrink: 0 }}>{grade}</span>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <div style={{ height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: 5, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
                   <div style={{ width: `${(aVal / maxGrade) * 100}%`, height: '100%', background: '#38bdf8', borderRadius: 2 }} />
+                  <div style={{ width: `${(uVal / maxGrade) * 100}%`, height: '100%', background: '#f59e0b', opacity: 0.85 }} />
+                  <div style={{ width: `${(cVal / maxGrade) * 100}%`, height: '100%', background: '#f87171', opacity: 0.8 }} />
                 </div>
-                {uVal > 0 && (
-                  <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${(uVal / maxGrade) * 100}%`, height: '100%', background: '#f59e0b', borderRadius: 2, opacity: 0.85 }} />
-                  </div>
-                )}
               </div>
-              <div style={{ minWidth: 30, textAlign: 'right', flexShrink: 0, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
-                <span style={{ color: '#38bdf8' }}>{aVal}</span>
-                {uVal > 0 && <span style={{ color: '#f59e0b' }}> +{uVal}</span>}
+              <div style={{ flexShrink: 0, display: 'flex', gap: 0, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ width: 22, textAlign: 'right', color: '#38bdf8' }}>{aVal > 0 ? aVal : ''}</span>
+                <span style={{ width: 22, textAlign: 'right', color: '#f59e0b' }}>{uVal > 0 ? `+${uVal}` : ''}</span>
+                {hasClosedGrade && <span style={{ width: 22, textAlign: 'right', color: '#f87171' }}>{cVal > 0 ? `-${cVal}` : ''}</span>}
               </div>
             </div>
           </div>
@@ -643,15 +656,19 @@ function YearSplitCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
   const fy = oracle.store_fin_year_dist ?? {}
   const cyUp = oracle.store_cal_year_upcoming ?? {}
   const fyUp = oracle.store_fin_year_upcoming ?? {}
+  const cyCl = oracle.store_cal_year_closed ?? {}
+  const fyCl = oracle.store_fin_year_closed ?? {}
   const tag = oracle.store_tag_distribution ?? {}
   const tagUp = oracle.store_tag_upcoming ?? {}
+  const tagCl = oracle.closed_tag_distribution ?? {}
   if (!Object.keys(cy).length && !Object.keys(fy).length && !Object.keys(tag).length) return null
 
   const activeDist = tab === 'cy' ? cy : tab === 'tag' ? tag : fy
   const upcomingDist = tab === 'cy' ? cyUp : tab === 'tag' ? tagUp : fyUp
+  const closedDist = tab === 'cy' ? cyCl : tab === 'tag' ? tagCl : fyCl
 
   const allKeys = tab === 'tag'
-    ? Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)]))
+    ? Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist), ...Object.keys(closedDist)]))
         .filter(t => t !== '-' && t !== '—')
         .sort((a, b) => {
           const fyA = a.match(/^FY(\d+)\s*-\s*Q(\d)/); const fyB = b.match(/^FY(\d+)\s*-\s*Q(\d)/)
@@ -659,10 +676,11 @@ function YearSplitCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
           if (fyA) return 1; if (fyB) return -1
           return a.localeCompare(b)
         })
-    : Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist)])).sort()
+    : Array.from(new Set([...Object.keys(activeDist), ...Object.keys(upcomingDist), ...Object.keys(closedDist)])).sort()
 
-  const mx = Math.max(...allKeys.map(k => (activeDist[k] ?? 0) + (upcomingDist[k] ?? 0)), 1)
+  const mx = Math.max(...allKeys.map(k => (activeDist[k] ?? 0) + (upcomingDist[k] ?? 0) + (closedDist[k] ?? 0)), 1)
   const COLORS = ['#f59e0b', '#fb923c', '#34d399', '#38bdf8', '#818cf8', '#ec4899', '#a78bfa', '#10b981', '#06b6d4', '#84cc16']
+  const hasClosed = Object.keys(closedDist).length > 0
   return (
     <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '12px 14px', borderLeft: '3px solid #f59e0b', minWidth: 0, overflow: 'hidden' }}>
       <div style={{ marginBottom: 8 }}>
@@ -685,11 +703,13 @@ function YearSplitCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
         <div style={{ display: 'flex', gap: 6, fontSize: 9 }}>
           <span style={{ color: 'var(--text-secondary)' }}>● Active</span>
           <span style={{ color: '#f59e0b' }}>● Upcoming</span>
+          {hasClosed && <span style={{ color: '#f87171' }}>● Closed</span>}
         </div>
       </div>
       {allKeys.map((key, i) => {
         const a = activeDist[key] ?? 0
         const u = upcomingDist[key] ?? 0
+        const c = closedDist[key] ?? 0
         return (
           <div key={key} onClick={() => onDrill(tab, key)} title={`Click to see ${tab === 'tag' ? key : `stores opened in ${key}`}`}
             style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 10, cursor: 'pointer', borderRadius: 4, padding: '1px 2px' }}
@@ -699,11 +719,13 @@ function YearSplitCard({ oracle, onDrill, cardId, expanded, onToggle }: { oracle
             <div style={{ flex: 1, height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
               <div style={{ width: `${(a / mx) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 2 }} />
               <div style={{ width: `${(u / mx) * 100}%`, height: '100%', background: '#f59e0b', opacity: 0.6 }} />
+              <div style={{ width: `${(c / mx) * 100}%`, height: '100%', background: '#f87171', opacity: 0.7 }} />
             </div>
-            <span style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'right', fontSize: 9 }}>
-              {a > 0 && <span style={{ color: 'var(--text-secondary)' }}>{a}</span>}
-              {u > 0 && <span style={{ color: '#f59e0b' }}> +{u}</span>}
-            </span>
+            <div style={{ flexShrink: 0, display: 'flex', gap: 0, fontSize: 9, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ width: 22, textAlign: 'right', color: 'var(--text-secondary)' }}>{a > 0 ? a : ''}</span>
+              <span style={{ width: 22, textAlign: 'right', color: '#f59e0b' }}>{u > 0 ? `+${u}` : ''}</span>
+              {hasClosed && <span style={{ width: 22, textAlign: 'right', color: '#f87171' }}>{c > 0 ? `-${c}` : ''}</span>}
+            </div>
           </div>
         )
       })}
@@ -1237,13 +1259,25 @@ export default function Dashboard() {
               <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8 }}>Store Network</div>
               <ExpandBtn id="network" expanded={expandedCards.has('network')} onToggle={toggleCard} />
               <div style={{ fontSize: 26, fontWeight: 900, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_all_stores)}</div>
+              {(oracle.unique_state_count > 0 || oracle.unique_city_count > 0) && (
+                <div style={{ marginLeft: 4, display: 'flex', gap: 6, fontSize: 9, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                  {oracle.unique_state_count > 0 && <span title="Unique states (Active + Upcoming)"><span style={{ color: '#818cf8', fontWeight: 700 }}>{oracle.unique_state_count}</span> st</span>}
+                  {oracle.unique_city_count > 0 && <span title="Unique cities (Active + Upcoming)"><span style={{ color: '#818cf8', fontWeight: 700 }}>{oracle.unique_city_count}</span> ct</span>}
+                </div>
+              )}
             </div>
-            {/* Stacked bar */}
-            <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
-              <div style={{ height: '100%', background: '#38bdf8', width: oracle.total_all_stores > 0 ? `${(oracle.total_stores / oracle.total_all_stores) * 100}%` : '0%' }} />
-              <div style={{ height: '100%', background: '#f59e0b', width: oracle.total_all_stores > 0 ? `${(oracle.upcoming_stores / oracle.total_all_stores) * 100}%` : '0%' }} />
-            </div>
-            {/* Active | Upcoming row */}
+            {/* Stacked bar — Active | Upcoming | Closed */}
+            {(() => {
+              const tot = oracle.total_stores + oracle.upcoming_stores + (oracle.closed_stores ?? 0)
+              return (
+                <div style={{ height: 4, background: 'var(--card-bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                  <div style={{ height: '100%', background: '#38bdf8', width: tot > 0 ? `${(oracle.total_stores / tot) * 100}%` : '0%' }} />
+                  <div style={{ height: '100%', background: '#f59e0b', width: tot > 0 ? `${(oracle.upcoming_stores / tot) * 100}%` : '0%' }} />
+                  <div style={{ height: '100%', background: '#f87171', width: tot > 0 ? `${((oracle.closed_stores ?? 0) / tot) * 100}%` : '0%' }} />
+                </div>
+              )
+            })()}
+            {/* Active | Upcoming | Closed row */}
             <div style={{ display: 'flex', gap: 0 }}>
               {/* ACTIVE */}
               <div style={{ flex: 3, paddingRight: 10 }}>
@@ -1270,7 +1304,7 @@ export default function Dashboard() {
               </div>
               <div style={{ width: 1, background: 'var(--card-bg)' }} />
               {/* UPCOMING */}
-              <div style={{ flex: 2, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ flex: 2, paddingLeft: 10, paddingRight: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontSize: 9, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.8 }}>Upcoming</div>
                   <div style={{ fontSize: 30, fontWeight: 900, color: '#f59e0b', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.upcoming_stores)}</div>
@@ -1281,6 +1315,14 @@ export default function Dashboard() {
                   {oracle.nso_from_date && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>from {oracle.nso_from_date}</div>}
                 </div>
               </div>
+              {(oracle.closed_stores ?? 0) > 0 && <>
+                <div style={{ width: 1, background: 'var(--card-bg)' }} />
+                {/* CLOSED */}
+                <div style={{ flex: 2, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                  <div style={{ fontSize: 9, color: '#f87171', textTransform: 'uppercase', letterSpacing: 0.8 }}>Closed</div>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: '#f87171', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.closed_stores)}</div>
+                </div>
+              </>}
             </div>
           </div>
 

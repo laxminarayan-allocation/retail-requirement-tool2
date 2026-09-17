@@ -1078,158 +1078,146 @@ function StoreMapCard() {
   function openMapWindow() {
     const storesJson = JSON.stringify(stores)
     const distJson   = JSON.stringify(distPoints)
-    const win = window.open('', 'ck_store_map', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no')
-    if (!win) return
-    win.document.write(`<!DOCTYPE html><html><head>
-<meta charset="utf-8">
-<title>CityKart Store Map</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#0f172a; color:#e2e8f0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
-  #toolbar { display:flex; gap:8px; padding:8px 12px; background:#0a1220; border-bottom:1px solid #1e293b; align-items:center; flex-wrap:wrap; }
-  #toolbar h2 { font-size:13px; font-weight:700; color:#7dd3fc; margin-right:8px; }
-  .btn { font-size:10px; font-weight:700; padding:3px 10px; border-radius:5px; cursor:pointer; border:1px solid #334155; background:transparent; color:#94a3b8; }
-  .btn.active { background:#ef444422; border-color:#ef4444; color:#ef4444; }
-  #search { background:#1e293b; border:1px solid #334155; border-radius:5px; color:#e2e8f0; font-size:11px; padding:4px 10px; outline:none; width:200px; }
-  #dropdown { position:absolute; top:42px; background:#1e293b; border:1px solid #334155; border-radius:5px; z-index:9999; width:220px; max-height:200px; overflow-y:auto; display:none; }
-  .dd-item { padding:5px 10px; cursor:pointer; font-size:11px; border-bottom:1px solid #1e293b; display:flex; gap:8px; }
-  .dd-item:hover { background:#0f172a; }
-  #map { flex:1; }
-  #distbar { background:#0a1220; border-top:1px solid #ef444466; padding:6px 12px; font-size:10px; display:none; flex-wrap:wrap; gap:8px; align-items:center; }
-  .chip { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; background:#1e293b; border:1px solid #475569; color:#7dd3fc; cursor:grab; user-select:none; }
-  .chip.wh { background:#14532d33; border-color:#4ade80; color:#4ade80; }
-  .chip .rm { margin-left:4px; color:#64748b; cursor:pointer; font-size:9px; }
-  .seg { font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; white-space:nowrap; }
-  #total { font-size:11px; font-weight:800; color:#fff; margin-left:auto; white-space:nowrap; }
-</style>
-</head><body>
-<div id="toolbar">
-  <h2>🗺 CityKart Store Map</h2>
-  <button class="btn" id="btnZone" onclick="setColor('zone')">Zone</button>
-  <button class="btn" id="btnCluster" onclick="setColor('cluster')">Cluster</button>
-  <button class="btn" onclick="setStatus('all')">All</button>
-  <button class="btn" onclick="setStatus('ACTIVE')">Active</button>
-  <button class="btn" onclick="setStatus('UPCOMING_STORE')">Upcoming</button>
-  <div style="width:1px;height:20px;background:#334155;margin:0 4px"></div>
-  <button class="btn active" id="btnDist" onclick="toggleDist()">📏 Distance</button>
-  <button class="btn" onclick="addWH('123','KHETAWAS DC',28.574,76.534)">🏭 KHETAWAS</button>
-  <button class="btn" onclick="addWH('420','FARUKHNAGAR DC',28.458,76.817)">🏭 FARUKHNAGAR</button>
-  <div style="position:relative">
-    <input id="search" placeholder="🔍 Store code / name / city…" oninput="onSearch(this.value)" autocomplete="off"/>
-    <div id="dropdown"></div>
-  </div>
-  <button class="btn" onclick="resetDist()">Reset</button>
-  <span id="stcount" style="font-size:10px;color:#64748b;margin-left:4px"></span>
-</div>
-<div id="map"></div>
-<div id="distbar">
-  <span style="font-size:9px;color:#64748b;font-weight:700">ROUTE:</span>
-  <span style="font-size:8px;color:#475569;font-style:italic">drag to reorder</span>
-  <span id="chips"></span>
-  <span id="segs"></span>
-  <span id="total"></span>
-</div>
-<script>
-const STORES = ${storesJson};
-const ZONE_COLORS={NORTH:'#2563eb',BIHAR:'#d97706','BIHAR-PUJA':'#ea580c',EAST:'#16a34a','NORTH EAST':'#7c3aed',NCR:'#db2777',JK:'#0891b2'};
-const CLUSTER_COLORS={BR1:'#b45309',BR2:'#d97706',BR3:'#ea580c',BR4:'#dc2626',BR5:'#991b1b',UP1:'#1d4ed8',UP2:'#2563eb',UP3:'#4338ca',UP4:'#6d28d9',UP5:'#7c3aed',UP6:'#9333ea',CH1:'#15803d',JH1:'#16a34a',MP1:'#0e7490',NCR:'#be185d',NE:'#0891b2',OD:'#4d7c0f',NSO:'#a16207'};
-const FB='#6b7280';
-let colorBy='zone', filterStatus='all', distMode=true, distPoints=${distJson};
-let map, markers=[], distLayer=null, dragFrom=null;
-
-function getColor(s){return colorBy==='zone'?(ZONE_COLORS[s.zone]||FB):(CLUSTER_COLORS[s.cluster]||FB)}
-function haversine(a,b){const R=6371,dL=(b.lat-a.lat)*Math.PI/180,dN=(b.lon-a.lon)*Math.PI/180,aa=Math.sin(dL/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa))}
-function fmtT(km){const h=km/50;return h<1?Math.round(h*60)+' min':h.toFixed(1)+' hr'}
-
-map=L.map('map',{zoomControl:true,scrollWheelZoom:true,maxBounds:[[6,67],[38,99]],minZoom:5});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
-map.setView([24,82],5);
-
-function renderMarkers(){
-  markers.forEach(m=>m.remove()); markers=[];
-  const vis=STORES.filter(s=>filterStatus==='all'||s.status===filterStatus);
-  document.getElementById('stcount').textContent=vis.length+' stores';
-  vis.forEach(s=>{
-    const col=getColor(s), upcoming=s.status==='UPCOMING_STORE';
-    const icon=L.divIcon({className:'',iconAnchor:[7,7],html:\`<div style="width:14px;height:14px;border-radius:50%;background:\${col};border:2px solid \${upcoming?'transparent':'#fff'};outline:\${upcoming?'2px dashed '+col:'none'};box-shadow:0 1px 4px #0008"></div>\`});
-    const m=L.marker([s.lat,s.lon],{icon}).addTo(map);
-    m.bindTooltip(\`<b>\${s.code}</b> \${s.name}<br>\${s.city} · \${s.zone}\`,{direction:'top',offset:[0,-8]});
-    m.on('click',()=>{if(distMode)addPoint(s)});
-    markers.push(m);
-  });
-}
-
-function renderDist(){
-  if(distLayer){distLayer.remove();distLayer=null;}
-  const bar=document.getElementById('distbar');
-  if(distPoints.length<1){bar.style.display='none';return;}
-  bar.style.display='flex';
-  // chips
-  const chips=document.getElementById('chips');
-  chips.innerHTML='';
-  distPoints.forEach((pt,i)=>{
-    if(i>0)chips.innerHTML+=\`<span style="font-size:10px;color:#ef444488;margin:0 2px">→</span>\`;
-    const chip=document.createElement('span');
-      chip.className='chip'+(pt.isWarehouse?' wh':'');
-    chip.draggable=true;
-    chip.innerHTML='<span style="font-size:8px;color:#475569">⠿</span>'+(pt.isWarehouse?'🏭 ':'')+pt.code+(pt.name?' '+pt.name:'')+'<span class="rm" onclick="removePoint(\''+pt.code+'\')">✕</span>';
-    chip.ondragstart=()=>{dragFrom=i};
-    chip.ondragover=e=>e.preventDefault();
-    chip.ondrop=()=>{if(dragFrom!==null&&dragFrom!==i){const arr=[...distPoints];const[item]=arr.splice(dragFrom,1);arr.splice(i,0,item);distPoints=arr;dragFrom=null;renderDist();}};
-    chip.ondragend=()=>{dragFrom=null};
-    chips.appendChild(chip);
-  });
-  // segments
-  if(distPoints.length>=2){
-    const segs=document.getElementById('segs');
-    segs.innerHTML='';
-    const SC=['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#818cf8'];
-    let totalRoad=0;
-    const group=L.layerGroup();
-    distPoints.forEach((pt,i)=>{
-      if(i===0)return;
-      const prev=distPoints[i-1], km=haversine(prev,pt), road=km*1.3, col=SC[(i-1)%SC.length];
-      totalRoad+=road;
-      L.polyline([[prev.lat,prev.lon],[pt.lat,pt.lon]],{color:col,weight:2.5,dashArray:'8 6',opacity:0.9}).addTo(group);
-      const ml=(prev.lat+pt.lat)/2, mn=(prev.lon+pt.lon)/2;
-      var lbl='<div style="background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid '+col+'">'+Math.round(km)+'km · ~'+Math.round(road)+'km road · '+fmtT(road)+'</div>';
-      L.marker([ml,mn],{icon:L.divIcon({className:'',iconAnchor:[70,14],html:lbl})}).addTo(group);
-      const seg=document.createElement('span');
-      seg.className='seg'; seg.style.cssText='background:'+col+'15;border:1px solid '+col+'44;color:'+col;
-      seg.textContent=prev.code+'→'+pt.code+': '+Math.round(km)+'km · ~'+Math.round(road)+'km road · '+fmtT(road);
-      segs.appendChild(seg);
-    });
-    distPoints.filter(p=>p.isWarehouse).forEach(pt=>{
-      L.marker([pt.lat,pt.lon],{icon:L.divIcon({className:'',iconAnchor:[14,28],html:'<div style="font-size:22px">🏭</div>'})}).addTo(group);
-    });
-    group.addTo(map);
-    distLayer=group;
-    document.getElementById('total').textContent=distPoints.length>2?'Total: ~'+Math.round(totalRoad)+' km road · '+fmtT(totalRoad):'';
-  } else { document.getElementById('segs').innerHTML=''; document.getElementById('total').textContent=''; }
-}
-
-function addPoint(s){if(!distPoints.find(p=>p.code===s.code)){distPoints=[...distPoints,s];renderDist();}}
-function addWH(code,name,lat,lon){addPoint({code,name,lat,lon,isWarehouse:true,zone:'',cluster:'',status:'',grade:'',state:'',city:''});}
-function removePoint(code){distPoints=distPoints.filter(p=>p.code!==code);renderDist();}
-function resetDist(){distPoints=[];renderDist();}
-function toggleDist(){distMode=!distMode;document.getElementById('btnDist').className='btn'+(distMode?' active':'');}
-function setColor(m){colorBy=m;renderMarkers();}
-function setStatus(s){filterStatus=s;renderMarkers();}
-function onSearch(v){
-  const dd=document.getElementById('dropdown');
-  if(!v.trim()){dd.style.display='none';return;}
-  const res=STORES.filter(s=>s.code.toLowerCase().includes(v.toLowerCase())||s.name.toLowerCase().includes(v.toLowerCase())||s.city.toLowerCase().includes(v.toLowerCase())).slice(0,8);
-  if(!res.length){dd.style.display='none';return;}
-  dd.innerHTML=res.map(s=>\`<div class="dd-item" onclick="addPoint(\${JSON.stringify(s).replace(/"/g,'&quot;')});document.getElementById('search').value='';document.getElementById('dropdown').style.display='none'"><b style="color:#7dd3fc;font-size:10px">\${s.code}</b><span>\${s.name}</span><span style="font-size:9px;color:#64748b">\${s.city}</span></div>\`).join('');
-  dd.style.display='block';
-}
-document.addEventListener('click',e=>{if(!e.target.closest('#search')&&!e.target.closest('#dropdown'))document.getElementById('dropdown').style.display='none';});
-setTimeout(function(){map.invalidateSize();renderMarkers();renderDist();},200);
-<\/script>
-</body></html>`)
-    win.document.close()
+    const html = [
+      '<!DOCTYPE html><html><head>',
+      '<meta charset="utf-8"><title>CityKart Store Map</title>',
+      '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>',
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>',
+      '<style>',
+      '* { margin:0; padding:0; box-sizing:border-box; }',
+      'body { background:#0f172a; color:#e2e8f0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }',
+      '#toolbar { display:flex; gap:8px; padding:8px 12px; background:#0a1220; border-bottom:1px solid #1e293b; align-items:center; flex-wrap:wrap; flex-shrink:0; }',
+      '#toolbar h2 { font-size:13px; font-weight:700; color:#7dd3fc; margin-right:8px; }',
+      '.btn { font-size:10px; font-weight:700; padding:3px 10px; border-radius:5px; cursor:pointer; border:1px solid #334155; background:transparent; color:#94a3b8; }',
+      '.btn.active { background:#ef444422; border-color:#ef4444; color:#ef4444; }',
+      '#search { background:#1e293b; border:1px solid #334155; border-radius:5px; color:#e2e8f0; font-size:11px; padding:4px 10px; outline:none; width:200px; }',
+      '#dropdown { position:absolute; top:100%; left:0; background:#1e293b; border:1px solid #334155; border-radius:5px; z-index:9999; width:260px; max-height:200px; overflow-y:auto; display:none; margin-top:2px; }',
+      '.dd-item { padding:5px 10px; cursor:pointer; font-size:11px; border-bottom:1px solid #0f172a; display:flex; gap:8px; align-items:center; }',
+      '.dd-item:hover { background:#0f172a; }',
+      '#map { flex:1; min-height:0; }',
+      '#distbar { background:#0a1220; border-top:1px solid #ef444466; padding:6px 12px; font-size:10px; display:none; flex-wrap:wrap; gap:8px; align-items:center; flex-shrink:0; }',
+      '.chip { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; background:#1e293b; border:1px solid #475569; color:#7dd3fc; cursor:grab; user-select:none; }',
+      '.chip.wh { background:#14532d33; border-color:#4ade80; color:#4ade80; }',
+      '.seg { font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; white-space:nowrap; }',
+      '#total { font-size:11px; font-weight:800; color:#fff; margin-left:auto; white-space:nowrap; }',
+      '</style></head><body>',
+      '<div id="toolbar">',
+      '  <h2>CityKart Store Map</h2>',
+      '  <button class="btn" onclick="setColor(\'zone\')">Zone</button>',
+      '  <button class="btn" onclick="setColor(\'cluster\')">Cluster</button>',
+      '  <button class="btn" onclick="setStatus(\'all\')">All</button>',
+      '  <button class="btn" onclick="setStatus(\'ACTIVE\')">Active</button>',
+      '  <button class="btn" onclick="setStatus(\'UPCOMING_STORE\')">Upcoming</button>',
+      '  <div style="width:1px;height:20px;background:#334155"></div>',
+      '  <button class="btn active" id="btnDist" onclick="toggleDist()">Distance</button>',
+      '  <button class="btn" onclick="addWH(\'123\',\'KHETAWAS DC\',28.574,76.534)">KHETAWAS</button>',
+      '  <button class="btn" onclick="addWH(\'420\',\'FARUKHNAGAR DC\',28.458,76.817)">FARUKHNAGAR</button>',
+      '  <div style="position:relative">',
+      '    <input id="search" placeholder="Store code / name / city" oninput="onSearch(this.value)" autocomplete="off"/>',
+      '    <div id="dropdown"></div>',
+      '  </div>',
+      '  <button class="btn" onclick="resetDist()">Reset</button>',
+      '  <span id="stcount" style="font-size:10px;color:#64748b;margin-left:4px"></span>',
+      '</div>',
+      '<div id="map"></div>',
+      '<div id="distbar">',
+      '  <span style="font-size:9px;color:#64748b;font-weight:700">ROUTE:</span>',
+      '  <span id="chips"></span><span id="segs"></span><span id="total"></span>',
+      '</div>',
+      '<script>',
+      'var STORES=' + storesJson + ';',
+      'var DIST_INIT=' + distJson + ';',
+      'var ZC={NORTH:"#2563eb",BIHAR:"#d97706","BIHAR-PUJA":"#ea580c",EAST:"#16a34a","NORTH EAST":"#7c3aed",NCR:"#db2777",JK:"#0891b2"};',
+      'var CC={BR1:"#b45309",BR2:"#d97706",BR3:"#ea580c",BR4:"#dc2626",BR5:"#991b1b",UP1:"#1d4ed8",UP2:"#2563eb",UP3:"#4338ca",UP4:"#6d28d9",UP5:"#7c3aed",UP6:"#9333ea",CH1:"#15803d",JH1:"#16a34a",MP1:"#0e7490",NCR:"#be185d",NE:"#0891b2",OD:"#4d7c0f",NSO:"#a16207"};',
+      'var FB="#6b7280";',
+      'var colorBy="zone",filterStatus="all",distMode=true,distPoints=DIST_INIT.slice();',
+      'var leafMap,markers=[],distLayer=null,dragFrom=null;',
+      'function gc(s){return colorBy==="zone"?(ZC[s.zone]||FB):(CC[s.cluster]||FB)}',
+      'function hav(a,b){var R=6371,dL=(b.lat-a.lat)*Math.PI/180,dN=(b.lon-a.lon)*Math.PI/180,aa=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dN/2)*Math.sin(dN/2);return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa))}',
+      'function fmt(km){var h=km/50;return h<1?Math.round(h*60)+" min":h.toFixed(1)+" hr"}',
+      'window.onload=function(){',
+      '  leafMap=L.map("map",{zoomControl:true,scrollWheelZoom:true,maxBounds:[[6,67],[38,99]],minZoom:4});',
+      '  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:18}).addTo(leafMap);',
+      '  leafMap.setView([24,82],5);',
+      '  setTimeout(function(){leafMap.invalidateSize();renderMarkers();renderDist();},300);',
+      '};',
+      'function renderMarkers(){',
+      '  markers.forEach(function(m){m.remove()});markers=[];',
+      '  var vis=STORES.filter(function(s){return filterStatus==="all"||s.status===filterStatus});',
+      '  document.getElementById("stcount").textContent=vis.length+" stores";',
+      '  vis.forEach(function(s){',
+      '    var col=gc(s),up=s.status==="UPCOMING_STORE";',
+      '    var icon=L.divIcon({className:"",iconAnchor:[7,7],html:"<div style=\\"width:14px;height:14px;border-radius:50%;background:"+col+";border:2px solid "+(up?"transparent":"#fff")+";box-shadow:0 1px 4px #0008\\"></div>"});',
+      '    var m=L.marker([s.lat,s.lon],{icon:icon}).addTo(leafMap);',
+      '    m.bindTooltip("<b>"+s.code+"</b> "+s.name+"<br>"+s.city+" · "+s.zone,{direction:"top",offset:[0,-8]});',
+      '    m.on("click",function(){if(distMode)addPoint(s)});',
+      '    markers.push(m);',
+      '  });',
+      '}',
+      'function renderDist(){',
+      '  if(distLayer){distLayer.remove();distLayer=null;}',
+      '  var bar=document.getElementById("distbar");',
+      '  if(distPoints.length<1){bar.style.display="none";return;}',
+      '  bar.style.display="flex";',
+      '  var chips=document.getElementById("chips"); chips.innerHTML="";',
+      '  distPoints.forEach(function(pt,i){',
+      '    if(i>0){var arr=document.createElement("span");arr.style.cssText="font-size:10px;color:#ef444488;margin:0 4px";arr.textContent="→";chips.appendChild(arr);}',
+      '    var chip=document.createElement("span");',
+      '    chip.className="chip"+(pt.isWarehouse?" wh":"");',
+      '    chip.draggable=true;',
+      '    chip.innerHTML="<span style=\\"font-size:8px;color:#475569\\">⠿</span>"+(pt.isWarehouse?"🏭 ":"")+pt.code+(pt.name?" "+pt.name:"")+"<span onclick=\\"removePoint(\'"+pt.code+"\')\\" style=\\"margin-left:4px;color:#64748b;cursor:pointer;font-size:9px\\">✕</span>";',
+      '    chip.addEventListener("dragstart",function(){dragFrom=i});',
+      '    chip.addEventListener("dragover",function(e){e.preventDefault()});',
+      '    chip.addEventListener("drop",function(){if(dragFrom!==null&&dragFrom!==i){var arr=distPoints.slice();var item=arr.splice(dragFrom,1)[0];arr.splice(i,0,item);distPoints=arr;dragFrom=null;renderDist();}});',
+      '    chip.addEventListener("dragend",function(){dragFrom=null});',
+      '    chips.appendChild(chip);',
+      '  });',
+      '  if(distPoints.length>=2){',
+      '    var segs=document.getElementById("segs"); segs.innerHTML="";',
+      '    var SC=["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#818cf8"];',
+      '    var totalRoad=0; var group=L.layerGroup();',
+      '    distPoints.forEach(function(pt,i){',
+      '      if(i===0)return;',
+      '      var prev=distPoints[i-1],km=hav(prev,pt),road=km*1.3,col=SC[(i-1)%SC.length];',
+      '      totalRoad+=road;',
+      '      L.polyline([[prev.lat,prev.lon],[pt.lat,pt.lon]],{color:col,weight:2.5,dashArray:"8 6",opacity:0.9}).addTo(group);',
+      '      var ml=(prev.lat+pt.lat)/2,mn=(prev.lon+pt.lon)/2;',
+      '      var lbl="<div style=\\"background:#1e293b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;white-space:nowrap;border:1.5px solid "+col+"\\">"+Math.round(km)+"km · ~"+Math.round(road)+"km road · "+fmt(road)+"</div>";',
+      '      L.marker([ml,mn],{icon:L.divIcon({className:"",iconAnchor:[70,14],html:lbl})}).addTo(group);',
+      '      var seg=document.createElement("span"); seg.className="seg";',
+      '      seg.style.cssText="background:"+col+"15;border:1px solid "+col+"44;color:"+col;',
+      '      seg.textContent=prev.code+"→"+pt.code+": "+Math.round(km)+"km · ~"+Math.round(road)+"km road · "+fmt(road);',
+      '      segs.appendChild(seg);',
+      '    });',
+      '    distPoints.filter(function(p){return p.isWarehouse}).forEach(function(pt){',
+      '      L.marker([pt.lat,pt.lon],{icon:L.divIcon({className:"",iconAnchor:[14,28],html:"<div style=\\"font-size:22px\\">🏭</div>"})}).addTo(group);',
+      '    });',
+      '    group.addTo(leafMap); distLayer=group;',
+      '    document.getElementById("total").textContent=distPoints.length>2?"Total: ~"+Math.round(totalRoad)+" km road · "+fmt(totalRoad):"";',
+      '  } else { document.getElementById("segs").innerHTML=""; document.getElementById("total").textContent=""; }',
+      '}',
+      'function addPoint(s){if(!distPoints.find(function(p){return p.code===s.code})){distPoints.push(s);renderDist();}}',
+      'function addWH(code,name,lat,lon){addPoint({code:code,name:name,lat:lat,lon:lon,isWarehouse:true,zone:"",cluster:"",status:"",grade:"",state:"",city:""});}',
+      'function removePoint(code){distPoints=distPoints.filter(function(p){return p.code!==code});renderDist();}',
+      'function resetDist(){distPoints=[];renderDist();}',
+      'function toggleDist(){distMode=!distMode;document.getElementById("btnDist").className="btn"+(distMode?" active":"");}',
+      'function setColor(m){colorBy=m;renderMarkers();}',
+      'function setStatus(s){filterStatus=s;renderMarkers();}',
+      'function onSearch(v){',
+      '  var dd=document.getElementById("dropdown");',
+      '  if(!v.trim()){dd.style.display="none";return;}',
+      '  var res=STORES.filter(function(s){return s.code.toLowerCase().indexOf(v.toLowerCase())>=0||s.name.toLowerCase().indexOf(v.toLowerCase())>=0||s.city.toLowerCase().indexOf(v.toLowerCase())>=0}).slice(0,8);',
+      '  if(!res.length){dd.style.display="none";return;}',
+      '  dd.innerHTML=res.map(function(s){return "<div class=\\"dd-item\\" onclick=\\"addPoint(STORES.find(function(x){return x.code===\'"+s.code+"\'}))||true;document.getElementById(\'search\').value=\'\';document.getElementById(\'dropdown\').style.display=\'none\'\\"><b style=\\"color:#7dd3fc;font-size:10px\\">"+s.code+"</b><span>"+s.name+"</span><span style=\\"font-size:9px;color:#64748b\\">"+s.city+"</span></div>";}).join("");',
+      '  dd.style.display="block";',
+      '}',
+      'document.addEventListener("click",function(e){if(!e.target.closest("#search")&&!e.target.closest("#dropdown"))document.getElementById("dropdown").style.display="none";});',
+      '<\/script></body></html>',
+    ].join('\n')
+    const blob = new Blob([html], { type: 'text/html' })
+    const url  = URL.createObjectURL(blob)
+    const win  = window.open(url, '_blank', 'width=1280,height=820,menubar=no,toolbar=no,location=no,status=no')
+    if (win) setTimeout(() => URL.revokeObjectURL(url), 10000)
   }
 
   // store search results (max 8)

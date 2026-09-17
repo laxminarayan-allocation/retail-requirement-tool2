@@ -268,6 +268,11 @@ def _safe_oracle_stats() -> dict:
         state_city_dist: dict = {}   # {state: {city: count}}
         unique_state_count: int = 0
         unique_city_count: int = 0
+        active_state_count: int = 0
+        active_city_count: int = 0
+        upcoming_state_count: int = 0
+        upcoming_city_count: int = 0
+        upcoming_new_city_count: int = 0
         try:
             city_col = next((c for c in ("city", "store_city", "city_name") if _sod is not None and c in _sod.columns), None)
             if _sod is not None and "store_status" in _sod.columns and city_col:
@@ -292,6 +297,17 @@ def _safe_oracle_stats() -> dict:
                     )
                     unique_state_count = int(au_df["state"].dropna().nunique())
                 unique_city_count = int(au_df[city_col].dropna().nunique())
+                # Separate counts for active and upcoming
+                if "state" in active_city.columns:
+                    active_state_count = int(active_city["state"].dropna().nunique())
+                active_city_count = int(active_city[city_col].dropna().nunique())
+                if "state" in upcoming_city.columns:
+                    upcoming_state_count = int(upcoming_city["state"].dropna().nunique())
+                upcoming_city_count = int(upcoming_city[city_col].dropna().nunique())
+                # New cities in upcoming not already in active
+                _active_cities = set(active_city[city_col].dropna().str.strip().str.upper())
+                _upcoming_cities = set(upcoming_city[city_col].dropna().str.strip().str.upper())
+                upcoming_new_city_count = int(len(_upcoming_cities - _active_cities))
                 if "state" in active_city.columns:
                     for state_val, grp in active_city.groupby("state"):
                         sk = str(state_val).strip()
@@ -397,6 +413,11 @@ def _safe_oracle_stats() -> dict:
             "store_fin_year_closed": {str(k): int(v) for k, v in fin_year_closed_dist.items()},
             "unique_state_count": unique_state_count,
             "unique_city_count": unique_city_count,
+            "active_state_count": active_state_count,
+            "active_city_count": active_city_count,
+            "upcoming_state_count": upcoming_state_count,
+            "upcoming_city_count": upcoming_city_count,
+            "upcoming_new_city_count": upcoming_new_city_count,
         }
         _oracle_cache.update(result)
         _oracle_cache_ts = time.time()
@@ -453,6 +474,11 @@ def _safe_oracle_stats() -> dict:
             "store_fin_year_closed": {},
             "unique_state_count": 0,
             "unique_city_count": 0,
+            "active_state_count": 0,
+            "active_city_count": 0,
+            "upcoming_state_count": 0,
+            "upcoming_city_count": 0,
+            "upcoming_new_city_count": 0,
         }
 
 

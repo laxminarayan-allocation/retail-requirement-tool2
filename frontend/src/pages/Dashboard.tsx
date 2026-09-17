@@ -169,6 +169,11 @@ interface OracleStats {
   store_fin_year_closed: Record<string, number>
   unique_state_count: number
   unique_city_count: number
+  active_state_count: number
+  active_city_count: number
+  upcoming_state_count: number
+  upcoming_city_count: number
+  upcoming_new_city_count: number
 }
 
 interface DivBreak { division: string; total_req: number; stores: number; rows: number }
@@ -1286,19 +1291,19 @@ export default function Dashboard() {
               <div style={{ flex: 3, paddingRight: 10 }}>
                 <div style={{ fontSize: 9, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Active</div>
                 <div style={{ fontSize: 30, fontWeight: 900, color: '#38bdf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.total_stores)}</div>
-                {(oracle.unique_state_count > 0 || oracle.unique_city_count > 0) && (
+                {(oracle.active_state_count > 0 || oracle.active_city_count > 0) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                    {oracle.unique_state_count > 0 && (
+                    {oracle.active_state_count > 0 && (
                       <div>
                         <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>States</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.unique_state_count}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.active_state_count}</div>
                       </div>
                     )}
-                    {oracle.unique_state_count > 0 && oracle.unique_city_count > 0 && <div style={{ width: 1, background: 'var(--card-bg)', alignSelf: 'stretch' }} />}
-                    {oracle.unique_city_count > 0 && (
+                    {oracle.active_state_count > 0 && oracle.active_city_count > 0 && <div style={{ width: 1, background: 'var(--card-bg)', alignSelf: 'stretch' }} />}
+                    {oracle.active_city_count > 0 && (
                       <div>
                         <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Cities</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.unique_city_count}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.active_city_count}</div>
                       </div>
                     )}
                   </div>
@@ -1328,6 +1333,12 @@ export default function Dashboard() {
                 <div>
                   <div style={{ fontSize: 9, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.8 }}>Upcoming</div>
                   <div style={{ fontSize: 30, fontWeight: 900, color: '#f59e0b', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtNum(oracle.upcoming_stores)}</div>
+                  {(oracle.upcoming_new_city_count ?? 0) > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>New Cities</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#fbbf24', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{oracle.upcoming_new_city_count}</div>
+                    </div>
+                  )}
                 </div>
                 <div style={{ marginTop: 6, padding: '4px 6px', background: '#0a1628', borderRadius: 3, borderLeft: '2px solid #44300a' }}>
                   <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.6 }}>NSO Active</div>

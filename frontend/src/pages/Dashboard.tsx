@@ -1058,6 +1058,7 @@ function StoreMapCard() {
   const distModeRef = useRef(false)
   const distPointsRef = useRef<MapStore[]>([])
   const onClickRef = useRef<((s: MapStore) => void) | null>(null)
+  const dragIndexRef = useRef<number | null>(null)
 
   useEffect(() => { distModeRef.current = distMode }, [distMode])
   useEffect(() => { distPointsRef.current = distPoints }, [distPoints])
@@ -1407,18 +1408,36 @@ function StoreMapCard() {
             )}
           </div>
 
-          {/* Row 2: Selected point chips */}
+          {/* Row 2: Selected point chips (drag to reorder) */}
           {distPoints.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>ROUTE:</span>
+              <span style={{ fontSize: 8, color: '#475569', fontStyle: 'italic' }}>drag to reorder</span>
               {distPoints.map((pt, i) => (
-                <span key={pt.code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span key={pt.code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  draggable
+                  onDragStart={() => { dragIndexRef.current = i }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => {
+                    const from = dragIndexRef.current
+                    if (from === null || from === i) return
+                    setDistPoints(prev => {
+                      const arr = [...prev]
+                      const [item] = arr.splice(from, 1)
+                      arr.splice(i, 0, item)
+                      return arr
+                    })
+                    dragIndexRef.current = null
+                  }}
+                  onDragEnd={() => { dragIndexRef.current = null }}>
                   {i > 0 && <span style={{ fontSize: 10, color: '#ef444488' }}>→</span>}
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700,
-                    padding: '2px 8px', borderRadius: 6, cursor: 'default',
+                    padding: '2px 8px', borderRadius: 6, cursor: 'grab',
                     background: pt.isWarehouse ? '#14532d33' : '#1e293b',
                     border: `1px solid ${pt.isWarehouse ? '#4ade80' : '#475569'}`,
-                    color: pt.isWarehouse ? '#4ade80' : '#7dd3fc' }}>
+                    color: pt.isWarehouse ? '#4ade80' : '#7dd3fc',
+                    userSelect: 'none' }}>
+                    <span style={{ fontSize: 8, color: '#475569', marginRight: 2 }}>⠿</span>
                     {pt.isWarehouse ? '🏭 ' : ''}{pt.code}{pt.name ? ` ${pt.name}` : ''}
                     <span onClick={() => removeDistPoint(pt.code)}
                       style={{ marginLeft: 2, color: '#64748b', cursor: 'pointer', fontSize: 9 }}>✕</span>
@@ -1427,7 +1446,7 @@ function StoreMapCard() {
               ))}
               {distPoints.length < 2 && (
                 <span style={{ fontSize: 9, color: '#64748b', fontStyle: 'italic' }}>
-                  {distPoints.length === 0 ? 'Warehouse ya store add karo' : '→ ab dusra point add karo'}
+                  → ab dusra point add karo
                 </span>
               )}
             </div>

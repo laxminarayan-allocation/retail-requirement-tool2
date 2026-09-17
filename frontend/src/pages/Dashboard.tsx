@@ -906,6 +906,12 @@ const CLUSTER_COLORS: Record<string, string> = {
 }
 const FALLBACK_COLOR = '#6b7280'
 
+function hashColor(str: string): string {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xfffffff
+  return `hsl(${h % 360},60%,50%)`
+}
+
 function getColor(store: MapStore, mode: 'zone' | 'cluster'): string {
   if (mode === 'zone') return ZONE_COLORS[store.zone] ?? FALLBACK_COLOR
   return CLUSTER_COLORS[store.cluster] ?? FALLBACK_COLOR
@@ -957,10 +963,11 @@ function bufferedHull(pts: [number,number][], buf = 0.5): [number,number][] {
 }
 
 // ── Zone Multi-Select Dropdown ────────────────────────────────────────────────
-function ZoneDropdown({ allKeys, selected, onToggle, colorMap, label }: {
+function ZoneDropdown({ allKeys, selected, onToggle, colorMap, colorFn, label }: {
   allKeys: string[]; selected: Set<string>
-  onToggle: (k: string) => void; colorMap: Record<string, string>; label: string
+  onToggle: (k: string) => void; colorMap?: Record<string, string>; colorFn?: (k: string) => string; label: string
 }) {
+  const getCol = (k: string) => colorFn ? colorFn(k) : (colorMap?.[k] ?? FALLBACK_COLOR)
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -1016,7 +1023,7 @@ function ZoneDropdown({ allKeys, selected, onToggle, colorMap, label }: {
           {/* Options */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {filtered.map(k => {
-              const col = colorMap[k] ?? FALLBACK_COLOR
+              const col = getCol(k)
               const active = selected.has(k)
               return (
                 <div key={k} onClick={() => onToggle(k)} style={{
@@ -1044,9 +1051,11 @@ function StoreMapCard() {
   const [loading, setLoading] = useState(true)
   const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
   const [filterStatus, setFilterStatus] = useState<'all' | 'ACTIVE' | 'UPCOMING_STORE'>('all')
-  // Zone/Cluster multi-select filter (empty = show all)
+  // Zone/Cluster/State/City multi-select filter (empty = show all)
   const [selectedZones, setSelectedZones] = useState<Set<string>>(new Set())
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set())
+  const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set())
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set())
   const [distMode, setDistMode] = useState(false)
   const [distPoints, setDistPoints] = useState<MapStore[]>([])
   const [distSearch, setDistSearch] = useState('')
@@ -1394,19 +1403,25 @@ function onSearch(v){
       .finally(() => setLoading(false))
   }, [])
 
-  // Derived: all available zones/clusters
+  // Derived: all available zones/clusters/states/cities
   const allZones = Array.from(new Set(stores.map(s => s.zone).filter(z => z && z !== '-'))).sort()
   const allClusters = Array.from(new Set(stores.map(s => s.cluster).filter(c => c && c !== '-'))).sort()
+  const allStates = Array.from(new Set(stores.map(s => s.state).filter(v => v && v !== '-'))).sort()
+  const allCities = Array.from(new Set(stores.map(s => s.city).filter(v => v && v !== '-'))).sort()
 
   // Toggle helpers
   const toggleZone = (k: string) => setSelectedZones(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
   const toggleCluster = (k: string) => setSelectedClusters(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const toggleState = (k: string) => setSelectedStates(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const toggleCity = (k: string) => setSelectedCities(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
 
-  // Filtered stores: apply zone/cluster selection + status filter
+  // Filtered stores: apply all multi-select filters + status filter
   const filteredStores = stores.filter(s => {
     if (filterStatus !== 'all' && s.status !== filterStatus) return false
     if (selectedZones.size > 0 && !selectedZones.has(s.zone)) return false
     if (selectedClusters.size > 0 && !selectedClusters.has(s.cluster)) return false
+    if (selectedStates.size > 0 && !selectedStates.has(s.state)) return false
+    if (selectedCities.size > 0 && !selectedCities.has(s.city)) return false
     return true
   })
 
@@ -1470,14 +1485,6 @@ function onSearch(v){
   // Boundaries — auto-show for selected zones/clusters; show all if none selected + explicit toggle
   const [showAllBounds, setShowAllBounds] = useState(false)
   const [boundaryBy, setBoundaryBy] = useState<'zone' | 'cluster' | 'state' | 'city'>('zone')
-
-  // Auto-color for state/city (hash-based)
-  function hashColor(str: string): string {
-    let h = 0
-    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xfffffff
-    const hue = h % 360
-    return `hsl(${hue},60%,50%)`
-  }
 
   function getBoundaryColor(key: string): string {
     if (boundaryBy === 'zone') return ZONE_COLORS[key] ?? FALLBACK_COLOR
@@ -1626,6 +1633,18 @@ function onSearch(v){
         <ZoneDropdown
           allKeys={allClusters} selected={selectedClusters} onToggle={toggleCluster}
           colorMap={CLUSTER_COLORS} label="Cluster"
+        />
+
+        {/* State multi-select dropdown */}
+        <ZoneDropdown
+          allKeys={allStates} selected={selectedStates} onToggle={toggleState}
+          colorFn={hashColor} label="State"
+        />
+
+        {/* City multi-select dropdown */}
+        <ZoneDropdown
+          allKeys={allCities} selected={selectedCities} onToggle={toggleCity}
+          colorFn={hashColor} label="City"
         />
 
         {/* Boundary toggle + by selector */}

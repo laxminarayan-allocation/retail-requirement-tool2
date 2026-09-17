@@ -1523,57 +1523,50 @@ function onSearch(v){
       const storeStateNames = new Set(
         stores.map(s => s.state?.trim().toUpperCase()).filter(Boolean)
       )
-      // Name map: GeoJSON title-case → store uppercase (common variations)
-      const normalize = (n: string) => n.toUpperCase()
-        .replace('UTTARAKHAND', 'UTTARAKHAND')
-        .replace('ODISHA', 'ODISHA').replace('ORISSA', 'ODISHA')
-        .replace('JAMMU AND KASHMIR', 'J&K').replace('JAMMU & KASHMIR', 'J&K')
-        .replace('DELHI', 'DELHI').replace('NCT OF DELHI', 'DELHI')
-      fetch('https://cdn.jsdelivr.net/gh/geohacker/india@master/state/india_state.geojson')
-        .then(r => r.json())
+      const normalize = (n: string) => {
+        const u = n.trim().toUpperCase()
+        if (u === 'NCT OF DELHI' || u === 'NATIONAL CAPITAL TERRITORY OF DELHI') return 'DELHI'
+        if (u === 'ORISSA') return 'ODISHA'
+        if (u === 'JAMMU AND KASHMIR' || u === 'JAMMU & KASHMIR') return 'J&K'
+        if (u === 'UTTARANCHAL') return 'UTTARAKHAND'
+        return u
+      }
+      const GJ_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_state.geojson'
+      fetch(GJ_URL)
+        .then(r => { if (!r.ok) throw new Error('fetch failed'); return r.json() })
         .then((gj: any) => {
           if (!leafletMap.current) return
-          const layer = L.geoJSON(gj, {
-            filter: (f: any) => {
-              const name = normalize(f.properties.NAME_1 || f.properties.ST_NM || f.properties.name || '')
-              return storeStateNames.has(name) || storeStateNames.has(f.properties.NAME_1?.toUpperCase())
-            },
+          // Filter only states with CityKart stores
+          const features = (gj.features as any[]).filter(f => {
+            const raw = f.properties.NAME_1 || f.properties.ST_NM || f.properties.name || ''
+            return storeStateNames.has(normalize(raw)) || storeStateNames.has(raw.toUpperCase())
+          })
+          if (!features.length) { console.warn('[Boundary] No state features matched. Store states:', Array.from(storeStateNames)); return }
+
+          const filtered = { ...gj, features }
+          const map = leafletMap.current
+
+          // Layer 1: cream halo (thick, no fill)
+          const halo = L.geoJSON(filtered, {
+            style: () => ({ color: '#c8b89a', weight: 8, opacity: 0.5, fillOpacity: 0 }),
+          }).addTo(map)
+
+          // Layer 2: colored border (thin solid, slight fill)
+          const main = L.geoJSON(filtered, {
             style: (f: any) => {
-              const rawName = f.properties.NAME_1 || f.properties.ST_NM || ''
-              const col = hashColor(rawName)
-              return {
-                // Outer halo pass — drawn via pane trick: use a wrapper
-                color: col, weight: 2.5, opacity: 0.9,
-                fillColor: col, fillOpacity: 0.05,
-                dashArray: undefined,
-                lineCap: 'round', lineJoin: 'round',
-              }
+              const raw = f.properties.NAME_1 || f.properties.ST_NM || ''
+              return { color: hashColor(raw), weight: 2.5, opacity: 1, fillColor: hashColor(raw), fillOpacity: 0.06, lineCap: 'round', lineJoin: 'round' }
             },
             onEachFeature: (f: any, lyr: any) => {
-              const rawName = f.properties.NAME_1 || f.properties.ST_NM || ''
-              const col = hashColor(rawName)
-              // Outer cream halo polyline on top of fill
-              lyr.on('add', () => {
-                const map = leafletMap.current; if (!map) return
-                // Halo
-                const halo = L.geoJSON(f, {
-                  style: () => ({ color: '#d4c9a8', weight: 7, opacity: 0.4, fillOpacity: 0, dashArray: undefined })
-                }).addTo(map)
-                // Inner colored line
-                const line = L.geoJSON(f, {
-                  style: () => ({ color: col, weight: 2, opacity: 1, fillOpacity: 0, dashArray: undefined, lineCap: 'round', lineJoin: 'round' })
-                }).addTo(map)
-                boundsLayersRef.current.push(halo, line)
-              })
-              lyr.bindTooltip(`<b>${rawName}</b>`, { sticky: true, direction: 'top' })
+              const raw = f.properties.NAME_1 || f.properties.ST_NM || ''
+              const col = hashColor(raw)
+              lyr.bindTooltip(`<b style="color:${col}">${raw}</b>`, { sticky: true, direction: 'top' })
             },
-          })
-          // Don't add base layer (fill only for picking), just the halo+line added in onEachFeature
-          // Actually add it for the fill + tooltip
-          layer.addTo(leafletMap.current)
-          boundsLayersRef.current.push(layer)
+          }).addTo(map)
+
+          boundsLayersRef.current.push(halo, main)
         })
-        .catch(() => {}) // silent fail — fallback stays empty
+        .catch(e => console.error('[Boundary] GeoJSON load failed:', e))
       return
     }
 

@@ -1413,8 +1413,15 @@ function onSearch(v){
   // Toggle helpers
   const toggleZone = (k: string) => setSelectedZones(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
   const toggleCluster = (k: string) => setSelectedClusters(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
-  const toggleState = (k: string) => setSelectedStates(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
-  const toggleCity = (k: string) => setSelectedCities(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const toggleState = (k: string) => {
+    setSelectedStates(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+    // Auto-enable state boundary when any state is selected
+    setBoundaryBy('state'); setShowAllBounds(true)
+  }
+  const toggleCity = (k: string) => {
+    setSelectedCities(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+    setBoundaryBy('city'); setShowAllBounds(true)
+  }
 
   // Filtered stores: apply all multi-select filters + status filter
   const filteredStores = stores.filter(s => {
@@ -1520,47 +1527,66 @@ function onSearch(v){
 
     // ── State: real GeoJSON India state borders ──────────────────────────────
     if (boundaryBy === 'state' && showAllBounds) {
-      const storeStateNames = new Set(
-        stores.map(s => s.state?.trim().toUpperCase()).filter(Boolean)
-      )
+      // Count stores per state
+      const storeCountByState: Record<string, number> = {}
+      stores.forEach(s => {
+        const st = s.state?.trim().toUpperCase()
+        if (st) storeCountByState[st] = (storeCountByState[st] || 0) + 1
+      })
+      const storeStateNames = new Set(Object.keys(storeCountByState))
+
       const normalize = (n: string) => {
         const u = n.trim().toUpperCase()
         if (u === 'NCT OF DELHI' || u === 'NATIONAL CAPITAL TERRITORY OF DELHI') return 'DELHI'
         if (u === 'ORISSA') return 'ODISHA'
         if (u === 'JAMMU AND KASHMIR' || u === 'JAMMU & KASHMIR') return 'J&K'
         if (u === 'UTTARANCHAL') return 'UTTARAKHAND'
+        if (u === 'UTTAR PRADESH') return 'UP'
+        if (u === 'MADHYA PRADESH') return 'MP'
+        if (u === 'HIMACHAL PRADESH') return 'HP'
+        if (u === 'ARUNACHAL PRADESH') return 'ARUNACHAL PRADESH'
+        if (u === 'WEST BENGAL') return 'WEST BENGAL'
         return u
       }
+
       const GJ_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_state.geojson'
       fetch(GJ_URL)
-        .then(r => { if (!r.ok) throw new Error('fetch failed'); return r.json() })
+        .then(r => { if (!r.ok) throw new Error('fetch ' + r.status); return r.json() })
         .then((gj: any) => {
           if (!leafletMap.current) return
-          // Filter only states with CityKart stores
           const features = (gj.features as any[]).filter(f => {
             const raw = f.properties.NAME_1 || f.properties.ST_NM || f.properties.name || ''
-            return storeStateNames.has(normalize(raw)) || storeStateNames.has(raw.toUpperCase())
+            const norm = normalize(raw)
+            return storeStateNames.has(norm) || storeStateNames.has(raw.trim().toUpperCase())
           })
-          if (!features.length) { console.warn('[Boundary] No state features matched. Store states:', Array.from(storeStateNames)); return }
+          console.log('[Boundary] Matched', features.length, 'states of', gj.features.length, '| Store states:', Array.from(storeStateNames))
+          if (!features.length) return
 
           const filtered = { ...gj, features }
           const map = leafletMap.current
 
-          // Layer 1: cream halo (thick, no fill)
+          // Halo layer
           const halo = L.geoJSON(filtered, {
-            style: () => ({ color: '#c8b89a', weight: 8, opacity: 0.5, fillOpacity: 0 }),
+            style: () => ({ color: '#c8b89a', weight: 8, opacity: 0.45, fillOpacity: 0 }),
           }).addTo(map)
 
-          // Layer 2: colored border (thin solid, slight fill)
+          // Main colored border + store count tooltip + permanent label
           const main = L.geoJSON(filtered, {
             style: (f: any) => {
               const raw = f.properties.NAME_1 || f.properties.ST_NM || ''
-              return { color: hashColor(raw), weight: 2.5, opacity: 1, fillColor: hashColor(raw), fillOpacity: 0.06, lineCap: 'round', lineJoin: 'round' }
+              const col = hashColor(raw)
+              return { color: col, weight: 2.5, opacity: 1, fillColor: col, fillOpacity: 0.07, lineCap: 'round', lineJoin: 'round' }
             },
             onEachFeature: (f: any, lyr: any) => {
               const raw = f.properties.NAME_1 || f.properties.ST_NM || ''
+              const norm = normalize(raw)
+              const cnt = storeCountByState[norm] ?? storeCountByState[raw.trim().toUpperCase()] ?? 0
               const col = hashColor(raw)
-              lyr.bindTooltip(`<b style="color:${col}">${raw}</b>`, { sticky: true, direction: 'top' })
+              lyr.bindTooltip(
+                `<div style="font-size:12px;font-weight:700;color:${col}">${raw}</div>` +
+                `<div style="font-size:11px;color:#94a3b8">${cnt} store${cnt !== 1 ? 's' : ''}</div>`,
+                { sticky: true, direction: 'top' }
+              )
             },
           }).addTo(map)
 

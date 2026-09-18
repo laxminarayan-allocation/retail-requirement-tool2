@@ -105,6 +105,7 @@ export default function AllocationPipeline() {
       const reader = streamResp.body.getReader()
       const decoder = new TextDecoder()
       let buf = ''
+      let lastEventId = -1  // track SSE id: field to deduplicate on reconnect
 
       return new Promise<boolean>(async (resolve) => {
         try {
@@ -112,12 +113,21 @@ export default function AllocationPipeline() {
             const { done, value } = await reader.read()
             if (done) break
             buf += decoder.decode(value, { stream: true })
-            const parts = buf.split('\n')
+            const parts = buf.split('\n\n')
             buf = parts.pop() ?? ''
-            for (const line of parts) {
-              if (!line.startsWith('data: ')) continue
+            for (const block of parts) {
+              let evtId: number | null = null
+              let dataLine: string | null = null
+              for (const line of block.split('\n')) {
+                if (line.startsWith('id: ')) evtId = parseInt(line.slice(4), 10)
+                if (line.startsWith('data: ')) dataLine = line.slice(6)
+              }
+              // skip events we've already processed (reconnect replay guard)
+              if (evtId !== null && evtId <= lastEventId) continue
+              if (evtId !== null) lastEventId = evtId
+              if (!dataLine) continue
               try {
-                const evt = JSON.parse(line.slice(6))
+                const evt = JSON.parse(dataLine)
                 if (evt.event === 'start') continue
                 if (evt.step) appendLog(id, `Step ${evt.step}: ${evt.name ?? ''}${evt.detail ? ' — ' + evt.detail : ''}`)
                 if (evt.status === 'finished') {

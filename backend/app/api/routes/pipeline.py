@@ -80,16 +80,17 @@ def _emit(job_id: str, event: dict) -> None:
         _jobs[job_id].append(event)
 
 
-def _sse_lines(job_id: str) -> Generator[str, None, None]:
-    """Yield SSE lines for a running job until it closes."""
-    sent = 0
+def _sse_lines(job_id: str, last_id: int = 0) -> Generator[str, None, None]:
+    """Yield SSE lines for a running job until it closes.
+    last_id: resume from this event index (supports Last-Event-ID reconnect)."""
+    sent = last_id
     deadline = time.time() + 600  # 10-min max
     while time.time() < deadline:
         with _jobs_lock:
             events = _jobs[job_id]
             new = events[sent:]
         for evt in new:
-            yield f"data: {json.dumps(evt)}\n\n"
+            yield f"id: {sent}\ndata: {json.dumps(evt)}\n\n"
             sent += 1
             if evt.get("status") in ("finished", "error", "closed"):
                 return
@@ -917,13 +918,19 @@ async def run_module(mod_id: str, request: Request) -> JSONResponse:
 
 
 @router.get("/pipeline/stream/{job_id}")
-async def stream_job(job_id: str) -> StreamingResponse:
+async def stream_job(job_id: str, request: Request) -> StreamingResponse:
     with _jobs_lock:
         if job_id not in _jobs:
             return JSONResponse({"error": "unknown job_id"}, status_code=404)
 
+    last_event_id = request.headers.get("Last-Event-ID", "")
+    try:
+        last_id = int(last_event_id)
+    except (ValueError, TypeError):
+        last_id = 0
+
     def generator():
-        yield from _sse_lines(job_id)
+        yield from _sse_lines(job_id, last_id=last_id)
 
     return StreamingResponse(
         generator(),

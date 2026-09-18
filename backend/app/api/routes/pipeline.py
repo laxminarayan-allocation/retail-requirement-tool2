@@ -200,6 +200,135 @@ def _run_module1(job_id: str) -> None:
 # Routes
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 2 — Build grid + enrich
+# grc2_raw × item_master → cross-join active stores → lifecycle + article_grid
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SQL_LIFECYCLE = (
+    "SELECT DEPARTMENT, DISPLAY_TYPE, PERIOD, OPTION_LEVEL, LIFE_CYCLE"
+    " FROM T_ALLOCATION_LEVEL"
+    " WHERE START_DATE <= TRUNC(SYSDATE) AND END_DATE >= TRUNC(SYSDATE)"
+)
+
+_SQL_ARTICLE_GRID = (
+    "SELECT ATTRIBUTE1, DIVISION, SECTION, DEPARTMENT, ARTICLE_NAME,"
+    " DISPLAY_TYPE, GRADE, MIN_VALUE, MAX_VALUE"
+    " FROM t_article_grid_lxmi"
+)
+
+
+def _run_module2(job_id: str) -> None:
+    _emit(job_id, {"event": "start", "module": "2", "name": "Build grid + enrich"})
+
+    # ── Step 1: load Module 1 CSVs ────────────────────────────────────────────
+    _emit(job_id, {"step": 1, "name": "Load grc2_raw + item_master + store_master", "status": "running"})
+    try:
+        grc = pd.read_csv(_OUT / "grc2_raw.csv")
+        items = pd.read_csv(_OUT / "item_master.csv", low_memory=False)
+        stores = pd.read_csv(_OUT / "store_master.csv", low_memory=False)
+    except FileNotFoundError as e:
+        _emit(job_id, {"status": "error", "message": f"Module 1 output missing: {e}. Run Module 1 first."})
+        _emit(job_id, {"status": "closed"})
+        return
+
+    grc.columns = grc.columns.str.upper()
+    items.columns = items.columns.str.upper()
+    stores.columns = stores.columns.str.upper()
+    _emit(job_id, {"step": 1, "name": "Load grc2_raw + item_master + store_master",
+                   "status": "done", "rows": len(grc)})
+
+    # ── Step 2: join grc × item_master ───────────────────────────────────────
+    _emit(job_id, {"step": 2, "name": "Join GRC × item master", "status": "running"})
+    items = items.rename(columns={"ICODE": "BARCODE"}) if "ICODE" in items.columns else items
+    grc_items = grc.merge(items, on="BARCODE", how="left")
+    _emit(job_id, {"step": 2, "name": "Join GRC × item master",
+                   "status": "done", "rows": len(grc_items)})
+
+    # ── Step 3: cross-join with active stores ─────────────────────────────────
+    _emit(job_id, {"step": 3, "name": "Cross-join active stores", "status": "running"})
+    # active = stores that have a STORE_STATUS (exclude blanks/DC rows)
+    active_stores = stores.dropna(subset=["SITE_CODE"]).copy()
+    if "STORE_STATUS" in active_stores.columns:
+        active_stores = active_stores[
+            ~active_stores["STORE_STATUS"].astype(str).str.upper().isin(["INACTIVE", "CLOSED", "NAN", ""])
+        ]
+    grc_items["_key"] = 1
+    active_stores["_key"] = 1
+    grid = grc_items.merge(active_stores, on="_key").drop(columns=["_key"])
+    _emit(job_id, {"step": 3, "name": "Cross-join active stores",
+                   "status": "done", "rows": len(grid)})
+
+    # ── Step 4: fetch lifecycle from Oracle ───────────────────────────────────
+    _emit(job_id, {"step": 4, "name": "Fetch lifecycle (Oracle)", "status": "running"})
+    try:
+        lc = _query(_SQL_LIFECYCLE)
+        lc.columns = lc.columns.str.upper()
+        join_cols = [c for c in ["DEPARTMENT", "DISPLAY_TYPE"] if c in grid.columns and c in lc.columns]
+        if join_cols:
+            grid = grid.merge(lc[join_cols + ["PERIOD", "OPTION_LEVEL", "LIFE_CYCLE"]].drop_duplicates(subset=join_cols),
+                              on=join_cols, how="left")
+        else:
+            for col in ["PERIOD", "OPTION_LEVEL", "LIFE_CYCLE"]:
+                grid[col] = None
+        _emit(job_id, {"step": 4, "name": "Fetch lifecycle (Oracle)",
+                       "status": "done", "rows": len(lc)})
+    except Exception as exc:
+        _emit(job_id, {"step": 4, "name": "Fetch lifecycle (Oracle)",
+                       "status": "done", "rows": 0, "detail": f"skipped: {exc}"})
+        for col in ["PERIOD", "OPTION_LEVEL", "LIFE_CYCLE"]:
+            grid[col] = None
+
+    # ── Step 5: fetch article_grid from Oracle ────────────────────────────────
+    _emit(job_id, {"step": 5, "name": "Fetch article_grid (Oracle)", "status": "running"})
+    try:
+        ag = _query(_SQL_ARTICLE_GRID)
+        ag.columns = ag.columns.str.upper()
+        # join on item attrs + store grade
+        grade_col = "STORE_GRADE" if "STORE_GRADE" in grid.columns else None
+        ag_join = ag.rename(columns={"GRADE": "STORE_GRADE"}) if grade_col else ag
+        ag_cols = [c for c in ["ATTRIBUTE1", "DIVISION", "SECTION", "DEPARTMENT", "ARTICLE_NAME", "DISPLAY_TYPE", "STORE_GRADE"]
+                   if c in grid.columns and c in ag_join.columns]
+        if ag_cols:
+            grid = grid.merge(
+                ag_join[ag_cols + ["MIN_VALUE", "MAX_VALUE"]].drop_duplicates(subset=ag_cols),
+                on=ag_cols, how="left"
+            )
+        else:
+            grid["MIN_VALUE"] = None
+            grid["MAX_VALUE"] = None
+        _emit(job_id, {"step": 5, "name": "Fetch article_grid (Oracle)",
+                       "status": "done", "rows": len(ag)})
+    except Exception as exc:
+        _emit(job_id, {"step": 5, "name": "Fetch article_grid (Oracle)",
+                       "status": "done", "rows": 0, "detail": f"skipped: {exc}"})
+        grid["MIN_VALUE"] = None
+        grid["MAX_VALUE"] = None
+
+    # ── Step 6: initialise filter/req columns ─────────────────────────────────
+    _emit(job_id, {"step": 6, "name": "Initialise filter + requirement columns", "status": "running"})
+    for col in ["CAT6_LIST", "MC_LISTING", "CLR_LIST_TAG", "BLOCKED", "MANUAL_EXCLUDE"]:
+        if col not in grid.columns:
+            grid[col] = None
+    for col in ["PASS", "BAR_REQ", "MC_REQ", "FILL_RATE",
+                "ARTICLE_REQ", "MRP_REQ", "OPTION_REQ", "SPARKY_REQ", "SZ_REQ", "TABLE_REQ"]:
+        if col not in grid.columns:
+            grid[col] = 0
+    _emit(job_id, {"step": 6, "name": "Initialise filter + requirement columns", "status": "done"})
+
+    # ── Step 7: save grid CSV ─────────────────────────────────────────────────
+    _emit(job_id, {"step": 7, "name": "Save grid.csv", "status": "running"})
+    grid_path = _OUT / "grid.csv"
+    grid.to_csv(grid_path, index=False)
+    _emit(job_id, {"step": 7, "name": "Save grid.csv", "status": "done", "rows": len(grid)})
+
+    _emit(job_id, {
+        "status": "finished",
+        "files": [{"name": "grid.csv", "rows": len(grid)}],
+    })
+    _emit(job_id, {"status": "closed"})
+
+
 @router.post("/pipeline/module/{mod_id}/run")
 async def run_module(mod_id: str, request: Request) -> JSONResponse:
     body: dict[str, Any] = {}
@@ -212,7 +341,7 @@ async def run_module(mod_id: str, request: Request) -> JSONResponse:
     with _jobs_lock:
         _jobs[job_id] = []
 
-    runners = {"1": _run_module1}
+    runners = {"1": _run_module1, "2": _run_module2}
     fn = runners.get(mod_id)
     if fn is None:
         return JSONResponse(

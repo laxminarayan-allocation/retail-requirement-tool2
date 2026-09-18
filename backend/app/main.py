@@ -40,6 +40,7 @@ from app.api.routes import versions as versions_routes
 from app.api.routes import warehouse_inventory as warehouse_inventory_routes
 from app.api.routes import data_store as data_store_routes
 from app.api.routes import preferences as preferences_routes
+from app.api.routes import pipeline_proxy as pipeline_proxy_routes
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -254,6 +255,8 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/simulation/",           None,          "planner"),
     # Option Listing — Pre-Winter AW26 allocation (planner+)
     ("/api/option-listing/",       None,          "planner"),
+    # Pipeline proxy → 8642 (planner+)
+    ("/api/pipeline/",             None,          "planner"),
     # Oracle / Excel Refresh (planner+)
     ("/api/oracle-refresh/",       None,          "planner"),
     # Version Control — GET public, write ops admin
@@ -420,6 +423,7 @@ app.include_router(versions_routes.router, prefix="/api")          # Version Con
 app.include_router(warehouse_inventory_routes.router, prefix="/api")  # Warehouse Inventory
 app.include_router(data_store_routes.router,         prefix="/api")  # Parquet Data Store
 app.include_router(preferences_routes.router,        prefix="/api")  # User Preferences
+app.include_router(pipeline_proxy_routes.router,     prefix="/api")  # Pipeline proxy → 8642
 
 
 @app.get("/api", tags=["Root"])

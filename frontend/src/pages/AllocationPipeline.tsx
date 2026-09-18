@@ -1,9 +1,16 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTheme } from '@/context/ThemeContext'
+import { useAuth } from '@/context/AuthContext'
 
 type ModuleStatus = 'idle' | 'running' | 'done' | 'error'
 type Source = 'csv' | 'oracle'
 type FilterOp = '=' | '!=' | 'in'
+
+interface ModuleResult {
+  rows?: number
+  files?: { name: string; download: string; rows?: number }[]
+  error?: string
+}
 
 interface FilterRow {
   id: number
@@ -47,13 +54,17 @@ let filterIdSeq = 1
 
 export default function AllocationPipeline() {
   const { tokens: T } = useTheme()
+  const { token } = useAuth()
 
   const [source, setSource] = useState<Source>('csv')
   const [statuses, setStatuses] = useState<Record<number, ModuleStatus>>({
     1: 'idle', 2: 'idle', 3: 'idle', 4: 'idle', 5: 'idle', 6: 'idle', 7: 'idle',
   })
+  const [results, setResults] = useState<Record<number, ModuleResult>>({})
+  const [stepLogs, setStepLogs] = useState<Record<number, string[]>>({})
   const [runningAll, setRunningAll] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState<number | null>(null)
+  const esRef = useRef<EventSource | null>(null)
 
   // Filter builder state
   const [filters, setFilters] = useState<FilterRow[]>([])
@@ -65,39 +76,67 @@ export default function AllocationPipeline() {
     setStatuses(prev => ({ ...prev, [id]: s }))
   }
 
-  async function runModule(id: number) {
+  function appendLog(id: number, msg: string) {
+    setStepLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), msg] }))
+  }
+
+  async function runModule(id: number): Promise<boolean> {
     setStatus(id, 'running')
+    setStepLogs(prev => ({ ...prev, [id]: [] }))
+    setResults(prev => ({ ...prev, [id]: {} }))
     try {
-      const res = await fetch('/api/pipeline/run-module', {
+      const res = await fetch(`/api/pipeline/module/${id}/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: id, source }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ source }),
       })
-      if (!res.ok) throw new Error('fail')
-      setStatus(id, 'done')
-    } catch {
-      // Simulate progress if no backend
-      await new Promise(r => setTimeout(r, 800))
-      setStatus(id, 'done')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const { job_id } = await res.json()
+      if (!job_id) throw new Error('No job_id returned')
+
+      return new Promise<boolean>((resolve) => {
+        const es = new EventSource(`/api/pipeline/stream/${job_id}`)
+        esRef.current = es
+        es.onmessage = (e) => {
+          try {
+            const evt = JSON.parse(e.data)
+            if (evt.event === 'start') return
+            if (evt.step) appendLog(id, evt.step)
+            if (evt.status === 'finished') {
+              es.close()
+              setResults(prev => ({ ...prev, [id]: { rows: evt.files?.[0]?.rows, files: evt.files } }))
+              setStatus(id, 'done')
+              resolve(true)
+            } else if (evt.status === 'error') {
+              es.close()
+              setResults(prev => ({ ...prev, [id]: { error: evt.message || 'Module failed' } }))
+              setStatus(id, 'error')
+              resolve(false)
+            }
+          } catch { /* ignore parse errors */ }
+        }
+        es.onerror = () => {
+          es.close()
+          setStatus(id, 'error')
+          resolve(false)
+        }
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setResults(prev => ({ ...prev, [id]: { error: msg } }))
+      setStatus(id, 'error')
+      return false
     }
   }
 
   async function runAll() {
     setRunningAll(true)
     for (const m of MODULES) {
-      setStatus(m.id, 'running')
-      try {
-        const res = await fetch('/api/pipeline/run-module', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ module: m.id, source }),
-        })
-        if (!res.ok) throw new Error('fail')
-        setStatus(m.id, 'done')
-      } catch {
-        await new Promise(r => setTimeout(r, 800))
-        setStatus(m.id, 'done')
-      }
+      const ok = await runModule(m.id)
+      if (!ok) break
     }
     setRunningAll(false)
   }
@@ -292,19 +331,30 @@ export default function AllocationPipeline() {
                   <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{m.description}</div>
                 </div>
 
-                {/* Status chip */}
+                {/* Status chip + result info */}
                 {s !== 'idle' && (
-                  <div style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: circleColor(s),
-                    background: circleBg(s),
-                    border: `1px solid ${circleColor(s)}44`,
-                    borderRadius: 10,
-                    padding: '2px 10px',
-                    flexShrink: 0,
-                  }}>
-                    {statusLabel(s)}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <div style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: circleColor(s),
+                      background: circleBg(s),
+                      border: `1px solid ${circleColor(s)}44`,
+                      borderRadius: 10,
+                      padding: '2px 10px',
+                    }}>
+                      {statusLabel(s)}
+                    </div>
+                    {s === 'done' && results[m.id]?.rows != null && (
+                      <span style={{ fontSize: 11, color: T.textMuted }}>
+                        {results[m.id].rows!.toLocaleString()} rows
+                      </span>
+                    )}
+                    {s === 'error' && results[m.id]?.error && (
+                      <span style={{ fontSize: 11, color: T.danger, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {results[m.id].error}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -346,6 +396,34 @@ export default function AllocationPipeline() {
                   {s === 'running' ? '⏳ Running' : 'Run module'}
                 </button>
               </div>
+
+              {/* Step logs */}
+              {(stepLogs[m.id]?.length > 0 || results[m.id]?.files?.length) && (
+                <div style={{
+                  background: T.inputBg,
+                  border: `1px solid ${T.cardBorder}`,
+                  borderTop: 'none',
+                  padding: '10px 18px',
+                  fontSize: 11,
+                  color: T.textMuted,
+                  fontFamily: 'monospace',
+                }}>
+                  {stepLogs[m.id]?.map((l, i) => (
+                    <div key={i} style={{ lineHeight: 1.6 }}>▸ {l}</div>
+                  ))}
+                  {results[m.id]?.files?.map((f, i) => (
+                    <a
+                      key={i}
+                      href={`http://10.0.1.12:8642${f.download}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ display: 'block', color: T.accent, marginTop: 4, textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      ⬇ {f.name}{f.rows != null ? ` (${f.rows.toLocaleString()} rows)` : ''}
+                    </a>
+                  ))}
+                </div>
+              )}
 
               {/* Configure drawer (simple inline panel) */}
               {drawerOpen === m.id && m.id !== 4 && (

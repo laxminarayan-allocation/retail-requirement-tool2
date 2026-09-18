@@ -353,6 +353,7 @@ _SOURCE_FILES: dict[str, str] = {
     "item_repository":  "app/repositories/item_repository.py",
     "parquet_store":    "app/core/parquet_store.py",
     "main":             "app/main.py",
+    "pipeline":         "app/api/routes/pipeline.py",
 }
 
 

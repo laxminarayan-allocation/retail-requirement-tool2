@@ -22,6 +22,10 @@ import OracleRefreshPage from '@/pages/OracleRefreshPage'
 import WarehouseInventory from '@/pages/WarehouseInventory'
 import DataStore from '@/pages/DataStore'
 import SourceViewer from '@/pages/SourceViewer'
+import AllocationPipeline from '@/pages/AllocationPipeline'
+import FlowDocumentation from '@/pages/FlowDocumentation'
+import SchemaMap from '@/pages/SchemaMap'
+import AllParameters from '@/pages/AllParameters'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
@@ -57,6 +61,10 @@ export default function App() {
             <Route path="oracle-refresh" element={<OracleRefreshPage />} />
             <Route path="data-store" element={<DataStore />} />
             <Route path="source" element={<SourceViewer />} />
+            <Route path="allocation-pipeline" element={<AllocationPipeline />} />
+            <Route path="flow-docs" element={<FlowDocumentation />} />
+            <Route path="schema-map" element={<SchemaMap />} />
+            <Route path="all-parameters" element={<AllParameters />} />
           </Route>
         </Routes>
       </BrowserRouter>

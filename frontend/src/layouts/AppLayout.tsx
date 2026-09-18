@@ -36,6 +36,10 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/settings',   label: 'Settings',         icon: '🔧', minRole: 'planner' },
   { to: '/admin',      label: 'Admin Panel',      icon: '🛡️', minRole: 'admin'   },
   { to: '/manual',    label: 'User Manual',      icon: '📖', minRole: 'viewer'  },
+  { to: '/allocation-pipeline', label: 'Create Allocation', icon: '⚙️', minRole: 'planner' },
+  { to: '/flow-docs',           label: 'Flow Documentation', icon: '📋', minRole: 'viewer'  },
+  { to: '/schema-map',          label: 'Schema Map',         icon: '🗺️', minRole: 'viewer'  },
+  { to: '/all-parameters',      label: 'All Parameters',     icon: '🎛️', minRole: 'planner' },
 ]
 
 function NavSearch({ visibleNav, tokens }: {
@@ -540,7 +544,7 @@ export default function AppLayout() {
   }, [user?.role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return null
-  if (!user || !token) return <Navigate to="/login" replace />
+  if (!user || !token) return <Navigate to="/login" replace /> // AUTH_CHECK
 
   // Pending users see a dedicated waiting screen instead of the app
   if (user.role === 'pending') return <PendingPage />

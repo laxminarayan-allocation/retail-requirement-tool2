@@ -224,6 +224,8 @@ _ROUTE_ROLES: list[tuple] = [
     # Any authenticated user can see their own data
     ("/api/auth/my-logs",          {"GET"},       "viewer"),
     ("/api/auth/my-page-access",   {"GET"},       "viewer"),
+    ("/api/auth/session/heartbeat", {"POST"},      "viewer"),
+    ("/api/auth/active-sessions",  {"GET"},       "viewer"),
     # Admin only
     ("/api/auth/",                  None,          "admin"),
     ("/api/system/",               None,          "admin"),

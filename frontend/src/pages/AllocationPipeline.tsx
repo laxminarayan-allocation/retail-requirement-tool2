@@ -3,7 +3,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useAuth } from '@/context/AuthContext'
 
 type ModuleStatus = 'idle' | 'running' | 'done' | 'error'
-type Source = 'csv' | 'oracle'
+type Source = 'csv' | 'db'
 type FilterOp = '=' | '!=' | 'in'
 
 interface ModuleResult {
@@ -213,7 +213,7 @@ export default function AllocationPipeline() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Source toggle */}
           <div style={{ display: 'flex', background: T.cardBg, border: `1px solid ${T.cardBorder}`, borderRadius: 22, overflow: 'hidden' }}>
-            {(['csv', 'oracle'] as Source[]).map(s => (
+            {(['csv', 'db'] as Source[]).map(s => (
               <button
                 key={s}
                 onClick={() => setSource(s)}

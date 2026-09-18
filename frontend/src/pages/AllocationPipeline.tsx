@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 import { useAuth } from '@/context/AuthContext'
 
@@ -64,7 +64,6 @@ export default function AllocationPipeline() {
   const [stepLogs, setStepLogs] = useState<Record<number, string[]>>({})
   const [runningAll, setRunningAll] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState<number | null>(null)
-  const esRef = useRef<EventSource | null>(null)
 
   // Filter builder state
   const [filters, setFilters] = useState<FilterRow[]>([])
@@ -97,29 +96,47 @@ export default function AllocationPipeline() {
       const { job_id } = await res.json()
       if (!job_id) throw new Error('No job_id returned')
 
-      return new Promise<boolean>((resolve) => {
-        const es = new EventSource(`/api/pipeline/stream/${job_id}`)
-        esRef.current = es
-        es.onmessage = (e) => {
-          try {
-            const evt = JSON.parse(e.data)
-            if (evt.event === 'start') return
-            if (evt.step) appendLog(id, evt.step)
-            if (evt.status === 'finished') {
-              es.close()
-              setResults(prev => ({ ...prev, [id]: { rows: evt.files?.[0]?.rows, files: evt.files } }))
-              setStatus(id, 'done')
-              resolve(true)
-            } else if (evt.status === 'error') {
-              es.close()
-              setResults(prev => ({ ...prev, [id]: { error: evt.message || 'Module failed' } }))
-              setStatus(id, 'error')
-              resolve(false)
+      // Use fetch+ReadableStream instead of EventSource so we can send the auth header
+      const streamResp = await fetch(`/api/pipeline/stream/${job_id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!streamResp.ok || !streamResp.body) throw new Error(`Stream ${streamResp.status}`)
+
+      const reader = streamResp.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+
+      return new Promise<boolean>(async (resolve) => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            const parts = buf.split('\n')
+            buf = parts.pop() ?? ''
+            for (const line of parts) {
+              if (!line.startsWith('data: ')) continue
+              try {
+                const evt = JSON.parse(line.slice(6))
+                if (evt.event === 'start') continue
+                if (evt.step) appendLog(id, `Step ${evt.step}: ${evt.name ?? ''}${evt.detail ? ' — ' + evt.detail : ''}`)
+                if (evt.status === 'finished') {
+                  setResults(prev => ({ ...prev, [id]: { rows: evt.files?.[0]?.rows, files: evt.files } }))
+                  setStatus(id, 'done')
+                  resolve(true)
+                  return
+                }
+                if (evt.status === 'error') {
+                  setResults(prev => ({ ...prev, [id]: { error: evt.message || 'Module failed' } }))
+                  setStatus(id, 'error')
+                  resolve(false)
+                  return
+                }
+              } catch { /* skip malformed lines */ }
             }
-          } catch { /* ignore parse errors */ }
-        }
-        es.onerror = () => {
-          es.close()
+          }
+          resolve(true)
+        } catch {
           setStatus(id, 'error')
           resolve(false)
         }

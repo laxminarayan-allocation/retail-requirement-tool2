@@ -27,6 +27,17 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
     proxy: {
+      '/api/pipeline/stream': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        ws: false,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['cache-control'] = 'no-cache'
+            proxyRes.headers['x-accel-buffering'] = 'no'
+          })
+        },
+      },
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,

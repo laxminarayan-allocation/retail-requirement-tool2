@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 router = APIRouter()
 
 PIPELINE_ORIGIN = "http://10.0.1.12:8642"
-_client = httpx.AsyncClient(base_url=PIPELINE_ORIGIN, timeout=300.0)
+_client = httpx.AsyncClient(base_url=PIPELINE_ORIGIN, timeout=300.0, trust_env=False)
 
 
 async def _proxy(method: str, path: str, request: Request) -> JSONResponse:

@@ -12,7 +12,7 @@ const FILE_LABELS: Record<string, string> = {
   item_repository:  'item_repository.py',
   parquet_store:    'parquet_store.py',
   main:             'main.py',
-  pipeline:         'pipeline.py',
+  simulation:       'simulation.py',
 }
 
 // Minimal Python syntax highlighter

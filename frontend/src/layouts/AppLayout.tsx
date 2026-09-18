@@ -20,7 +20,7 @@ function useIsMobile() {
   return mobile
 }
 
-const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = [
+const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role; group?: string }[] = [
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
   { to: '/database',   label: 'Database Explorer',icon: '🗄️', minRole: 'admin'   },
   { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'admin'   },
@@ -35,10 +35,10 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role }[] = 
   { to: '/settings',   label: 'Settings',         icon: '🔧', minRole: 'planner' },
   { to: '/admin',      label: 'Admin Panel',      icon: '🛡️', minRole: 'admin'   },
   { to: '/manual',    label: 'User Manual',      icon: '📖', minRole: 'viewer'  },
-  { to: '/allocation-pipeline', label: 'Create Allocation', icon: '⚙️', minRole: 'planner' },
-  { to: '/flow-docs',           label: 'Flow Documentation', icon: '📋', minRole: 'viewer'  },
-  { to: '/schema-map',          label: 'Schema Map',         icon: '🗺️', minRole: 'viewer'  },
-  { to: '/all-parameters',      label: 'All Parameters',     icon: '🎛️', minRole: 'planner' },
+  { to: '/allocation-pipeline', label: 'Create Allocation',  icon: '⚙️',  minRole: 'planner', group: 'Simulation' },
+  { to: '/flow-docs',           label: 'Flow Documentation', icon: '📋', minRole: 'viewer',   group: 'Simulation' },
+  { to: '/schema-map',          label: 'Schema Map',         icon: '🗺️', minRole: 'viewer',   group: 'Simulation' },
+  { to: '/all-parameters',      label: 'All Parameters',     icon: '🎛️', minRole: 'planner',  group: 'Simulation' },
 ]
 
 function NavSearch({ visibleNav, tokens }: {
@@ -497,6 +497,20 @@ export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('app_sidebarCollapsed') === '1' } catch { return false }
   })
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('app_collapsed_groups')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch { return new Set() }
+  })
+  function toggleGroup(name: string) {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      try { localStorage.setItem('app_collapsed_groups', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
   const [reorderMode, setReorderMode] = useState(false)
   const dragIdxRef = useRef<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
@@ -682,46 +696,76 @@ export default function AppLayout() {
               title="Reorder navigation"
             >↕</button>
           </div>
-          {visibleNav.map((item, idx) => (
-            <NavItem
-              key={item.to}
-              to={item.to}
-              label={item.label}
-              icon={item.icon}
-              reorderMode={reorderMode}
-              dragOver={dragOverIdx === idx}
-              onDragStart={() => { dragIdxRef.current = idx }}
-              onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
-              onDrop={() => {
-                if (dragIdxRef.current !== null && dragIdxRef.current !== idx) {
-                  moveNavItem(dragIdxRef.current, idx)
-                }
-                dragIdxRef.current = null
-                setDragOverIdx(null)
-              }}
-              onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null) }}
-              onTouchStart={e => {
-                touchDragIdxRef.current = idx
-                touchStartYRef.current = e.touches[0].clientY
-                const el = e.currentTarget as HTMLElement
-                navItemHeightRef.current = el.getBoundingClientRect().height || 44
-              }}
-              onTouchMove={e => {
-                if (touchDragIdxRef.current === null) return
-                const dy = e.touches[0].clientY - touchStartYRef.current
-                const steps = Math.round(dy / navItemHeightRef.current)
-                const targetIdx = Math.max(0, Math.min(visibleNav.length - 1, touchDragIdxRef.current + steps))
-                setDragOverIdx(targetIdx)
-              }}
-              onTouchEnd={() => {
-                if (touchDragIdxRef.current !== null && dragOverIdx !== null && touchDragIdxRef.current !== dragOverIdx) {
-                  moveNavItem(touchDragIdxRef.current, dragOverIdx)
-                }
-                touchDragIdxRef.current = null
-                setDragOverIdx(null)
-              }}
-            />
-          ))}
+          {(() => {
+            const renderedGroups = new Set<string>()
+            return visibleNav.map((item, idx) => {
+              const g = item.group
+              const isGrouped = !!g
+              const isFirstInGroup = isGrouped && !renderedGroups.has(g!)
+              if (isFirstInGroup) renderedGroups.add(g!)
+              const isCollapsed = isGrouped && collapsedGroups.has(g!)
+              return (
+                <div key={item.to}>
+                  {isFirstInGroup && (
+                    <button
+                      onClick={() => toggleGroup(g!)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '6px 16px 4px', marginTop: 4,
+                        color: tokens.textMuted, fontSize: 10, fontWeight: 700,
+                        letterSpacing: '0.8px', textTransform: 'uppercase',
+                      }}
+                    >
+                      <span>🧮 Simulation</span>
+                      <span style={{ fontSize: 9 }}>{isCollapsed ? '▶' : '▼'}</span>
+                    </button>
+                  )}
+                  {!isCollapsed && (
+                    <div style={isGrouped ? { paddingLeft: 10 } : {}}>
+                      <NavItem
+                        to={item.to}
+                        label={item.label}
+                        icon={item.icon}
+                        reorderMode={reorderMode}
+                        dragOver={dragOverIdx === idx}
+                        onDragStart={() => { dragIdxRef.current = idx }}
+                        onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
+                        onDrop={() => {
+                          if (dragIdxRef.current !== null && dragIdxRef.current !== idx) {
+                            moveNavItem(dragIdxRef.current, idx)
+                          }
+                          dragIdxRef.current = null
+                          setDragOverIdx(null)
+                        }}
+                        onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null) }}
+                        onTouchStart={e => {
+                          touchDragIdxRef.current = idx
+                          touchStartYRef.current = e.touches[0].clientY
+                          const el = e.currentTarget as HTMLElement
+                          navItemHeightRef.current = el.getBoundingClientRect().height || 44
+                        }}
+                        onTouchMove={e => {
+                          if (touchDragIdxRef.current === null) return
+                          const dy = e.touches[0].clientY - touchStartYRef.current
+                          const steps = Math.round(dy / navItemHeightRef.current)
+                          const targetIdx = Math.max(0, Math.min(visibleNav.length - 1, touchDragIdxRef.current + steps))
+                          setDragOverIdx(targetIdx)
+                        }}
+                        onTouchEnd={() => {
+                          if (touchDragIdxRef.current !== null && dragOverIdx !== null && touchDragIdxRef.current !== dragOverIdx) {
+                            moveNavItem(touchDragIdxRef.current, dragOverIdx)
+                          }
+                          touchDragIdxRef.current = null
+                          setDragOverIdx(null)
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          })()}
         </nav>
         <div style={{ borderTop: `1px solid ${tokens.sidebarBorder}`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

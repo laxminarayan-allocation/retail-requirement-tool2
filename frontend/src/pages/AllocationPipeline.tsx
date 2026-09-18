@@ -90,7 +90,7 @@ export default function AllocationPipeline() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ source }),
+        body: JSON.stringify(id === 4 ? { source, filters } : { source }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const { job_id } = await res.json()

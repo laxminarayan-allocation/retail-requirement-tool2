@@ -344,16 +344,29 @@ _SQL_BLOCK_LIST  = (
     " JOIN MISRETAIL.T_DLT_ICODE I ON S.STR_DLT_ID = I.ICODE_DLT_ID"
     " JOIN ADMSITE K ON S.STR_CODE = K.CODE"
     " JOIN MISRETAIL.T_DLT_BAR B ON S.STR_DLT_ID = B.DLT_ID"
-    " WHERE S.STR_DLT_ID >= 22"
+    " WHERE S.STR_DLT_ID >= 22 AND ROWNUM <= 200000"
 )
 
 
-def _safe_query(sql: str) -> pd.DataFrame | None:
-    """Run query; return None on error (non-fatal for filter steps)."""
-    try:
-        return _query(sql)
-    except Exception:
+def _safe_query(sql: str, timeout_s: int = 120) -> pd.DataFrame | None:
+    """Run query with a wall-clock timeout; return None on error or timeout."""
+    result: list[pd.DataFrame | None] = [None]
+    exc_holder: list[Exception | None] = [None]
+
+    def _worker():
+        try:
+            result[0] = _query(sql)
+        except Exception as e:
+            exc_holder[0] = e
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(timeout=timeout_s)
+    if t.is_alive():
+        return None  # timed out
+    if exc_holder[0]:
         return None
+    return result[0]
 
 
 def _run_module3(job_id: str) -> None:
@@ -409,7 +422,7 @@ def _run_module3(job_id: str) -> None:
 
     # ── Step 4: CLR concept filter ────────────────────────────────────────────
     _emit(job_id, {"step": 4, "name": "CLR concept filter (Oracle)", "status": "running"})
-    clr = _safe_query(_SQL_CLR_CONCEPT)
+    clr = _safe_query(_SQL_CLR_CONCEPT, timeout_s=60)
     if clr is not None:
         clr.columns = clr.columns.str.upper()
         clr["CLR_LIST_TAG"] = "Y"
@@ -451,18 +464,17 @@ def _run_module3(job_id: str) -> None:
 
     # ── Step 6: DLT block list ────────────────────────────────────────────────
     _emit(job_id, {"step": 6, "name": "DLT block list (Oracle)", "status": "running"})
-    dlt = _safe_query(_SQL_BLOCK_LIST)
+    dlt = _safe_query(_SQL_BLOCK_LIST, timeout_s=60)
     if dlt is not None and not dlt.empty:
         dlt.columns = dlt.columns.str.upper()
         if "STORE" in dlt.columns and "ICODE" in dlt.columns:
             dlt["_DLT"] = "Y"
             b_col = "BARCODE" if "BARCODE" in grid.columns else None
             s_col = "STORE_NAME" if "STORE_NAME" in grid.columns else None
-            if b_col and s_col:
-                grid = grid.merge(
-                    dlt[["STORE", "ICODE", "_DLT"]].drop_duplicates(),
-                    left_on=[s_col, b_col], right_on=["STORE", "ICODE"], how="left"
-                )
+            if b_col and s_col and len(dlt) <= 100_000:
+                dlt_dedup = dlt[["STORE", "ICODE", "_DLT"]].drop_duplicates()
+                grid = grid.merge(dlt_dedup, left_on=[s_col, b_col],
+                                  right_on=["STORE", "ICODE"], how="left")
                 grid["BLOCKED"] = grid["BLOCKED"].fillna(grid["_DLT"])
                 grid.drop(columns=["STORE", "ICODE", "_DLT"], errors="ignore", inplace=True)
         _emit(job_id, {"step": 6, "name": "DLT block list (Oracle)", "status": "done", "rows": len(dlt)})
@@ -496,6 +508,382 @@ def _run_module3(job_id: str) -> None:
     _emit(job_id, {"status": "closed"})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 4 — Manual filters
+# Applies user-defined exclusion rules (column / op / value) to grid_filtered.csv.
+# Rows that match any rule get MANUAL_EXCLUDE = "Y"; PASS is re-evaluated.
+# Saves grid_manual.csv.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_module4(job_id: str, filters: list[dict]) -> None:
+    _emit(job_id, {"event": "start", "module": "4", "name": "Manual filters"})
+
+    # ── Step 1: load grid_filtered.csv ────────────────────────────────────────
+    _emit(job_id, {"step": 1, "name": "Load grid_filtered.csv", "status": "running"})
+    try:
+        grid = pd.read_csv(_OUT / "grid_filtered.csv", low_memory=False)
+    except FileNotFoundError:
+        _emit(job_id, {"status": "error", "message": "grid_filtered.csv missing — run Module 3 first."})
+        _emit(job_id, {"status": "closed"})
+        return
+    grid.columns = grid.columns.str.upper()
+    _emit(job_id, {"step": 1, "name": "Load grid_filtered.csv", "status": "done", "rows": len(grid)})
+
+    # ── Step 2: apply each filter rule ───────────────────────────────────────
+    _emit(job_id, {"step": 2, "name": f"Apply {len(filters)} manual filter rule(s)", "status": "running"})
+    if "MANUAL_EXCLUDE" not in grid.columns:
+        grid["MANUAL_EXCLUDE"] = None
+
+    excluded = pd.Series(False, index=grid.index)
+    applied = 0
+    for rule in filters:
+        col = str(rule.get("column", "")).upper()
+        op  = str(rule.get("op", "="))
+        val = str(rule.get("value", ""))
+        if col not in grid.columns:
+            continue
+        col_s = grid[col].astype(str).str.strip().str.upper()
+        if op == "=":
+            mask = col_s == val.upper()
+        elif op == "!=":
+            mask = col_s != val.upper()
+        elif op == "in":
+            vals = {v.strip().upper() for v in val.split(",")}
+            mask = col_s.isin(vals)
+        else:
+            continue
+        excluded |= mask
+        applied += 1
+
+    grid.loc[excluded, "MANUAL_EXCLUDE"] = "Y"
+    n_excluded = int(excluded.sum())
+    _emit(job_id, {"step": 2, "name": f"Apply {applied} manual filter rule(s)",
+                   "status": "done", "detail": f"{n_excluded:,} rows marked MANUAL_EXCLUDE=Y"})
+
+    # ── Step 3: re-evaluate PASS ──────────────────────────────────────────────
+    _emit(job_id, {"step": 3, "name": "Re-evaluate PASS column", "status": "running"})
+    def _flag(col: str) -> pd.Series:
+        if col in grid.columns:
+            return grid[col].astype(str).str.upper().isin(["Y", "YES", "1", "BLOCK", "BLOCKED"])
+        return pd.Series(False, index=grid.index)
+
+    blocked_mask = _flag("BLOCKED") | _flag("MANUAL_EXCLUDE")
+    grid["PASS"] = (~blocked_mask).map({True: "Y", False: "N"})
+    pass_y = int((grid["PASS"] == "Y").sum())
+    _emit(job_id, {"step": 3, "name": "Re-evaluate PASS column", "status": "done",
+                   "detail": f"{pass_y:,} rows PASS=Y"})
+
+    # ── Step 4: save grid_manual.csv ──────────────────────────────────────────
+    _emit(job_id, {"step": 4, "name": "Save grid_manual.csv", "status": "running"})
+    out_path = _OUT / "grid_manual.csv"
+    grid.to_csv(out_path, index=False)
+    _emit(job_id, {"step": 4, "name": "Save grid_manual.csv", "status": "done", "rows": len(grid)})
+
+    _emit(job_id, {
+        "status": "finished",
+        "files": [{"name": "grid_manual.csv", "rows": len(grid)}],
+    })
+    _emit(job_id, {"status": "closed"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 5 — Join requirements
+# Fetches 6 Oracle requirement views and attaches BAR_REQ, MC_REQ,
+# ARTICLE_REQ, MRP_REQ, OPTION_REQ, SPARKY_REQ to each row in grid_manual.csv.
+# Saves grid_req.csv.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SQL_BAR_REQ     = "SELECT ICODE, STORE_NAME, REQ AS BAR_REQ FROM ck_a2166.v_barcode_req_apps_grc_v2"
+_SQL_MC_REQ      = "SELECT STORE_NAME, DEPARTMENT, SECTION, REQ AS MC_REQ FROM ck_a2166.v_mc_req_apps_2"
+_SQL_ART_REQ     = "SELECT STORE_NAME, DEPARTMENT, ARTICLE_NAME, REQ AS ARTICLE_REQ FROM ck_a2166.v_art_req_apps"
+_SQL_MRP_REQ     = "SELECT STORE_NAME, DEPARTMENT, ARTICLE_NAME, MRP, REQ AS MRP_REQ FROM ck_a2166.v_mrp_req_apps"
+_SQL_OPTION_REQ  = "SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, ALLOCATION_OPTION, OPTION_REQ FROM ck_a2166.v_option_req_apps"
+_SQL_SPARKY_REQ  = "SELECT STORE_NAME, DEPARTMENT, ARTICLE_NAME, SPARKY_REQ FROM ck_a2166.v_sparky_pbs_req"
+
+
+def _run_module5(job_id: str) -> None:
+    _emit(job_id, {"event": "start", "module": "5", "name": "Join requirements"})
+
+    # ── Step 1: load grid_manual.csv ─────────────────────────────────────────
+    _emit(job_id, {"step": 1, "name": "Load grid_manual.csv", "status": "running"})
+    try:
+        grid = pd.read_csv(_OUT / "grid_manual.csv", low_memory=False)
+    except FileNotFoundError:
+        _emit(job_id, {"status": "error", "message": "grid_manual.csv missing — run Module 4 first."})
+        _emit(job_id, {"status": "closed"})
+        return
+    grid.columns = grid.columns.str.upper()
+    _emit(job_id, {"step": 1, "name": "Load grid_manual.csv", "status": "done", "rows": len(grid)})
+
+    def _join_req(step: int, name: str, sql: str, left_on: list, right_on: list,
+                  req_col: str, icode_join: bool = False) -> None:
+        _emit(job_id, {"step": step, "name": name, "status": "running"})
+        df = _safe_query(sql, timeout_s=60)
+        if df is not None and not df.empty:
+            df.columns = df.columns.str.upper()
+            # deduplicate on join keys keeping max REQ
+            df = df.drop_duplicates(subset=right_on, keep="last")
+            valid_left  = [c for c in left_on  if c in grid.columns]
+            valid_right = [c for c in right_on if c in df.columns]
+            if len(valid_left) == len(left_on) and len(valid_right) == len(right_on):
+                nonlocal grid
+                grid = grid.merge(
+                    df[right_on + [req_col]],
+                    left_on=left_on, right_on=right_on, how="left",
+                    suffixes=("", f"__{req_col}")
+                )
+                # if right_on columns differ from left_on, drop the extra columns
+                for rc in right_on:
+                    if rc not in left_on and rc in grid.columns:
+                        grid.drop(columns=[rc], errors="ignore", inplace=True)
+                if req_col not in grid.columns:
+                    grid[req_col] = df[req_col] if req_col in df.columns else 0
+            _emit(job_id, {"step": step, "name": name, "status": "done", "rows": len(df)})
+        else:
+            if req_col not in grid.columns:
+                grid[req_col] = 0
+            _emit(job_id, {"step": step, "name": name, "status": "done",
+                           "rows": 0, "detail": "skipped/timeout"})
+
+    # ── Step 2: BAR_REQ (barcode × store) ────────────────────────────────────
+    _emit(job_id, {"step": 2, "name": "Fetch BAR_REQ (Oracle)", "status": "running"})
+    bar = _safe_query(_SQL_BAR_REQ, timeout_s=60)
+    if bar is not None and not bar.empty:
+        bar.columns = bar.columns.str.upper()
+        bar = bar.drop_duplicates(subset=["ICODE", "STORE_NAME"])
+        if "BARCODE" in grid.columns and "STORE_NAME" in grid.columns:
+            grid = grid.merge(bar[["ICODE", "STORE_NAME", "BAR_REQ"]],
+                              left_on=["BARCODE", "STORE_NAME"],
+                              right_on=["ICODE", "STORE_NAME"], how="left")
+            grid.drop(columns=["ICODE"], errors="ignore", inplace=True)
+        _emit(job_id, {"step": 2, "name": "Fetch BAR_REQ (Oracle)", "status": "done", "rows": len(bar)})
+    else:
+        if "BAR_REQ" not in grid.columns:
+            grid["BAR_REQ"] = 0
+        _emit(job_id, {"step": 2, "name": "Fetch BAR_REQ (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 3: MC_REQ (store × dept × section) ───────────────────────────────
+    _emit(job_id, {"step": 3, "name": "Fetch MC_REQ (Oracle)", "status": "running"})
+    mc = _safe_query(_SQL_MC_REQ, timeout_s=60)
+    if mc is not None and not mc.empty:
+        mc.columns = mc.columns.str.upper()
+        join_cols = [c for c in ["STORE_NAME", "DEPARTMENT", "SECTION"] if c in mc.columns and c in grid.columns]
+        mc = mc.drop_duplicates(subset=join_cols)
+        if join_cols:
+            grid = grid.merge(mc[join_cols + ["MC_REQ"]], on=join_cols, how="left")
+        _emit(job_id, {"step": 3, "name": "Fetch MC_REQ (Oracle)", "status": "done", "rows": len(mc)})
+    else:
+        if "MC_REQ" not in grid.columns:
+            grid["MC_REQ"] = 0
+        _emit(job_id, {"step": 3, "name": "Fetch MC_REQ (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 4: ARTICLE_REQ (store × dept × article) ──────────────────────────
+    _emit(job_id, {"step": 4, "name": "Fetch ARTICLE_REQ (Oracle)", "status": "running"})
+    art = _safe_query(_SQL_ART_REQ, timeout_s=60)
+    if art is not None and not art.empty:
+        art.columns = art.columns.str.upper()
+        join_cols = [c for c in ["STORE_NAME", "DEPARTMENT", "ARTICLE_NAME"] if c in art.columns and c in grid.columns]
+        art = art.drop_duplicates(subset=join_cols)
+        if join_cols:
+            grid = grid.merge(art[join_cols + ["ARTICLE_REQ"]], on=join_cols, how="left")
+        _emit(job_id, {"step": 4, "name": "Fetch ARTICLE_REQ (Oracle)", "status": "done", "rows": len(art)})
+    else:
+        if "ARTICLE_REQ" not in grid.columns:
+            grid["ARTICLE_REQ"] = 0
+        _emit(job_id, {"step": 4, "name": "Fetch ARTICLE_REQ (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 5: MRP_REQ (store × dept × article × mrp) ───────────────────────
+    _emit(job_id, {"step": 5, "name": "Fetch MRP_REQ (Oracle)", "status": "running"})
+    mrp = _safe_query(_SQL_MRP_REQ, timeout_s=60)
+    if mrp is not None and not mrp.empty:
+        mrp.columns = mrp.columns.str.upper()
+        join_cols = [c for c in ["STORE_NAME", "DEPARTMENT", "ARTICLE_NAME", "MRP"] if c in mrp.columns and c in grid.columns]
+        mrp = mrp.drop_duplicates(subset=join_cols)
+        if join_cols:
+            grid = grid.merge(mrp[join_cols + ["MRP_REQ"]], on=join_cols, how="left")
+        _emit(job_id, {"step": 5, "name": "Fetch MRP_REQ (Oracle)", "status": "done", "rows": len(mrp)})
+    else:
+        if "MRP_REQ" not in grid.columns:
+            grid["MRP_REQ"] = 0
+        _emit(job_id, {"step": 5, "name": "Fetch MRP_REQ (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 6: OPTION_REQ (store × dept × display_type × allocation_option) ──
+    _emit(job_id, {"step": 6, "name": "Fetch OPTION_REQ (Oracle)", "status": "running"})
+    opt = _safe_query(_SQL_OPTION_REQ, timeout_s=60)
+    if opt is not None and not opt.empty:
+        opt.columns = opt.columns.str.upper()
+        join_cols = [c for c in ["STORE_NAME", "DEPARTMENT", "DISPLAY_TYPE", "ALLOCATION_OPTION"]
+                     if c in opt.columns and c in grid.columns]
+        opt = opt.drop_duplicates(subset=join_cols)
+        if join_cols:
+            grid = grid.merge(opt[join_cols + ["OPTION_REQ"]], on=join_cols, how="left")
+        _emit(job_id, {"step": 6, "name": "Fetch OPTION_REQ (Oracle)", "status": "done", "rows": len(opt)})
+    else:
+        if "OPTION_REQ" not in grid.columns:
+            grid["OPTION_REQ"] = 0
+        _emit(job_id, {"step": 6, "name": "Fetch OPTION_REQ (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 7: SPARKY_REQ (store × dept × article) ───────────────────────────
+    _emit(job_id, {"step": 7, "name": "Fetch SPARKY_REQ (Oracle)", "status": "running"})
+    sparky = _safe_query(_SQL_SPARKY_REQ, timeout_s=60)
+    if sparky is not None and not sparky.empty:
+        sparky.columns = sparky.columns.str.upper()
+        join_cols = [c for c in ["STORE_NAME", "DEPARTMENT", "ARTICLE_NAME"] if c in sparky.columns and c in grid.columns]
+        sparky = sparky.drop_duplicates(subset=join_cols)
+        if join_cols:
+            grid = grid.merge(sparky[join_cols + ["SPARKY_REQ"]], on=join_cols, how="left")
+        _emit(job_id, {"step": 7, "name": "Fetch SPARKY_REQ (Oracle)", "status": "done", "rows": len(sparky)})
+    else:
+        if "SPARKY_REQ" not in grid.columns:
+            grid["SPARKY_REQ"] = 0
+        _emit(job_id, {"step": 7, "name": "Fetch SPARKY_REQ (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 8: fill NaN reqs with 0 ─────────────────────────────────────────
+    _emit(job_id, {"step": 8, "name": "Fill NaN requirements → 0", "status": "running"})
+    for col in ["BAR_REQ", "MC_REQ", "ARTICLE_REQ", "MRP_REQ", "OPTION_REQ", "SPARKY_REQ", "SZ_REQ"]:
+        if col in grid.columns:
+            grid[col] = pd.to_numeric(grid[col], errors="coerce").fillna(0)
+        else:
+            grid[col] = 0
+    _emit(job_id, {"step": 8, "name": "Fill NaN requirements → 0", "status": "done"})
+
+    # ── Step 9: save grid_req.csv ─────────────────────────────────────────────
+    _emit(job_id, {"step": 9, "name": "Save grid_req.csv", "status": "running"})
+    out_path = _OUT / "grid_req.csv"
+    grid.to_csv(out_path, index=False)
+    _emit(job_id, {"step": 9, "name": "Save grid_req.csv", "status": "done", "rows": len(grid)})
+
+    _emit(job_id, {
+        "status": "finished",
+        "files": [{"name": "grid_req.csv", "rows": len(grid)}],
+    })
+    _emit(job_id, {"status": "closed"})
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 6 — Eligible qty + export
+# ELIGIBLE_QTY = min(BAR_REQ, MC_REQ, priority_req where >0)
+# Writes final_eligible.csv.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_module6(job_id: str) -> None:
+    _emit(job_id, {"event": "start", "module": "6", "name": "Eligible qty + export"})
+
+    # ── Step 1: load grid_req.csv ─────────────────────────────────────────────
+    _emit(job_id, {"step": 1, "name": "Load grid_req.csv", "status": "running"})
+    try:
+        grid = pd.read_csv(_OUT / "grid_req.csv", low_memory=False)
+    except FileNotFoundError:
+        _emit(job_id, {"status": "error", "message": "grid_req.csv missing — run Module 5 first."})
+        _emit(job_id, {"status": "closed"})
+        return
+    grid.columns = grid.columns.str.upper()
+    _emit(job_id, {"step": 1, "name": "Load grid_req.csv", "status": "done", "rows": len(grid)})
+
+    # ── Step 2: compute ELIGIBLE_QTY ─────────────────────────────────────────
+    _emit(job_id, {"step": 2, "name": "Compute ELIGIBLE_QTY", "status": "running"})
+    req_cols = ["BAR_REQ", "MC_REQ", "ARTICLE_REQ", "MRP_REQ", "OPTION_REQ", "SPARKY_REQ"]
+    for col in req_cols:
+        if col in grid.columns:
+            grid[col] = pd.to_numeric(grid[col], errors="coerce").fillna(0)
+        else:
+            grid[col] = 0
+
+    # ELIGIBLE_QTY = min of all non-zero requirements; if all are 0, result is 0
+    req_matrix = grid[req_cols].copy()
+    req_matrix[req_matrix == 0] = float("inf")  # treat 0 as "no constraint"
+    grid["ELIGIBLE_QTY"] = req_matrix.min(axis=1).replace(float("inf"), 0).astype(int)
+
+    pass_y = int((grid.get("PASS", "Y") == "Y").sum()) if "PASS" in grid.columns else len(grid)
+    _emit(job_id, {"step": 2, "name": "Compute ELIGIBLE_QTY", "status": "done",
+                   "detail": f"max eligible_qty: {int(grid['ELIGIBLE_QTY'].max())}"})
+
+    # ── Step 3: filter PASS=Y rows ────────────────────────────────────────────
+    _emit(job_id, {"step": 3, "name": "Filter PASS=Y rows", "status": "running"})
+    if "PASS" in grid.columns:
+        eligible = grid[grid["PASS"].astype(str).str.upper() == "Y"].copy()
+    else:
+        eligible = grid.copy()
+    _emit(job_id, {"step": 3, "name": "Filter PASS=Y rows", "status": "done", "rows": len(eligible)})
+
+    # ── Step 4: save final_eligible.csv ───────────────────────────────────────
+    _emit(job_id, {"step": 4, "name": "Save final_eligible.csv", "status": "running"})
+    out_path = _OUT / "final_eligible.csv"
+    eligible.to_csv(out_path, index=False)
+    _emit(job_id, {"step": 4, "name": "Save final_eligible.csv", "status": "done", "rows": len(eligible)})
+
+    _emit(job_id, {
+        "status": "finished",
+        "files": [{"name": "final_eligible.csv", "rows": len(eligible)}],
+    })
+    _emit(job_id, {"status": "closed"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 7 — Sort + export
+# Sort by DEPARTMENT → STORE_NAME → ARTICLE_NAME → BARCODE
+# Writes final_sorted.csv (and optionally an Excel file).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_module7(job_id: str) -> None:
+    _emit(job_id, {"event": "start", "module": "7", "name": "Sort + export"})
+
+    # ── Step 1: load final_eligible.csv ──────────────────────────────────────
+    _emit(job_id, {"step": 1, "name": "Load final_eligible.csv", "status": "running"})
+    try:
+        df = pd.read_csv(_OUT / "final_eligible.csv", low_memory=False)
+    except FileNotFoundError:
+        _emit(job_id, {"status": "error", "message": "final_eligible.csv missing — run Module 6 first."})
+        _emit(job_id, {"status": "closed"})
+        return
+    df.columns = df.columns.str.upper()
+    _emit(job_id, {"step": 1, "name": "Load final_eligible.csv", "status": "done", "rows": len(df)})
+
+    # ── Step 2: sort ──────────────────────────────────────────────────────────
+    _emit(job_id, {"step": 2, "name": "Sort DEPT → STORE → ARTICLE → BARCODE", "status": "running"})
+    sort_cols = [c for c in ["DEPARTMENT", "STORE_NAME", "ARTICLE_NAME", "BARCODE"] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(by=sort_cols).reset_index(drop=True)
+    _emit(job_id, {"step": 2, "name": "Sort DEPT → STORE → ARTICLE → BARCODE",
+                   "status": "done", "rows": len(df)})
+
+    # ── Step 3: save final_sorted.csv ─────────────────────────────────────────
+    _emit(job_id, {"step": 3, "name": "Save final_sorted.csv", "status": "running"})
+    csv_path = _OUT / "final_sorted.csv"
+    df.to_csv(csv_path, index=False)
+    _emit(job_id, {"step": 3, "name": "Save final_sorted.csv", "status": "done", "rows": len(df)})
+
+    # ── Step 4: write Excel ───────────────────────────────────────────────────
+    _emit(job_id, {"step": 4, "name": "Write Excel (final_allocation.xlsx)", "status": "running"})
+    xlsx_path = _OUT / "final_allocation.xlsx"
+    try:
+        import openpyxl  # noqa: F401  — check it's available
+        # Export key columns only to keep xlsx manageable
+        export_cols = [c for c in [
+            "DEPARTMENT", "DIVISION", "SECTION", "DISPLAY_TYPE", "ARTICLE_NAME",
+            "BARCODE", "MRP", "STORE_NAME", "STORE_GRADE", "STATE",
+            "ELIGIBLE_QTY", "BAR_REQ", "MC_REQ", "ARTICLE_REQ", "MRP_REQ",
+            "OPTION_REQ", "SPARKY_REQ", "PASS", "CAT6_LIST", "MC_LISTING",
+            "BLOCKED", "MANUAL_EXCLUDE",
+        ] if c in df.columns]
+        df[export_cols].to_excel(str(xlsx_path), index=False, engine="openpyxl")
+        _emit(job_id, {"step": 4, "name": "Write Excel (final_allocation.xlsx)",
+                       "status": "done", "rows": len(df)})
+    except Exception as exc:
+        _emit(job_id, {"step": 4, "name": "Write Excel (final_allocation.xlsx)",
+                       "status": "done", "rows": 0, "detail": f"skipped: {exc}"})
+
+    _emit(job_id, {
+        "status": "finished",
+        "files": [
+            {"name": "final_sorted.csv", "rows": len(df)},
+            {"name": "final_allocation.xlsx", "rows": len(df)},
+        ],
+    })
+    _emit(job_id, {"status": "closed"})
+
+
 @router.post("/pipeline/module/{mod_id}/run")
 async def run_module(mod_id: str, request: Request) -> JSONResponse:
     body: dict[str, Any] = {}
@@ -508,7 +896,15 @@ async def run_module(mod_id: str, request: Request) -> JSONResponse:
     with _jobs_lock:
         _jobs[job_id] = []
 
-    runners = {"1": _run_module1, "2": _run_module2, "3": _run_module3}
+    if mod_id == "4":
+        filters = body.get("filters", [])
+        threading.Thread(target=_run_module4, args=(job_id, filters), daemon=True).start()
+        return JSONResponse({"job_id": job_id, "module": mod_id})
+
+    runners = {
+        "1": _run_module1, "2": _run_module2, "3": _run_module3,
+        "5": _run_module5, "6": _run_module6, "7": _run_module7,
+    }
     fn = runners.get(mod_id)
     if fn is None:
         return JSONResponse(

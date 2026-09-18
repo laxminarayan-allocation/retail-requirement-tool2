@@ -1,24 +1,9 @@
 {
+  "folder": "",
   "files": [
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\BARCODE_APPS_REQ_GRC.xlsb"
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\03_ART_Requirment.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\03_MC_Requirment.xlsb"
   ],
-  "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\",
-  "recent_folders": [
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\",
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_DC-Champs"
-  ],
-  "schedules": [
-    {
-      "id": "64fd1997-7316-41e3-965a-d854467dd6e9",
-      "enabled": true,
-      "cron": "30 8 * * *",
-      "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_DC-Champs"
-    },
-    {
-      "id": "af8fc2ae-c894-405f-a23d-533259e0db5a",
-      "enabled": true,
-      "cron": "0 7 * * *",
-      "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\"
-    }
-  ]
+  "recent_folders": [],
+  "schedules": []
 }

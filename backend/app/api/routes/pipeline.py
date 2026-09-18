@@ -329,6 +329,173 @@ def _run_module2(job_id: str) -> None:
     _emit(job_id, {"status": "closed"})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Module 3 — Apply system filters
+# Annotates each grid row with CAT6_LIST, MC_LISTING, CLR_LIST_TAG, BLOCKED.
+# Nothing is dropped — rows are marked Y/N so later modules can decide.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SQL_CAT6        = "SELECT CAT6, STORE_NAME, CAT6_LIST FROM CK_A2166.v_cat6_list"
+_SQL_MC_LISTING  = "SELECT STORE_NAME, DEPARTMENT, MC_LISTING FROM MISRETAIL.t_store_mc_listing"
+_SQL_CLR_CONCEPT = "SELECT STORE, DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP, CONCEPT_NEW, COLOR FROM REPORT.T_CLR_CONCEPT_AW26_V1"
+_SQL_BLOCK       = "SELECT ST_NM, DEPARTMENT, HOLD_ITEM, HOLD_FIELDS, HOLD_KEYS, HOLD_LIST FROM REPORT.t_store_item_block_list"
+_SQL_BLOCK_LIST  = (
+    "SELECT K.SHRTNAME AS STORE, I.ICODE FROM MISRETAIL.T_DLT_STR S"
+    " JOIN MISRETAIL.T_DLT_ICODE I ON S.STR_DLT_ID = I.ICODE_DLT_ID"
+    " JOIN ADMSITE K ON S.STR_CODE = K.CODE"
+    " JOIN MISRETAIL.T_DLT_BAR B ON S.STR_DLT_ID = B.DLT_ID"
+    " WHERE S.STR_DLT_ID >= 22"
+)
+
+
+def _safe_query(sql: str) -> pd.DataFrame | None:
+    """Run query; return None on error (non-fatal for filter steps)."""
+    try:
+        return _query(sql)
+    except Exception:
+        return None
+
+
+def _run_module3(job_id: str) -> None:
+    _emit(job_id, {"event": "start", "module": "3", "name": "Apply system filters"})
+
+    # ── Step 1: load grid ─────────────────────────────────────────────────────
+    _emit(job_id, {"step": 1, "name": "Load grid.csv", "status": "running"})
+    try:
+        grid = pd.read_csv(_OUT / "grid.csv", low_memory=False)
+    except FileNotFoundError:
+        _emit(job_id, {"status": "error", "message": "grid.csv missing — run Module 2 first."})
+        _emit(job_id, {"status": "closed"})
+        return
+    grid.columns = grid.columns.str.upper()
+    _emit(job_id, {"step": 1, "name": "Load grid.csv", "status": "done", "rows": len(grid)})
+
+    # ── Step 2: CAT6 listing filter ───────────────────────────────────────────
+    _emit(job_id, {"step": 2, "name": "CAT6 listing filter (Oracle)", "status": "running"})
+    cat6 = _safe_query(_SQL_CAT6)
+    if cat6 is not None:
+        cat6.columns = cat6.columns.str.upper()
+        cat6 = cat6.rename(columns={"STORE_NAME": "_STORE_NAME_C6"})
+        if "CAT6" in grid.columns and "STORE_NAME" in grid.columns:
+            grid = grid.merge(
+                cat6[["CAT6", "_STORE_NAME_C6", "CAT6_LIST"]].drop_duplicates(),
+                left_on=["CAT6", "STORE_NAME"], right_on=["CAT6", "_STORE_NAME_C6"],
+                how="left"
+            ).drop(columns=["_STORE_NAME_C6"], errors="ignore")
+        n = int(cat6["CAT6_LIST"].notna().sum()) if "CAT6_LIST" in cat6.columns else 0
+        _emit(job_id, {"step": 2, "name": "CAT6 listing filter (Oracle)", "status": "done", "rows": len(cat6)})
+    else:
+        if "CAT6_LIST" not in grid.columns:
+            grid["CAT6_LIST"] = None
+        _emit(job_id, {"step": 2, "name": "CAT6 listing filter (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 3: MC listing filter ─────────────────────────────────────────────
+    _emit(job_id, {"step": 3, "name": "MC listing filter (Oracle)", "status": "running"})
+    mc = _safe_query(_SQL_MC_LISTING)
+    if mc is not None:
+        mc.columns = mc.columns.str.upper()
+        mc = mc.rename(columns={"STORE_NAME": "_ST_MC", "DEPARTMENT": "_DEPT_MC"})
+        if "STORE_NAME" in grid.columns and "DEPARTMENT" in grid.columns:
+            grid = grid.merge(
+                mc[["_ST_MC", "_DEPT_MC", "MC_LISTING"]].drop_duplicates(),
+                left_on=["STORE_NAME", "DEPARTMENT"], right_on=["_ST_MC", "_DEPT_MC"],
+                how="left"
+            ).drop(columns=["_ST_MC", "_DEPT_MC"], errors="ignore")
+        _emit(job_id, {"step": 3, "name": "MC listing filter (Oracle)", "status": "done", "rows": len(mc)})
+    else:
+        if "MC_LISTING" not in grid.columns:
+            grid["MC_LISTING"] = None
+        _emit(job_id, {"step": 3, "name": "MC listing filter (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 4: CLR concept filter ────────────────────────────────────────────
+    _emit(job_id, {"step": 4, "name": "CLR concept filter (Oracle)", "status": "running"})
+    clr = _safe_query(_SQL_CLR_CONCEPT)
+    if clr is not None:
+        clr.columns = clr.columns.str.upper()
+        clr["CLR_LIST_TAG"] = "Y"
+        join_cols = [c for c in ["STORE", "DEPARTMENT", "CONCEPT_NEW", "COLOR"]
+                     if c in grid.columns and c in clr.columns]
+        if join_cols:
+            store_col = "STORE_NAME" if "STORE_NAME" in grid.columns else None
+            if store_col and "STORE" in clr.columns:
+                clr = clr.rename(columns={"STORE": "_CLR_STORE"})
+                join_cols_g = [store_col if c == "STORE" else c for c in join_cols]
+                join_cols_c = ["_CLR_STORE" if c == "STORE" else c for c in join_cols]
+                grid = grid.merge(
+                    clr[join_cols_c + ["CLR_LIST_TAG"]].drop_duplicates(subset=join_cols_c),
+                    left_on=join_cols_g, right_on=join_cols_c, how="left"
+                ).drop(columns=["_CLR_STORE"], errors="ignore")
+        _emit(job_id, {"step": 4, "name": "CLR concept filter (Oracle)", "status": "done", "rows": len(clr)})
+    else:
+        if "CLR_LIST_TAG" not in grid.columns:
+            grid["CLR_LIST_TAG"] = None
+        _emit(job_id, {"step": 4, "name": "CLR concept filter (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 5: Block list filter ─────────────────────────────────────────────
+    _emit(job_id, {"step": 5, "name": "Block list filter (Oracle)", "status": "running"})
+    blk = _safe_query(_SQL_BLOCK)
+    if blk is not None:
+        blk.columns = blk.columns.str.upper()
+        blk["BLOCKED"] = "Y"
+        if "ST_NM" in blk.columns and "STORE_NAME" in grid.columns and "DEPARTMENT" in grid.columns:
+            grid = grid.merge(
+                blk[["ST_NM", "DEPARTMENT", "BLOCKED"]].drop_duplicates(subset=["ST_NM", "DEPARTMENT"]),
+                left_on=["STORE_NAME", "DEPARTMENT"], right_on=["ST_NM", "DEPARTMENT"],
+                how="left"
+            ).drop(columns=["ST_NM"], errors="ignore")
+        _emit(job_id, {"step": 5, "name": "Block list filter (Oracle)", "status": "done", "rows": len(blk)})
+    else:
+        if "BLOCKED" not in grid.columns:
+            grid["BLOCKED"] = None
+        _emit(job_id, {"step": 5, "name": "Block list filter (Oracle)", "status": "done", "rows": 0, "detail": "skipped"})
+
+    # ── Step 6: DLT block list ────────────────────────────────────────────────
+    _emit(job_id, {"step": 6, "name": "DLT block list (Oracle)", "status": "running"})
+    dlt = _safe_query(_SQL_BLOCK_LIST)
+    if dlt is not None and not dlt.empty:
+        dlt.columns = dlt.columns.str.upper()
+        if "STORE" in dlt.columns and "ICODE" in dlt.columns:
+            dlt["_DLT"] = "Y"
+            b_col = "BARCODE" if "BARCODE" in grid.columns else None
+            s_col = "STORE_NAME" if "STORE_NAME" in grid.columns else None
+            if b_col and s_col:
+                grid = grid.merge(
+                    dlt[["STORE", "ICODE", "_DLT"]].drop_duplicates(),
+                    left_on=[s_col, b_col], right_on=["STORE", "ICODE"], how="left"
+                )
+                grid["BLOCKED"] = grid["BLOCKED"].fillna(grid["_DLT"])
+                grid.drop(columns=["STORE", "ICODE", "_DLT"], errors="ignore", inplace=True)
+        _emit(job_id, {"step": 6, "name": "DLT block list (Oracle)", "status": "done", "rows": len(dlt)})
+    else:
+        _emit(job_id, {"step": 6, "name": "DLT block list (Oracle)", "status": "done", "rows": 0, "detail": "skipped/empty"})
+
+    # ── Step 7: annotate PASS column ──────────────────────────────────────────
+    _emit(job_id, {"step": 7, "name": "Annotate PASS column", "status": "running"})
+    # PASS = Y when none of the block flags are set
+    def _flag(col: str) -> pd.Series:
+        if col in grid.columns:
+            return grid[col].astype(str).str.upper().isin(["Y", "YES", "1", "BLOCK", "BLOCKED"])
+        return pd.Series(False, index=grid.index)
+
+    blocked_mask = _flag("BLOCKED") | _flag("MANUAL_EXCLUDE")
+    grid["PASS"] = (~blocked_mask).map({True: "Y", False: "N"})
+    pass_y = int((grid["PASS"] == "Y").sum())
+    _emit(job_id, {"step": 7, "name": "Annotate PASS column", "status": "done",
+                   "detail": f"{pass_y:,} rows PASS=Y"})
+
+    # ── Step 8: save filtered grid ────────────────────────────────────────────
+    _emit(job_id, {"step": 8, "name": "Save grid_filtered.csv", "status": "running"})
+    out_path = _OUT / "grid_filtered.csv"
+    grid.to_csv(out_path, index=False)
+    _emit(job_id, {"step": 8, "name": "Save grid_filtered.csv", "status": "done"})
+
+    _emit(job_id, {
+        "status": "finished",
+        "files": [{"name": "grid_filtered.csv", "rows": len(grid)}],
+    })
+    _emit(job_id, {"status": "closed"})
+
+
 @router.post("/pipeline/module/{mod_id}/run")
 async def run_module(mod_id: str, request: Request) -> JSONResponse:
     body: dict[str, Any] = {}
@@ -341,7 +508,7 @@ async def run_module(mod_id: str, request: Request) -> JSONResponse:
     with _jobs_lock:
         _jobs[job_id] = []
 
-    runners = {"1": _run_module1, "2": _run_module2}
+    runners = {"1": _run_module1, "2": _run_module2, "3": _run_module3}
     fn = runners.get(mod_id)
     if fn is None:
         return JSONResponse(

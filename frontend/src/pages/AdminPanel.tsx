@@ -317,7 +317,6 @@ export default function AdminPanel() {
     { path: '/calculation', label: 'Calculation', minRole: 'planner' },
     { path: '/req', label: 'Requirements', minRole: 'planner' },
     { path: '/distribution', label: 'Distribution', minRole: 'planner' },
-    { path: '/simulation', label: 'Simulation', minRole: 'planner' },
     { path: '/settings', label: 'Settings', minRole: 'planner' },
     { path: '/warehouse', label: 'Warehouse Inventory', minRole: 'planner' },
   ] as const

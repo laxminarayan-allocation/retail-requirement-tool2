@@ -10,7 +10,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import ExportPanel from '@/components/ExportPanel'
 import http from '@/api/http'
 import { DataGrid } from '@/components/DataGrid'
-import Simulation from '@/pages/Simulation'
 import Factors from '@/pages/Factors'
 import Results from '@/pages/Results'
 
@@ -478,7 +477,6 @@ export default function Calculation() {
     }}>
       {([
         { key: 'calculation', label: '▶ Calculation' },
-        { key: 'simulation',  label: '🧮 Simulation' },
         { key: 'results',     label: '📋 Results' },
         { key: 'factors',     label: '⚙️ Calc Factors' },
       ] as const).map(({ key, label }) => (
@@ -493,16 +491,6 @@ export default function Calculation() {
     </div>
   )
 
-  if (pageTab === 'simulation') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
-        {tabBar}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <Simulation />
-        </div>
-      </div>
-    )
-  }
 
   if (pageTab === 'results') {
     return (

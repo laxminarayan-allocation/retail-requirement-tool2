@@ -563,7 +563,7 @@ async def refresh_single_file(owner: str, object_name: str):
                 sql = f'SELECT * FROM "{owner.upper()}"."{object_name.upper()}"'
             with get_connection() as conn:
                 df = fetch_df(conn, sql, label=f"{owner}.{object_name}")
-            write_cache(owner, object_name, df)
+            write_cache(owner, object_name, df, sql_text=sql if owner.upper() == "QUERY" else None)
             _refresh_status[key] = {"status": "done", "started_at": _refresh_status[key]["started_at"], "error": None, "rows": len(df)}
         except Exception as exc:
             _refresh_status[key] = {"status": "error", "started_at": _refresh_status[key]["started_at"], "error": str(exc)}

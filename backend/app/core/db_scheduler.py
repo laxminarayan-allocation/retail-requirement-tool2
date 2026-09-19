@@ -99,7 +99,7 @@ def _fetch_one(owner: str, obj: str) -> None:
                     return
                 sql = f"SELECT * FROM {owner.upper()}.{obj.upper()}"
                 df = fetch_df(conn, sql, label=f"{owner}.{obj}")
-        write_cache(owner, obj, df)
+        write_cache(owner, obj, df, sql_text=sql if owner.upper() == "QUERY" else None)
         logger.info("db_scheduler: refreshed %s.%s → %d rows", owner, obj, len(df))
     except Exception as exc:
         logger.warning("db_scheduler: failed %s.%s — %s", owner, obj, exc)

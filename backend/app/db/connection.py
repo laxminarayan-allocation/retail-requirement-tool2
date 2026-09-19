@@ -27,6 +27,10 @@ def get_connection() -> Generator[oracledb.Connection, None, None]:
     t0 = time.perf_counter()
     conn: oracledb.Connection = pool.acquire()
     try:
+        try:
+            conn.cursor().execute("SET ROLE ALL")
+        except Exception:
+            pass
         logger.debug("Connection acquired (%.1f ms)", (time.perf_counter() - t0) * 1000)
         yield conn
     finally:

@@ -1641,7 +1641,7 @@ function onSearch(v){
         boundsLayersRef.current.push(poly)
       }
     })
-  }, [activeBoundaryKeys, showAllBounds, boundaryBy, stores, colorBy, loading])
+  }, [showAllBounds, boundaryBy, stores, colorBy, loading, selectedZones, selectedClusters])
 
   // Distance line — multi-segment
   useEffect(() => {
@@ -1763,7 +1763,15 @@ function onSearch(v){
             color: showAllBounds ? '#34d399' : '#475569',
           }}>⬡ Boundary</button>
           {(['zone','cluster','state','city'] as const).map(m => (
-            <button key={m} onClick={() => { setBoundaryBy(m); setShowAllBounds(true) }} style={{
+            <button key={m} onClick={() => {
+              setBoundaryBy(m); setShowAllBounds(true)
+              // Auto-fit map to store locations
+              if (leafletMap.current && stores.length > 0) {
+                const L = (window as any).L
+                const bounds = L.latLngBounds(stores.map((s: any) => [s.lat, s.lon]))
+                leafletMap.current.fitBounds(bounds, { padding: [30, 30] })
+              }
+            }} style={{
               fontSize: 9, padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
               background: boundaryBy === m && showAllBounds ? '#34d39933' : 'transparent',
               border: `1px solid ${boundaryBy === m && showAllBounds ? '#34d399' : '#1e293b'}`,

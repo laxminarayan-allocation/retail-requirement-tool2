@@ -86,7 +86,7 @@ def _fetch_one(owner: str, obj: str) -> None:
 
         if owner.upper() == "QUERY":
             meta = get_meta(owner, obj)
-            sql = (meta or {}).get("sql_text", "")
+            sql = (meta or {}).get("sql_text", "").rstrip("; \t\n")
             if not sql:
                 logger.info("db_scheduler: skip QUERY.%s — no sql_text in meta", obj)
                 return

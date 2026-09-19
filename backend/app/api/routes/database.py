@@ -246,7 +246,7 @@ async def output_patch_sql(owner: str, object_name: str, body: SqlTextPatch):
     meta = get_meta(owner, object_name)
     if meta is None:
         raise HTTPException(status_code=404, detail="Output file not found.")
-    meta["sql_text"] = body.sql_text.strip()
+    meta["sql_text"] = body.sql_text.strip().rstrip(";")
     _meta_path(owner, object_name).write_text(
         __import__("json").dumps(meta, indent=2)
     )
@@ -556,7 +556,7 @@ async def refresh_single_file(owner: str, object_name: str):
             if owner.upper() == "QUERY":
                 from app.core.parquet_cache import get_meta
                 meta = get_meta(owner, object_name)
-                sql = (meta or {}).get("sql_text", "")
+                sql = (meta or {}).get("sql_text", "").rstrip("; \t\n")
                 if not sql:
                     raise ValueError(f"No sql_text found for QUERY.{object_name}")
             else:

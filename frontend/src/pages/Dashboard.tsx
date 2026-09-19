@@ -1197,8 +1197,8 @@ function bufferedHull(pts){
 window.onload=function(){
   leafMap=L.map("map",{zoomControl:true,scrollWheelZoom:true,maxBounds:[[6,67],[38,99]],minZoom:4});
   tileOSM=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:18});
-  tileSat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:"© Esri",maxZoom:18});
-  tileLabels=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"",maxZoom:18,opacity:0.4});
+  tileSat=L.tileLayer("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{subdomains:["0","1","2","3"],attribution:"© Google",maxZoom:20});
+  tileLabels=L.tileLayer("https://mt{s}.google.com/vt/lyrs=h&x={x}&y={y}&z={z}",{subdomains:["0","1","2","3"],attribution:"",maxZoom:20,opacity:0.8});
   tileOSM.addTo(leafMap);
   leafMap.setView([24,82],5);
   var zs=new Set(),cs=new Set();

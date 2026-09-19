@@ -211,7 +211,7 @@ def _safe_oracle_stats() -> dict:
         if not state_dist:
             for col in ("state", "store_state", "state_name"):
                 if col in store_df.columns:
-                    state_dist = store_df[col].fillna("—").value_counts().to_dict()
+                    state_dist = _norm_state_dict(store_df[col].fillna("—").value_counts().to_dict())
                     break
 
         store_tag_dist: dict = {}
@@ -250,7 +250,7 @@ def _safe_oracle_stats() -> dict:
                 if "store_tag" in closed_df.columns:
                     closed_tag_dist = closed_df["store_tag"].fillna("-").value_counts().to_dict()
                 if "state" in closed_df.columns:
-                    closed_state_dist = closed_df["state"].fillna("—").value_counts().to_dict()
+                    closed_state_dist = _norm_state_dict(closed_df["state"].fillna("—").value_counts().to_dict())
                 # Use last_bill_date for FY/CY distribution of closed stores
                 date_col_c = "last_bill_date" if "last_bill_date" in closed_df.columns else "opening_date"
                 if date_col_c in closed_df.columns:
@@ -324,16 +324,26 @@ def _safe_oracle_stats() -> dict:
                 upcoming_new_city_count = int(len(_upcoming_cities - _active_cities))
                 if "state" in active_city.columns:
                     for state_val, grp in active_city.groupby("state"):
-                        sk = str(state_val).strip()
+                        raw_sk = str(state_val).strip().upper()
+                        sk = _STATE_NORM.get(raw_sk, raw_sk)
                         if sk and sk not in ("-", "—", ""):
-                            state_city_dist[sk] = {str(c): int(v) for c, v in grp[city_col].fillna("—").value_counts().to_dict().items() if str(c) not in ("-", "—")}
+                            existing = state_city_dist.get(sk, {})
+                            for c, v in grp[city_col].fillna("—").value_counts().to_dict().items():
+                                if str(c) not in ("-", "—"):
+                                    existing[str(c)] = existing.get(str(c), 0) + int(v)
+                            state_city_dist[sk] = existing
             elif "state_name" in store_df.columns:
                 city_col_df = next((c for c in ("city", "store_city", "city_name") if c in store_df.columns), None)
                 if city_col_df:
                     for state_val, grp in store_df.groupby("state_name"):
-                        sk = str(state_val).strip()
+                        raw_sk = str(state_val).strip().upper()
+                        sk = _STATE_NORM.get(raw_sk, raw_sk)
                         if sk and sk not in ("-", "—", ""):
-                            state_city_dist[sk] = {str(c): int(v) for c, v in grp[city_col_df].fillna("—").value_counts().to_dict().items() if str(c) not in ("-", "—")}
+                            existing = state_city_dist.get(sk, {})
+                            for c, v in grp[city_col_df].fillna("—").value_counts().to_dict().items():
+                                if str(c) not in ("-", "—"):
+                                    existing[str(c)] = existing.get(str(c), 0) + int(v)
+                            state_city_dist[sk] = existing
         except Exception as _ce:
             logger.warning("store_city dist failed: %s", _ce)
 
@@ -981,10 +991,11 @@ _STATE_NORM: dict[str, str] = {
 
 
 def _norm_state_dict(d: dict) -> dict:
-    """Merge old state names into their official equivalents."""
+    """Merge old state names into their official equivalents, always uppercase."""
     out: dict = {}
     for k, v in d.items():
-        key = _STATE_NORM.get(str(k).upper(), str(k))
+        raw = str(k).strip().upper()
+        key = _STATE_NORM.get(raw, raw)
         out[key] = out.get(key, 0) + v
     return out
 

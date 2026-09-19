@@ -902,7 +902,7 @@ const USED_IN: Record<string, string[]> = {
   'CK_A2166__V_MC_PIVOT_V2':               ['Requirements'],
   'CK_A2166__V_MC_REQ_APPS_2':             ['Distribution', 'Requirements', 'Simulation'],
   'CK_A2166__V_MC_REQ_GM':                ['Distribution', 'Requirements'],
-  'CK_A2166__V_MC_STOCK':                  ['Master Data'],
+  'CK_A2166__V_MC_STK_SUM':                ['Master Data'],
   'CK_A2166__V_MC_MDQ_STR':               ['Master Data'],
   'CK_A2166__V_MRP_PIVOT':                 ['Requirements'],
   'CK_A2166__V_MRP_REQ_APPS':              ['Distribution', 'Requirements'],

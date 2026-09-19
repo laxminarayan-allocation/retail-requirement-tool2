@@ -1,9 +1,11 @@
 {
-  "folder": "",
+  "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data",
   "files": [
     "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\03_ART_Requirment.xlsb",
     "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\03_MC_Requirment.xlsb"
   ],
-  "recent_folders": [],
+  "recent_folders": [
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data"
+  ],
   "schedules": []
 }

@@ -22,12 +22,13 @@ import oracledb
 import pandas as pd
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from app.db.oracle import _ensure_thick_mode  # reuse shared thick-mode initialiser
 
-# ── init thick mode once at import time ──────────────────────────────────────
+# ── init thick mode once — delegates to oracle.py to avoid DPY-2017 ──────────
 try:
-    oracledb.init_oracle_client()
+    _ensure_thick_mode()
 except Exception:
-    pass  # already initialised or client not on path — connect will fail loudly
+    pass
 
 router = APIRouter()
 

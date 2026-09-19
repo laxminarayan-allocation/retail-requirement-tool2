@@ -1083,11 +1083,18 @@ function DownloadedFilesPanel() {
     setRemoveStatus(prev => { const n = { ...prev }; delete n[key]; return n })
   }
 
+  const [listError, setListError] = useState<string | null>(null)
+
   function loadList() {
     setLoading(true)
+    setListError(null)
     http.get('/database/output/list', { timeout: 10000 })
       .then(res => { if (res.data.success) setFiles(res.data.data.files ?? []) })
-      .catch(() => setFiles([]))
+      .catch(err => {
+        setFiles([])
+        const msg = err?.response?.data?.message || err?.message || 'Backend unreachable'
+        setListError(msg)
+      })
       .finally(() => setLoading(false))
   }
 
@@ -1362,7 +1369,13 @@ function DownloadedFilesPanel() {
       {/* File list — Table style (Master Data look) */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 8, background: 'var(--card-bg)' }}>
         {loading && <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '16px', textAlign: 'center' }}>Loading…</div>}
-        {!loading && files.length === 0 && (
+        {!loading && listError && (
+          <div style={{ fontSize: 11, padding: '24px', textAlign: 'center' }}>
+            <div style={{ color: '#f87171', marginBottom: 8 }}>⚠ Could not load files: {listError}</div>
+            <button onClick={loadList} style={{ fontSize: 11, padding: '4px 14px', borderRadius: 5, border: '1px solid #475569', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>↺ Retry</button>
+          </div>
+        )}
+        {!loading && !listError && files.length === 0 && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '32px 0', textAlign: 'center' }}>
             No files yet. Admin can download tables/views using Data Preview or SQL Query &amp; Export.
           </div>

@@ -52,7 +52,7 @@ export default function OracleRefreshPage() {
     }).catch(() => {})
     http.get<{ success: boolean; data: any[] }>('/oracle-refresh/schedules').then(r => {
       setSchedules(r.data.data ?? [])
-    }).catch(() => {})
+    }).catch(() => { setSchedules([]) })
   }, [])
 
   // Auto-scroll log

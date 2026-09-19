@@ -95,6 +95,9 @@ def get_pool() -> oracledb.ConnectionPool:
 def close_pool() -> None:
     global _pool
     if _pool is not None:
-        _pool.close()
+        try:
+            _pool.close(force=True)
+        except Exception:
+            pass
         _pool = None
         logger.info("Oracle pool closed")

@@ -82,14 +82,23 @@ def _fetch_one(owner: str, obj: str) -> None:
     try:
         from app.db.connection import get_connection
         from app.repositories.base_repository import fetch_df
-        from app.core.parquet_cache import write_cache
+        from app.core.parquet_cache import write_cache, get_meta
 
-        with get_connection() as conn:
-            if not _object_exists(conn, owner, obj):
-                logger.info("db_scheduler: skip %s.%s — not found in Oracle", owner, obj)
+        if owner.upper() == "QUERY":
+            meta = get_meta(owner, obj)
+            sql = (meta or {}).get("sql_text", "")
+            if not sql:
+                logger.info("db_scheduler: skip QUERY.%s — no sql_text in meta", obj)
                 return
-            sql = f"SELECT * FROM {owner.upper()}.{obj.upper()}"
-            df = fetch_df(conn, sql, label=f"{owner}.{obj}")
+            with get_connection() as conn:
+                df = fetch_df(conn, sql, label=f"QUERY.{obj}")
+        else:
+            with get_connection() as conn:
+                if not _object_exists(conn, owner, obj):
+                    logger.info("db_scheduler: skip %s.%s — not found in Oracle", owner, obj)
+                    return
+                sql = f"SELECT * FROM {owner.upper()}.{obj.upper()}"
+                df = fetch_df(conn, sql, label=f"{owner}.{obj}")
         write_cache(owner, obj, df)
         logger.info("db_scheduler: refreshed %s.%s → %d rows", owner, obj, len(df))
     except Exception as exc:

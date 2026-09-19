@@ -553,7 +553,14 @@ async def refresh_single_file(owner: str, object_name: str):
 
     def _do():
         try:
-            sql = f'SELECT * FROM "{owner.upper()}"."{object_name.upper()}"'
+            if owner.upper() == "QUERY":
+                from app.core.parquet_cache import get_meta
+                meta = get_meta(owner, object_name)
+                sql = (meta or {}).get("sql_text", "")
+                if not sql:
+                    raise ValueError(f"No sql_text found for QUERY.{object_name}")
+            else:
+                sql = f'SELECT * FROM "{owner.upper()}"."{object_name.upper()}"'
             with get_connection() as conn:
                 df = fetch_df(conn, sql, label=f"{owner}.{object_name}")
             write_cache(owner, object_name, df)

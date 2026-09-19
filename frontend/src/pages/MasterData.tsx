@@ -17,7 +17,7 @@ const VIEW_DESC: Record<string, string> = {
   V_OPTION_REQ_AP:               'Option-level requirement — option count & width planning per MC/division',
   V_LIST_PBS_REQ:                'List view PBS requirement — store-wise PBS allocation list with filters',
   V_MC_REQ_APPS_2:               'MC-level requirement for APPS (v2) — updated merch category allocation plan',
-  V_MC_STK_SUM:                  'Merch category stock — current inventory by MC across all stores',
+  V_MC_ALLOCATION:               'Merch category stock + allocation — current inventory by MC across all stores',
   V_MC_SALES:                    'Merch category sales — store-wise sales data by MC for analysis',
   V_DC_STOCK:                    'DC/warehouse stock — distribution centre inventory by article',
   V_NSO:                         'NSO store data — new store opening details and timeline',
@@ -117,7 +117,7 @@ const TABLE_KEYS: TableKey[] = ['sales', 'stock', 'mdq']
 
 const TABLE_META: Record<string, { color: string; desc: string; schema: string; view: string }> = {
   sales: { color: '#38bdf8', desc: 'Last 4-week store-level sales data',       schema: 'CK_A2166', view: 'V_MC_SALES / V_MC_SL_SUM' },
-  stock: { color: '#34d399', desc: 'Current stock position across all stores', schema: 'CK_A2166', view: 'V_MC_STK_SUM' },
+  stock: { color: '#34d399', desc: 'Current stock position across all stores', schema: 'CK_A2166', view: 'V_MC_ALLOCATION' },
   mdq:   { color: '#a78bfa', desc: 'MDQ & store capacity constraints',         schema: 'CK_A2166', view: 'V_MDQ_STR' },
 }
 
@@ -1033,7 +1033,7 @@ export default function MasterData() {
 
   const _CORE_PQ: Record<string, { owner: string; name: string }> = {
     sales: { owner: 'CK_A2166', name: 'V_MC_SALES' },
-    stock: { owner: 'CK_A2166', name: 'V_MC_STK_SUM' },
+    stock: { owner: 'CK_A2166', name: 'V_MC_ALLOCATION' },
     mdq:   { owner: 'CK_A2166', name: 'V_MDQ_STR'  },
   }
 

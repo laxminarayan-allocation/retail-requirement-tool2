@@ -236,8 +236,8 @@ _MASTER_TABLES: dict[str, dict] = {
         "stale_hours": 24,   # warn if older than 1 day
     },
     "stock": {
-        "owner": "CK_A2166", "name": "V_MC_STK_SUM",
-        "label": "Current Stock", "oracle_view": "V_MC_STK_SUM",
+        "owner": "CK_A2166", "name": "V_MC_ALLOCATION",
+        "label": "Current Stock", "oracle_view": "V_MC_ALLOCATION",
         "stale_hours": 24,
     },
     "mdq": {

@@ -964,6 +964,8 @@ function DownloadedFilesPanel() {
   const [mdStatus,      setMdStatus]      = useState<Record<string, 'idle' | 'adding' | 'done' | 'exists'>>({})
   const [refreshStatus, setRefreshStatus] = useState<Record<string, 'idle' | 'refreshing' | 'done' | 'error'>>({})
   const [removeStatus,  setRemoveStatus]  = useState<Record<string, 'idle' | 'removing'>>({})
+  const [sqlOpen,       setSqlOpen]       = useState<Record<string, boolean>>({})
+  const [sqlDraft,      setSqlDraft]      = useState<Record<string, string>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'idle' | 'refreshing' | 'removing'>('idle')
   type SortKey = 'name' | 'rows' | 'size' | 'age' | 'freq'
@@ -1520,6 +1522,18 @@ function DownloadedFilesPanel() {
                       style={{ ...actBtn('#7dd3fc'), background: isOpen ? '#0f2a3f' : 'transparent', padding: '3px 9px', fontSize: 10 }}>
                       {isOpen ? '▼ View' : '👁 View'}
                     </button>
+                    {f.owner === 'QUERY' && (
+                      <button
+                        onClick={() => {
+                          const open = !sqlOpen[key]
+                          setSqlOpen(p => ({ ...p, [key]: open }))
+                          if (open && !sqlDraft[key]) setSqlDraft(p => ({ ...p, [key]: f.sql_text ?? '' }))
+                        }}
+                        title="Edit SQL query"
+                        style={{ ...actBtn('#fbbf24'), background: sqlOpen[key] ? '#1c1200' : 'transparent', padding: '3px 9px', fontSize: 10 }}>
+                        {sqlOpen[key] ? '▼ SQL' : '✎ SQL'}
+                      </button>
+                    )}
                     <button onClick={() => downloadCsv(f.owner, f.object)} title="Download CSV"
                       style={{ ...actBtn('#4ade80'), padding: '3px 9px', fontSize: 10 }}>⬇ CSV</button>
                     <button onClick={() => addToMasterData(f.owner, f.object)} disabled={mdSt === 'adding' || mdSt === 'done'} title="Add to Master Data"
@@ -1538,19 +1552,76 @@ function DownloadedFilesPanel() {
                 </td>
               </tr>
 
-              {/* SQL block inline (QUERY rows only) */}
-              {f.owner === 'QUERY' && isOpen && (
-                <tr>
-                  <td colSpan={9} style={{ padding: 0, borderBottom: '1px solid #1e293b' }}>
-                    <div style={{ background: '#080f1a', padding: '8px 12px' }}>
-                      <SqlTextBlock file={f} onSaved={(sql) => {
-                        setFiles(prev => prev.map(x =>
-                          x.owner === f.owner && x.object === f.object ? { ...x, sql_text: sql } : x
-                        ))
-                      }} />
-                    </div>
-                  </td>
-                </tr>
+              {/* Inline SQL editor (QUERY rows only) */}
+              {f.owner === 'QUERY' && sqlOpen[key] && (() => {
+                const draft = sqlDraft[key] ?? f.sql_text ?? ''
+                const saving = rfSt === 'refreshing'
+                async function saveAndRun() {
+                  if (!draft.trim()) return
+                  try {
+                    await http.patch(
+                      `/database/output/${encodeURIComponent(f.owner)}/${encodeURIComponent(f.object)}/sql`,
+                      { sql_text: draft.trim() }
+                    )
+                    setFiles(prev => prev.map(x =>
+                      x.owner === f.owner && x.object === f.object ? { ...x, sql_text: draft.trim() } : x
+                    ))
+                  } catch { /* ignore save error, still try refresh */ }
+                  await refreshFile(f.owner, f.object)
+                }
+                return (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 0, borderBottom: '1px solid #253050' }}>
+                      <div style={{ background: '#060d1a', padding: '10px 14px', borderLeft: '3px solid #fbbf24' }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: '#fbbf24', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                          SQL Query — {f.owner}.{f.object}
+                        </div>
+                        <textarea
+                          value={draft}
+                          onChange={e => setSqlDraft(p => ({ ...p, [key]: e.target.value }))}
+                          rows={4}
+                          placeholder="Enter SQL query…"
+                          style={{
+                            width: '100%', background: '#030810', border: '1px solid #253761',
+                            borderRadius: 5, padding: '8px 10px', fontSize: 11,
+                            fontFamily: "'Cascadia Code','Fira Code','SF Mono',monospace",
+                            color: '#7dd3fc', outline: 'none', resize: 'vertical',
+                            lineHeight: 1.7, boxSizing: 'border-box',
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+                          <button
+                            onClick={saveAndRun}
+                            disabled={saving || !draft.trim()}
+                            style={{
+                              padding: '5px 16px', background: saving ? '#1e293b' : '#1a3a5c',
+                              color: saving ? '#64748b' : '#38bdf8',
+                              border: `1px solid ${saving ? '#334155' : '#2563eb'}`,
+                              borderRadius: 5, fontSize: 11, fontWeight: 700,
+                              cursor: saving || !draft.trim() ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {saving ? '↻ Running…' : '▶ Save & Run'}
+                          </button>
+                          {f.sql_text && draft !== f.sql_text && (
+                            <button
+                              onClick={() => setSqlDraft(p => ({ ...p, [key]: f.sql_text ?? '' }))}
+                              style={{ padding: '5px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--card-border)', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}
+                            >Reset</button>
+                          )}
+                          <span style={{ fontSize: 10, color: rfSt === 'done' ? '#4ade80' : rfSt === 'error' ? '#f87171' : 'var(--text-muted)', marginLeft: 4 }}>
+                            {rfSt === 'done' ? '✓ Refreshed' : rfSt === 'error' ? '✗ Failed' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })()}
+
+              {/* View data window inline */}
+              {isOpen && !sqlOpen[key] && (
+                <tr><td colSpan={9} style={{ padding: 0, borderBottom: '1px solid #1e293b' }} /></tr>
               )}
             </Fragment>
           )

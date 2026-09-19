@@ -84,6 +84,46 @@ async def distribution_store_list():
         return APIResponse.fail(message=str(exc))
 
 
+# ── Store master field filter meta ────────────────────────────────────────────
+
+_STORE_FILTER_META_CACHE: dict = {}
+
+# Fields exposed as filterable (col_name → display label)
+_STORE_FILTER_FIELDS = {
+    "zone":         "Zone",
+    "city":         "City",
+    "state_name":   "State",
+    "cluster_type": "Cluster",
+    "store_grade":  "Store Grade",
+    "gm_grd":       "GM Grade",
+    "store_type":   "Store Type",
+    "store_tag":    "Store Tag",
+    "store_status": "Status",
+}
+
+@router.get("/store-filter-meta", response_model=APIResponse)
+async def store_filter_meta():
+    """Return unique values for each filterable store master field."""
+    global _STORE_FILTER_META_CACHE
+    if _STORE_FILTER_META_CACHE:
+        return APIResponse.ok(data=_STORE_FILTER_META_CACHE)
+    try:
+        from app.repositories.store_repository import StoreRepository
+        df = StoreRepository().get_all_stores(active_only=False)
+        df.columns = [c.lower() for c in df.columns]
+        result = {"fields": {}}
+        for col, label in _STORE_FILTER_FIELDS.items():
+            if col in df.columns:
+                vals = sorted(df[col].dropna().astype(str).str.strip().unique().tolist())
+                vals = [v for v in vals if v and v != "nan"]
+                result["fields"][col] = {"label": label, "values": vals}
+        _STORE_FILTER_META_CACHE = result
+        return APIResponse.ok(data=result)
+    except Exception as exc:
+        logger.error("store_filter_meta: %s", exc)
+        return APIResponse.fail(message=str(exc))
+
+
 # ── V_ITEM_MASTER endpoints ────────────────────────────────────────────────────
 
 @router.get("/item-master/status", response_model=APIResponse)
@@ -237,11 +277,12 @@ def _safe_merge(base: pd.DataFrame, right: pd.DataFrame | None,
 
 @router.post("/build-base", response_model=APIResponse)
 async def build_distribution_base(
-    req_source:  str = "GRC",   # GRC | WMS | BOTH
-    biz_segment: str = "APPS",  # APPS | GM | BOTH
-    sort_mode:   str = "combined_req",  # fill_rate | combined_req | festive_req
-    scopes:      str = "",       # JSON array of {division, attribute1} for OR-filter
-    stores:      str = "",       # JSON array of store_name strings to filter
+    req_source:          str = "GRC",   # GRC | WMS | BOTH
+    biz_segment:         str = "APPS",  # APPS | GM | BOTH
+    sort_mode:           str = "combined_req",  # fill_rate | combined_req | festive_req
+    scopes:              str = "",       # JSON array of {division, attribute1} for OR-filter
+    stores:              str = "",       # JSON array of store_name strings to filter
+    store_field_filters: str = "",       # JSON dict of {field: [values]} store master field filters
 ):
     """
     Build the full joined distribution base:
@@ -323,7 +364,7 @@ async def build_distribution_base(
             except Exception:
                 pass
 
-        # ── Store filter ───────────────────────────────────────────────────────
+        # ── Store filter (by name) ─────────────────────────────────────────────
         if stores and "store_name" in base.columns:
             import json as _json
             try:
@@ -332,6 +373,33 @@ async def build_distribution_base(
                     base = base[base["store_name"].isin(store_list)].copy()
             except Exception:
                 pass
+
+        # ── Store master field filters (zone/city/state/cluster/grade/etc.) ───
+        if store_field_filters:
+            import json as _json
+            try:
+                field_map = _json.loads(store_field_filters)  # {col: [values]}
+                if field_map:
+                    # Join store master to get the filterable columns
+                    from app.repositories.store_repository import StoreRepository
+                    sm = StoreRepository().get_all_stores(active_only=False)
+                    sm.columns = [c.lower() for c in sm.columns]
+                    # Find the store name column in base
+                    base_sn = "store_name" if "store_name" in base.columns else None
+                    sm_sn   = "store_name" if "store_name" in sm.columns else None
+                    if base_sn and sm_sn:
+                        filter_cols = [c for c in field_map.keys() if c in sm.columns]
+                        if filter_cols:
+                            sm_sub = sm[[sm_sn] + filter_cols].drop_duplicates(sm_sn)
+                            # Merge, apply filters, drop helper cols
+                            merged = base.merge(sm_sub, left_on=base_sn, right_on=sm_sn, how="left", suffixes=("", "_sm"))
+                            mask = pd.Series(True, index=merged.index)
+                            for col, vals in field_map.items():
+                                if col in merged.columns and vals:
+                                    mask &= merged[col].astype(str).str.strip().isin([str(v).strip() for v in vals])
+                            base = merged[mask].drop(columns=[c + "_sm" for c in filter_cols if c + "_sm" in merged.columns]).copy()
+            except Exception as _fe:
+                logger.warning("store_field_filters parse error: %s", _fe)
 
         # ── 2. Join V_ITEM_MASTER → option_level, allocation_option, sz_grp ───
         im = _load("REPORT", "V_ITEM_MASTER")

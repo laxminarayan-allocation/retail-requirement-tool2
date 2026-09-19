@@ -23,6 +23,8 @@ type SortMode   = 'fill_rate' | 'combined_req' | 'festive_req'
 
 interface ItemMasterStatus { ready: boolean; rows: number; cached_at: string | null }
 interface BaseResult { rows: number; columns: string[]; elapsed_ms: number; sample: Record<string, unknown>[] }
+interface StoreFieldMeta { label: string; values: string[] }
+
 interface DistResult {
   ol_held_count?: number
   rows: number; elapsed_ms: number; max_round: number
@@ -175,12 +177,31 @@ export default function DistributionModel() {
 
   const [selStores, setSelStores] = useState<string[]>(() => ssLoad('selStores', []))
 
+  // Store master field filters: {col: label, values: string[]}
+  const [storeFieldMeta, setStoreFieldMeta] = useState<Record<string, StoreFieldMeta>>({})
+  // activeFieldFilters: col → selected values[]
+  const [activeFieldFilters, setActiveFieldFilters] = useState<Record<string, string[]>>(() => ssLoad('activeFieldFilters', {}))
+  // which fields the user has added as filter rows
+  const [addedFilterFields, setAddedFilterFields] = useState<string[]>(() => ssLoad('addedFilterFields', []))
+  const [fieldPickerOpen, setFieldPickerOpen] = useState(false)
+  const fieldPickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onOut(e: MouseEvent) {
+      if (fieldPickerRef.current && !fieldPickerRef.current.contains(e.target as Node)) setFieldPickerOpen(false)
+    }
+    document.addEventListener('mousedown', onOut)
+    return () => document.removeEventListener('mousedown', onOut)
+  }, [])
+
   // Persist form state on change
   useEffect(() => { ssSave({ reqSource }) }, [reqSource])
   useEffect(() => { ssSave({ bizSegment }) }, [bizSegment])
   useEffect(() => { ssSave({ sortMode }) }, [sortMode])
   useEffect(() => { ssSave({ scopes }) }, [scopes])
   useEffect(() => { ssSave({ selStores }) }, [selStores])
+  useEffect(() => { ssSave({ activeFieldFilters }) }, [activeFieldFilters])
+  useEffect(() => { ssSave({ addedFilterFields }) }, [addedFilterFields])
 
   const [divisionOptions,   setDivisionOptions]   = useState<string[]>([])
   const [attribute1Options, setAttribute1Options] = useState<string[]>([])
@@ -199,6 +220,9 @@ export default function DistributionModel() {
     http.get('/distribution/store-list').then(r => {
       const stores: string[] = r.data?.data?.stores ?? []
       setStoreOptions(stores)
+    }).catch(() => {})
+    http.get('/distribution/store-filter-meta').then(r => {
+      setStoreFieldMeta(r.data?.data?.fields ?? {})
     }).catch(() => {})
   }, [])
 
@@ -294,6 +318,8 @@ export default function DistributionModel() {
       const activeScopes = scopes.filter(s => s.divisions.length > 0 || s.attribute1s.length > 0)
       if (activeScopes.length > 0) params.scopes = JSON.stringify(activeScopes)
       if (selStores.length > 0) params.stores = JSON.stringify(selStores)
+      const activeFF = Object.fromEntries(Object.entries(activeFieldFilters).filter(([, v]) => v.length > 0))
+      if (Object.keys(activeFF).length > 0) params.store_field_filters = JSON.stringify(activeFF)
       const d = await apiFetch<BaseResult>('POST', '/distribution/build-base', params)
       setBaseResult(d)
       setBaseCacheReady(true)
@@ -587,14 +613,68 @@ export default function DistributionModel() {
           <div style={{ fontSize: 13, color: tokens.textMuted, marginBottom: 10 }}>
             Joins all REQ views (MC · ART · MRP · SIZE · SPARKY · OPTION) on Barcode × Store base
           </div>
-          {/* Store filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: tokens.textMuted }}>Store Filter</span>
+          {/* Store filter — by name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 72 }}>Store Filter</span>
             <MultiSelect label="Store" options={storeOptions} selected={selStores} onChange={setSelStores} width={220} />
             {selStores.length > 0 && (
               <button onClick={() => setSelStores([])} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>Clear</button>
             )}
             <span style={{ fontSize: 11, color: tokens.textMuted }}>(blank = all stores)</span>
+          </div>
+
+          {/* Store master field filters */}
+          {addedFilterFields.map(col => {
+            const meta = storeFieldMeta[col]
+            if (!meta) return null
+            const sel = activeFieldFilters[col] ?? []
+            return (
+              <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 72 }}>{meta.label}</span>
+                <MultiSelect label={meta.label} options={meta.values} selected={sel}
+                  onChange={v => setActiveFieldFilters(f => ({ ...f, [col]: v }))} width={220} />
+                {sel.length > 0 && (
+                  <button onClick={() => setActiveFieldFilters(f => ({ ...f, [col]: [] }))}
+                    style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>Clear</button>
+                )}
+                <button onClick={() => {
+                  setAddedFilterFields(f => f.filter(k => k !== col))
+                  setActiveFieldFilters(f => { const n = { ...f }; delete n[col]; return n })
+                }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid #52525240', background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>✕</button>
+              </div>
+            )
+          })}
+
+          {/* Add field filter button */}
+          <div ref={fieldPickerRef} style={{ position: 'relative', display: 'inline-block', marginBottom: 14 }}>
+            <button onClick={() => setFieldPickerOpen(o => !o)} style={{
+              fontSize: 11, padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
+              border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted,
+            }}>+ Add Field Filter</button>
+            {fieldPickerOpen && (
+              <div style={{
+                position: 'absolute', top: '110%', left: 0, zIndex: 999, minWidth: 180,
+                background: tokens.cardBg, border: `1px solid ${tokens.border}`, borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.4)', padding: 6,
+              }}>
+                {Object.entries(storeFieldMeta).length === 0 && (
+                  <div style={{ fontSize: 12, color: tokens.textMuted, padding: '6px 8px' }}>Loading fields…</div>
+                )}
+                {Object.entries(storeFieldMeta).map(([col, meta]) => (
+                  <button key={col} onClick={() => {
+                    if (!addedFilterFields.includes(col)) setAddedFilterFields(f => [...f, col])
+                    setFieldPickerOpen(false)
+                  }} style={{
+                    display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
+                    fontSize: 12, border: 'none', borderRadius: 5, cursor: 'pointer',
+                    background: addedFilterFields.includes(col) ? '#6366f115' : 'transparent',
+                    color: addedFilterFields.includes(col) ? '#818cf8' : tokens.text,
+                  }}>
+                    {meta.label} {addedFilterFields.includes(col) ? '✓' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button onClick={buildBase} disabled={!baseReady} style={S.btn('#10b981', !baseReady)}>
             {baseLoading ? 'â³ Building…' : '▶ Build Base'}

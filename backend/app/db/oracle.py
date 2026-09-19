@@ -64,6 +64,13 @@ def get_pool() -> oracledb.ConnectionPool:
         else:
             logger.info("oracledb thin mode (default)")
 
+        def _session_init(conn, requested_tag):
+            """Enable all granted roles on each new pooled connection."""
+            try:
+                conn.cursor().execute("SET ROLE ALL")
+            except Exception:
+                pass
+
         _pool = oracledb.create_pool(
             user=settings.oracle_user,
             password=settings.oracle_password.get_secret_value(),
@@ -73,6 +80,7 @@ def get_pool() -> oracledb.ConnectionPool:
             increment=1,
             getmode=oracledb.POOL_GETMODE_WAIT,
             timeout=30,
+            session_callback=_session_init,
         )
         mode = "thick" if thick_mode else "thin"
         logger.info(

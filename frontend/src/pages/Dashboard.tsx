@@ -1549,7 +1549,7 @@ function onSearch(v){
         return u
       }
 
-      const GJ_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_state.geojson'
+      const GJ_URL = '/india_states.geojson'  // served from frontend/public — proxy-safe
       fetch(GJ_URL)
         .then(r => { if (!r.ok) throw new Error('fetch ' + r.status); return r.json() })
         .then((gj: any) => {
@@ -1705,7 +1705,7 @@ function onSearch(v){
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Row 1: Color mode + Status + Dropdowns */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflowX: 'auto', paddingBottom: 2 }}>
         {/* Color by */}
         <div style={{ display: 'flex', gap: 3 }}>
           {(['zone','cluster'] as const).map(m => (

@@ -42,6 +42,12 @@ from app.api.routes import data_store as data_store_routes
 from app.api.routes import preferences as preferences_routes
 from app.api.routes import pipeline as pipeline_routes
 
+import mimetypes
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("image/svg+xml", ".svg")
+
 configure_logging()
 logger = logging.getLogger(__name__)
 
@@ -444,12 +450,18 @@ _DIST_DIR = Path(__file__).parent.parent.parent / "frontend" / "dist"
 
 
 class _CharsetMiddleware(BaseHTTPMiddleware):
-    """Ensure text/javascript and text/css responses carry charset=utf-8."""
+    """Ensure JS/CSS responses have correct MIME type and charset.
+
+    Windows registry may map .js to text/plain; nosniff would then cause
+    mobile browsers to refuse execution. Override to the correct types.
+    """
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        ct = response.headers.get("content-type", "")
-        if ct and ("javascript" in ct or "css" in ct) and "charset" not in ct:
-            response.headers["content-type"] = ct + "; charset=utf-8"
+        path = request.url.path
+        if path.endswith((".js", ".mjs")):
+            response.headers["content-type"] = "application/javascript; charset=utf-8"
+        elif path.endswith(".css"):
+            response.headers["content-type"] = "text/css; charset=utf-8"
         return response
 
 app.add_middleware(_CharsetMiddleware)

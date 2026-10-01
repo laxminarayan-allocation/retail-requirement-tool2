@@ -1840,10 +1840,10 @@ function onSearch(v){
           function downloadPairs() {
             const header = 'Store A Code,Store A Name,Store B Code,Store B Name,Distance (km)'
             const rows: string[] = []
-            for (let i = 0; i < validStores.length; i++) {
-              for (let j = i + 1; j < validStores.length; j++) {
-                const a = validStores[i], b = validStores[j]
-                const d = haversine(a.lat, a.lon, b.lat, b.lon)
+            for (let i = 0; i < stores.length; i++) {
+              for (let j = i + 1; j < stores.length; j++) {
+                const a = stores[i], b = stores[j]
+                const d = (a.lat && a.lon && b.lat && b.lon) ? haversine(a.lat, a.lon, b.lat, b.lon) : ''
                 rows.push(`"${a.code}","${(a.name||'').replace(/"/g,'""')}","${b.code}","${(b.name||'').replace(/"/g,'""')}",${d}`)
               }
             }

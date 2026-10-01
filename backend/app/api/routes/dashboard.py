@@ -1498,6 +1498,9 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
 
     try:
         import re as _re2
+        import urllib.request
+        import json as _json
+
         def _parse_coord(s):
             if pd.isna(s): return None
             m = _re2.search(r"([\d.]+)", str(s))
@@ -1528,6 +1531,9 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
         result: dict = {}
 
         for b in range(0, len(codes), BATCH):
+            if b > 0:
+                import time as _time
+                _time.sleep(6)   # Open-Meteo free tier: ~10 req/min
             bc  = codes[b:b+BATCH]
             bla = lats[b:b+BATCH]
             blo = lons[b:b+BATCH]
@@ -1589,10 +1595,11 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
         return APIResponse.ok(data=result)
 
     except Exception as exc:
-        logger.warning("store-monthly-temps failed: %s", exc)
+        import traceback
+        logger.error("store-monthly-temps failed: %s\n%s", exc, traceback.format_exc())
         if _monthly_cache.get(cache_key):
             return APIResponse.ok(data=_monthly_cache[cache_key])
-        return APIResponse.ok(data={})
+        return APIResponse.fail(f"store-monthly-temps error: {exc}")
 
 
 @router.get("/store-master-csv")

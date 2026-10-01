@@ -1069,6 +1069,8 @@ function StoreMapCard() {
   const boundsLayersRef = useRef<any[]>([])
   const ckBoundaryRef = useRef<any>(null)
   const distLayerRef = useRef<any>(null)
+  const tileLayerRef = useRef<any>(null)
+  const [satView, setSatView] = useState(false)
   const distModeRef = useRef(false)
   const distPointsRef = useRef<MapStore[]>([])
   const onClickRef = useRef<((s: MapStore) => void) | null>(null)
@@ -1463,7 +1465,7 @@ function onSearch(v){
       zoomControl: true, scrollWheelZoom: true,
       maxBounds: [[6, 67], [38, 99]], maxBoundsViscosity: 1.0, minZoom: 5,
     }).setView([24, 83], 5)
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    tileLayerRef.current = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(leafletMap.current)
@@ -1785,6 +1787,31 @@ function onSearch(v){
           allKeys={allCities} selected={selectedCities} onToggle={toggleCity}
           colorFn={hashColor} label="City"
         />
+
+        {/* Satellite toggle */}
+        <button onClick={() => {
+          const L = (window as any).L
+          if (!leafletMap.current || !L) return
+          const newSat = !satView
+          setSatView(newSat)
+          if (tileLayerRef.current) {
+            leafletMap.current.removeLayer(tileLayerRef.current)
+          }
+          tileLayerRef.current = newSat
+            ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19,
+              }).addTo(leafletMap.current)
+            : L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+              }).addTo(leafletMap.current)
+        }} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: satView ? '#f59e0b22' : 'transparent',
+          border: `1px solid ${satView ? '#f59e0b' : '#334155'}`,
+          color: satView ? '#f59e0b' : '#475569',
+        }}>🛰 Satellite</button>
 
         {/* Boundary toggle + by selector */}
         <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>

@@ -1841,9 +1841,9 @@ function onSearch(v){
             const header = 'Store A Code,Store A Name,Store B Code,Store B Name,Distance (km)'
             const rows: string[] = []
             for (let i = 0; i < stores.length; i++) {
-              for (let j = i + 1; j < stores.length; j++) {
+              for (let j = 0; j < stores.length; j++) {
                 const a = stores[i], b = stores[j]
-                const d = (a.lat && a.lon && b.lat && b.lon) ? haversine(a.lat, a.lon, b.lat, b.lon) : ''
+                const d = i === j ? 0 : (a.lat && a.lon && b.lat && b.lon) ? haversine(a.lat, a.lon, b.lat, b.lon) : ''
                 rows.push(`"${a.code}","${(a.name||'').replace(/"/g,'""')}","${b.code}","${(b.name||'').replace(/"/g,'""')}",${d}`)
               }
             }

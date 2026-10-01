@@ -1812,6 +1812,29 @@ function onSearch(v){
         <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>
           {filteredStores.length}{filteredStores.length < stores.length ? `/${stores.length}` : ''} stores
         </span>
+
+        {/* Temperature CSV download */}
+        <button onClick={() => {
+          const header = 'Store Code,Store Name,City,State,Zone,Cluster,Grade,Status,Current Temp (°C),High Temp (°C),Low Temp (°C)'
+          const rows = filteredStores.map(s => {
+            const td = (temps as any)[s.code]
+            const cur  = td != null ? (td.cur  ?? td) : ''
+            const tmax = td?.max ?? ''
+            const tmin = td?.min ?? ''
+            const esc  = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
+            return [esc(s.code), esc(s.name), esc(s.city), esc(s.state), esc(s.zone), esc(s.cluster), esc(s.grade), esc(s.status), cur, tmax, tmin].join(',')
+          })
+          const csv  = [header, ...rows].join('\n')
+          const blob = new Blob([csv], { type: 'text/csv' })
+          const url  = URL.createObjectURL(blob)
+          const a    = document.createElement('a')
+          const date = new Date().toISOString().slice(0, 10)
+          a.href = url; a.download = `store_temp_report_${date}.csv`; a.click()
+          setTimeout(() => URL.revokeObjectURL(url), 10000)
+        }} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: 'transparent', border: '1px solid #334155', color: '#94a3b8', marginLeft: 4,
+        }}>⬇ Temp CSV</button>
       </div>
 
       {/* Active filter chips */}

@@ -1049,6 +1049,7 @@ function ZoneDropdown({ allKeys, selected, onToggle, colorMap, colorFn, label }:
 function StoreMapCard() {
   const [stores, setStores] = useState<MapStore[]>([])
   const [loading, setLoading] = useState(true)
+  const [mapErr, setMapErr] = useState<string | null>(null)
   const [temps, setTemps] = useState<Record<string, number>>({})
   const [mLoading, setMLoading] = useState(false)
   const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
@@ -1401,13 +1402,22 @@ function onSearch(v){
 
   useEffect(() => {
     http.get('/dashboard/store-map-data')
-      .then(r => { if (r.data.success) setStores(r.data.data.stores ?? []) })
-      .catch(() => {})
+      .then(r => {
+        if (r.data.success) setStores(r.data.data.stores ?? [])
+        else console.warn('store-map-data:', r.data.message)
+      })
+      .catch(err => {
+        console.error('store-map-data fetch failed:', err)
+        setMapErr('Store data load failed — check backend connection')
+      })
       .finally(() => setLoading(false))
     // Fetch temperatures in background (non-blocking)
     http.get('/dashboard/store-temperatures')
-      .then(r => { if (r.data.success) setTemps(r.data.data ?? {}) })
-      .catch(() => {})
+      .then(r => {
+        if (r.data.success) setTemps(r.data.data ?? {})
+        else console.warn('store-temperatures:', r.data.message)
+      })
+      .catch(err => console.error('store-temperatures fetch failed:', err))
   }, [])
 
   // Derived: all available zones/clusters/states/cities
@@ -2089,6 +2099,7 @@ function onSearch(v){
           {mapFullscreen ? '✕ Exit' : '⛶ Fullscreen'}
         </button>
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#64748b' }}>Loading map…</div>}
+        {!loading && mapErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#f87171', flexDirection: 'column', gap: 8 }}>⚠ {mapErr}</div>}
         <div ref={mapRef} style={mapFullscreen ? { flex: 1, minHeight: 0 } : { height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />
         {distMode && distPoints.length === 0 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#fbbf24', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Map pe koi bhi store click karo (ya upar search/warehouse use karo)</div>}
         {distMode && distPoints.length === 1 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#f87171', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Ab dusra point add karo (map click / search)</div>}
@@ -2301,6 +2312,7 @@ export default function Dashboard() {
   const [allocView, setAllocView] = useState<'all' | 'store' | 'mc'>('all')
   const [alloc, setAlloc] = useState<AllocSummary | null>(null)
   const [allocLoading, setAllocLoading] = useState(true)
+  const [allocErr, setAllocErr] = useState<string | null>(null)
   // Detail view (All tab)
   const [detail, setDetail] = useState<DetailData | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -2342,10 +2354,14 @@ export default function Dashboard() {
     const ep = view === 'store' ? '/dashboard/allocation-store'
              : view === 'mc'   ? '/dashboard/allocation-mc'
              :                   '/dashboard/allocation-summary'
+    setAllocErr(null)
     try {
-      const res = await http.get<{ success: boolean; data: AllocSummary }>(ep, { timeout: 60_000 })
-      if (res.data.success) setAlloc(res.data.data)
-    } catch { /* silent */ } finally {
+      const res = await http.get<{ success: boolean; data: AllocSummary; message?: string }>(ep, { timeout: 60_000 })
+      if (res.data.success) { setAlloc(res.data.data); setAllocErr(null) }
+      else setAllocErr(res.data.message ?? 'Allocation data unavailable')
+    } catch (e: unknown) {
+      setAllocErr(e instanceof Error ? e.message : 'Allocation fetch failed')
+    } finally {
       setAllocLoading(false)
     }
   }, [])
@@ -2357,7 +2373,10 @@ export default function Dashboard() {
         params: { icodes: icodes.join(','), page, limit: 500 }, timeout: 60_000,
       })
       if (res.data.success) { setDetail(res.data.data); setDetailPage(page) }
-    } catch { /* silent */ } finally { setDetailLoading(false) }
+      else setAllocErr(res.data.message ?? 'Detail load failed')
+    } catch (e: unknown) {
+      setAllocErr(e instanceof Error ? e.message : 'Detail fetch failed')
+    } finally { setDetailLoading(false) }
   }, [])
 
   const searchIcodes = useCallback(async (q: string) => {
@@ -2889,6 +2908,8 @@ export default function Dashboard() {
             {allocView === 'all' ? detailBody : (
               allocLoading ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
+              ) : allocErr ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#f87171', fontSize: 12 }}>⚠ {allocErr}</div>
               ) : !alloc?.available ? (
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Allocation data not available — download from Master Data page first.</div>
               ) : (

@@ -744,7 +744,7 @@ async def allocation_summary():
 
     except Exception as exc:
         logger.warning("allocation summary failed: %s", exc)
-        return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})
+        return APIResponse.fail(f"allocation-summary error: {exc}")
 
 
 def _alloc_parquet():
@@ -836,7 +836,7 @@ async def allocation_detail(
         })
     except Exception as exc:
         logger.warning("allocation-detail failed: %s", exc)
-        return APIResponse.ok(data={"available": False, "rows": [], "total": 0, "error": str(exc)})
+        return APIResponse.fail(f"allocation-detail error: {exc}")
 
 
 def _pivot_and_serialize(df, group_cols: list[str]) -> dict:
@@ -935,7 +935,7 @@ async def allocation_store():
         return APIResponse.ok(data=result)
     except Exception as exc:
         logger.warning("allocation store summary failed: %s", exc)
-        return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})
+        return APIResponse.fail(f"allocation-store error: {exc}")
 
 
 # MC (div+section+dept) cache
@@ -962,7 +962,7 @@ async def allocation_mc():
         return APIResponse.ok(data=result)
     except Exception as exc:
         logger.warning("allocation mc summary failed: %s", exc)
-        return APIResponse.ok(data={"available": False, "rows": [], "error": str(exc)})
+        return APIResponse.fail(f"allocation-mc error: {exc}")
 
 
 # ── State name normalisation (old / unofficial → official) ───────────────────

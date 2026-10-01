@@ -1497,11 +1497,18 @@ async def store_monthly_temps(years: int = 10):
         return APIResponse.ok(data=_monthly_cache[cache_key])
 
     try:
+        import re as _re2
+        def _parse_coord(s):
+            if pd.isna(s): return None
+            m = _re2.search(r"([\d.]+)", str(s))
+            v = float(m.group(1)) if m else 0.0
+            return v if v > 1 else None
+
         df = _load_store_opening()
-        df["_lat"] = pd.to_numeric(df.get("longitude", df.get("_lat", None)), errors="coerce")
-        df["_lon"] = pd.to_numeric(df.get("latitude",  df.get("_lon", None)), errors="coerce")
+        df["_lat"] = df["longitude"].apply(_parse_coord)   # col named "longitude" holds ° N (lat)
+        df["_lon"] = df["latitude"].apply(_parse_coord)    # col named "latitude" holds ° E (lon)
         valid = df.dropna(subset=["_lat", "_lon", "site_code"]).copy()
-        valid = valid[valid["_lat"].between(-90, 90) & valid["_lon"].between(-180, 180)]
+        valid = valid[valid["_lat"].between(8, 37) & valid["_lon"].between(68, 98)]
 
         codes = valid["site_code"].astype(str).tolist()
         lats  = valid["_lat"].round(4).tolist()

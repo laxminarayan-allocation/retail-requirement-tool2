@@ -2266,12 +2266,11 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, pageAccess } = useAuth()
-  const isViewer = user?.role === 'viewer'
-  const showAllocation = ('dashboard#allocation' in pageAccess) ? pageAccess['dashboard#allocation'] : !isViewer
+  const isAdmin = user?.role === 'admin'
+  const showAllocation = ('dashboard#allocation' in pageAccess) ? pageAccess['dashboard#allocation'] : isAdmin
   const [drillDown, setDrillDown] = useState<DrillState | null>(null)
-  const [dashTab, setDashTab] = useState<'store-network' | 'allocation'>('store-network')
+  const [dashTab, setDashTab] = useState<'store-network' | 'store-map' | 'allocation'>('store-network')
   const effectiveDashTab = (!showAllocation && dashTab === 'allocation') ? 'store-network' : dashTab
-  const [networkView, setNetworkView] = useState<'cards' | 'map'>('cards')
   const [expandedCards, setExpandedCards] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('dash_expanded_cards') ?? '[]')) } catch { return new Set() }
   })
@@ -2369,7 +2368,7 @@ export default function Dashboard() {
   const loadDetail = useCallback(async (icodes: string[], page = 0) => {
     setDetailLoading(true)
     try {
-      const res = await http.get<{ success: boolean; data: DetailData }>('/dashboard/allocation-detail', {
+      const res = await http.get<{ success: boolean; data: DetailData; message?: string }>('/dashboard/allocation-detail', {
         params: { icodes: icodes.join(','), page, limit: 500 }, timeout: 60_000,
       })
       if (res.data.success) { setDetail(res.data.data); setDetailPage(page) }
@@ -2472,7 +2471,8 @@ export default function Dashboard() {
       {/* ── Tab Bar ── */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--card-border)', marginBottom: 0 }}>
         {([
-          { key: 'store-network', label: '🏪 Store Network' },
+          { key: 'store-network', label: '🏪 Store Cards' },
+          { key: 'store-map', label: '🗺 Store Map' },
           ...(showAllocation ? [{ key: 'allocation', label: '📦 Allocation Report' }] : []),
         ] as const).map(t => (
           <button key={t.key} onClick={() => setDashTab(t.key as any)} style={{
@@ -2485,19 +2485,16 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* ── Store Network section ── */}
+      {/* ── Store Map section ── */}
+      {effectiveDashTab === 'store-map' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
+        <StoreMapCard />
+      </div>}
+
+      {/* ── Store Network (Cards) section ── */}
       {effectiveDashTab === 'store-network' && <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Store Network</span>
-          {(['cards','map'] as const).map(v => (
-            <button key={v} onClick={() => setNetworkView(v)} style={{
-              fontSize: 10, padding: '2px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: networkView === v ? '#4ade8022' : 'transparent',
-              border: `1px solid ${networkView === v ? '#4ade80' : '#334155'}`,
-              color: networkView === v ? '#4ade80' : '#475569',
-            }}>{v === 'cards' ? '📊 Cards' : '🗺 Map'}</button>
-          ))}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: <strong style={{ color: '#818cf8' }}>{fmtNum(oracle.total_all_stores)}</strong></span>
@@ -2527,8 +2524,7 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
-        {networkView === 'map' && <StoreMapCard />}
-        <div style={{ width: '100%', display: networkView === 'map' ? 'none' : undefined }}>
+        <div style={{ width: '100%' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, width: '100%', alignItems: 'start' }}>
           {/* Combined Active + Upcoming + Total */}
           <div style={{ background: 'var(--content-bg)', borderRadius: 8, padding: '10px 12px', borderLeft: '3px solid #818cf8', display: 'flex', flexDirection: 'column', gap: 6, ...cardSpan('network') }}>

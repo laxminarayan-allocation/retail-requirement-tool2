@@ -1813,6 +1813,59 @@ function onSearch(v){
           {filteredStores.length}{filteredStores.length < stores.length ? `/${stores.length}` : ''} stores
         </span>
 
+        {/* Distance helpers */}
+        {(() => {
+          function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+            const R = 6371, r = Math.PI / 180
+            const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)**2
+            return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 10) / 10
+          }
+          const validStores = filteredStores.filter(s => s.lat && s.lon)
+          const date = new Date().toISOString().slice(0, 10)
+
+          function downloadMatrix() {
+            const codes = validStores.map(s => s.code)
+            const header = ['', ...codes].join(',')
+            const rows = validStores.map(a =>
+              [a.code, ...validStores.map(b => haversine(a.lat, a.lon, b.lat, b.lon))].join(',')
+            )
+            const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const el = document.createElement('a')
+            el.href = url; el.download = `store_distance_matrix_${date}.csv`; el.click()
+            setTimeout(() => URL.revokeObjectURL(url), 10000)
+          }
+
+          function downloadPairs() {
+            const header = 'Store A Code,Store A Name,Store B Code,Store B Name,Distance (km)'
+            const rows: string[] = []
+            for (let i = 0; i < validStores.length; i++) {
+              for (let j = i + 1; j < validStores.length; j++) {
+                const a = validStores[i], b = validStores[j]
+                const d = haversine(a.lat, a.lon, b.lat, b.lon)
+                rows.push(`"${a.code}","${(a.name||'').replace(/"/g,'""')}","${b.code}","${(b.name||'').replace(/"/g,'""')}",${d}`)
+              }
+            }
+            const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const el = document.createElement('a')
+            el.href = url; el.download = `store_distance_pairs_${date}.csv`; el.click()
+            setTimeout(() => URL.revokeObjectURL(url), 10000)
+          }
+
+          return <>
+            <button onClick={downloadMatrix} style={{
+              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: 'transparent', border: '1px solid #334155', color: '#94a3b8', marginLeft: 4,
+            }}>⬇ Dist Matrix</button>
+            <button onClick={downloadPairs} style={{
+              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+              background: 'transparent', border: '1px solid #334155', color: '#94a3b8',
+            }}>⬇ Dist Pairs</button>
+          </>
+        })()}
+
         {/* Temperature CSV download */}
         <button onClick={() => {
           const header = 'Store Code,Store Name,City,State,Zone,Cluster,Grade,Status,Current Temp (°C),High Temp (°C),Low Temp (°C)'

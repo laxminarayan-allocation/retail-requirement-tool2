@@ -1392,6 +1392,91 @@ async def store_map_data():
         return APIResponse.fail(str(exc))
 
 
+# ── Store temperatures — Open-Meteo batch (1-hour cache) ─────────────────────
+_temp_cache: dict = {}
+_temp_cache_ts: float = 0.0
+_TEMP_TTL = 3600  # 1 hour
+
+
+@router.get("/store-temperatures", response_model=APIResponse)
+async def store_temperatures():
+    """Fetch current temperature for all stores with valid lat/lon via Open-Meteo.
+    Results cached for 1 hour. Returns {site_code: temperature_celsius}."""
+    global _temp_cache, _temp_cache_ts
+    if _temp_cache and (time.time() - _temp_cache_ts) < _TEMP_TTL:
+        return APIResponse.ok(data=_temp_cache)
+
+    try:
+        import re as _re
+        import urllib.request
+        import json as _json
+        from app.core.parquet_cache import has_output, read_cache as _rc
+
+        sod = _rc("MISRETAIL", "T_STORE_OPENING_DATE") if has_output("MISRETAIL", "T_STORE_OPENING_DATE") else None
+        if sod is None:
+            return APIResponse.ok(data={})
+
+        sod = sod.copy()
+        sod.columns = [c.lower() for c in sod.columns]
+
+        def _parse(s) -> float | None:
+            if pd.isna(s): return None
+            m = _re.search(r"([\d.]+)", str(s))
+            v = float(m.group(1)) if m else 0.0
+            return v if v > 1 else None
+
+        # Note: column names are swapped in source data
+        sod["_lon"] = sod["latitude"].apply(_parse)
+        sod["_lat"] = sod["longitude"].apply(_parse)
+
+        valid = sod[
+            sod["_lat"].notna() & sod["_lon"].notna() &
+            (sod["_lat"].between(8, 37)) & (sod["_lon"].between(68, 98))
+        ][["site_code", "_lat", "_lon"]].copy()
+
+        if valid.empty:
+            return APIResponse.ok(data={})
+
+        codes  = valid["site_code"].astype(str).tolist()
+        lats   = valid["_lat"].round(4).tolist()
+        lons   = valid["_lon"].round(4).tolist()
+
+        lat_str = ",".join(str(x) for x in lats)
+        lon_str = ",".join(str(x) for x in lons)
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat_str}&longitude={lon_str}"
+            f"&current=temperature_2m&forecast_days=1&timezone=Asia%2FKolkata"
+        )
+
+        req = urllib.request.Request(url, headers={"User-Agent": "CityKartAlloc/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = _json.loads(resp.read())
+
+        # payload is a list when multiple locations; single dict when one location
+        if isinstance(payload, dict):
+            payload = [payload]
+
+        result: dict = {}
+        for code, item in zip(codes, payload):
+            try:
+                temp = item["current"]["temperature_2m"]
+                result[str(code)] = round(float(temp), 1)
+            except Exception:
+                pass
+
+        _temp_cache = result
+        _temp_cache_ts = time.time()
+        return APIResponse.ok(data=result)
+
+    except Exception as exc:
+        logger.warning("store-temperatures failed: %s", exc)
+        # Return stale cache if available
+        if _temp_cache:
+            return APIResponse.ok(data=_temp_cache)
+        return APIResponse.ok(data={})
+
+
 @router.get("/store-master-csv")
 def store_master_csv():
     """Download full store master as CSV."""

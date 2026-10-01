@@ -1049,6 +1049,7 @@ function ZoneDropdown({ allKeys, selected, onToggle, colorMap, colorFn, label }:
 function StoreMapCard() {
   const [stores, setStores] = useState<MapStore[]>([])
   const [loading, setLoading] = useState(true)
+  const [temps, setTemps] = useState<Record<string, number>>({})
   const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
   const [filterStatus, setFilterStatus] = useState<'all' | 'ACTIVE' | 'UPCOMING_STORE'>('all')
   // Zone/Cluster/State/City multi-select filter (empty = show all)
@@ -1402,6 +1403,10 @@ function onSearch(v){
       .then(r => { if (r.data.success) setStores(r.data.data.stores ?? []) })
       .catch(() => {})
       .finally(() => setLoading(false))
+    // Fetch temperatures in background (non-blocking)
+    http.get('/dashboard/store-temperatures')
+      .then(r => { if (r.data.success) setTemps(r.data.data ?? {}) })
+      .catch(() => {})
   }, [])
 
   // Derived: all available zones/clusters/states/cities
@@ -1494,21 +1499,27 @@ function onSearch(v){
       })
       if (distMode) {
         marker.on('click', () => { if (onClickRef.current) onClickRef.current(s) })
-        marker.bindTooltip(`${s.name || s.code} · ${s.city}`, { direction: 'top', offset: [0,-6] })
+        const tipTemp = temps[s.code] != null ? ` · 🌡${temps[s.code]}°C` : ''
+        marker.bindTooltip(`${s.name || s.code} · ${s.city}${tipTemp}`, { direction: 'top', offset: [0,-6] })
       } else {
+        const tempC = temps[s.code]
+        const tempBadge = tempC != null
+          ? `<span style="display:inline-flex;align-items:center;gap:3px;background:#0f172a;color:${tempC >= 35 ? '#f87171' : tempC >= 25 ? '#fbbf24' : '#38bdf8'};border:1px solid #334155;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700">🌡 ${tempC}°C</span>`
+          : ''
         marker.bindPopup(
           `<div style="font-size:12px;min-width:170px;line-height:1.7">
             <div style="font-size:14px;font-weight:800;color:${col};margin-bottom:2px">${s.name || s.code} <span style="font-size:10px;color:#888;font-weight:400">#${s.code}</span></div>
             <div><span style="color:#888">Zone:</span> <b>${s.zone}</b> &nbsp;·&nbsp; <span style="color:#888">Cluster:</span> <b>${s.cluster}</b></div>
             <div><span style="color:#888">Grade:</span> ${s.grade} &nbsp;·&nbsp; ${isUpcoming ? '<span style="color:#f59e0b">⬡ Upcoming</span>' : '<span style="color:#16a34a">● Active</span>'}</div>
             <div style="margin-top:2px;color:#555">📍 ${s.city}, ${s.state}</div>
+            ${tempBadge ? `<div style="margin-top:4px">${tempBadge}</div>` : ''}
           </div>`
         )
       }
       marker.addTo(leafletMap.current)
       markersRef.current.push(marker)
     })
-  }, [filteredStores, colorBy, loading, distMode, distA, distB])
+  }, [filteredStores, colorBy, loading, distMode, distA, distB, temps])
 
   // Boundaries — auto-show for selected zones/clusters; show all if none selected + explicit toggle
   const [showAllBounds, setShowAllBounds] = useState(false)

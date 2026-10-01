@@ -1488,11 +1488,11 @@ _MONTHLY_TTL = 86400  # 24 hours
 
 
 @router.get("/store-monthly-temps", response_model=APIResponse)
-async def store_monthly_temps(years: int = 10):
+async def store_monthly_temps(years: int = 3, predict: int = 0):
     """Fetch last N years of monthly min/max temp per store via Open-Meteo archive.
     Returns {site_code: {YYYY-MM: {min, max}}}. Cached 24 hours."""
     global _monthly_cache, _monthly_cache_ts
-    cache_key = str(years)
+    cache_key = f"{years}_{predict}"
     if _monthly_cache.get(cache_key) and (time.time() - _monthly_cache_ts) < _MONTHLY_TTL:
         return APIResponse.ok(data=_monthly_cache[cache_key])
 
@@ -1557,6 +1557,26 @@ async def store_monthly_temps(years: int = 10):
                     ym: {"max": round(max(v["max_vals"]), 1), "min": round(min(v["min_vals"]), 1)}
                     for ym, v in monthly.items()
                 }
+
+        if predict:
+            from datetime import date as _date
+            today = _date.today()
+            for store_code, monthly in result.items():
+                for i in range(1, 13):
+                    future_m = (today.month - 1 + i) % 12 + 1
+                    future_y = today.year + (today.month - 1 + i) // 12
+                    future_ym = f"{future_y}-{future_m:02d}"
+                    if future_ym in monthly:
+                        continue
+                    hist_vals = [
+                        (v["max"], v["min"])
+                        for ym, v in monthly.items()
+                        if int(ym[5:7]) == future_m and not v.get("predicted")
+                    ]
+                    if hist_vals:
+                        avg_max = round(sum(x[0] for x in hist_vals) / len(hist_vals), 1)
+                        avg_min = round(sum(x[1] for x in hist_vals) / len(hist_vals), 1)
+                        monthly[future_ym] = {"max": avg_max, "min": avg_min, "predicted": True}
 
         _monthly_cache[cache_key] = result
         _monthly_cache_ts = time.time()

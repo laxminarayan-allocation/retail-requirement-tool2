@@ -1871,12 +1871,18 @@ function onSearch(v){
         <button onClick={async () => {
           setMLoading(true)
           try {
-            const r = await http.get('/dashboard/store-monthly-temps?years=10', { timeout: 120000 })
+            const r = await http.get('/dashboard/store-monthly-temps?years=3&predict=1', { timeout: 120000 })
             if (!r.data.success) return
-            const data: Record<string, Record<string, {min: number, max: number}>> = r.data.data
+            const data: Record<string, Record<string, {min: number, max: number, predicted?: boolean}>> = r.data.data
             const months = Array.from(new Set(Object.values(data).flatMap(v => Object.keys(v)))).sort()
+            // Detect predicted months from any store's data
+            const predictedSet = new Set(
+              Object.values(data).flatMap(sd => Object.entries(sd).filter(([,v]) => v.predicted).map(([m]) => m))
+            )
             const header = ['Store Code', 'Store Name', 'City', 'State', 'Zone', 'Cluster',
-              ...months.flatMap(m => [`${m} Min (°C)`, `${m} Max (°C)`])].join(',')
+              ...months.flatMap(m => predictedSet.has(m)
+                ? [`${m} Pred Min (°C)`, `${m} Pred Max (°C)`]
+                : [`${m} Min (°C)`, `${m} Max (°C)`])].join(',')
             const rows = stores.map(s => {
               const sd = data[String(s.code)] ?? {}
               const esc = (v: any) => `"${String(v ?? '').replace(/"/g,'""')}"`
@@ -1886,13 +1892,13 @@ function onSearch(v){
             const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
             const url = URL.createObjectURL(blob)
             const el = document.createElement('a')
-            el.href = url; el.download = `store_monthly_temp_10yr_${new Date().toISOString().slice(0,10)}.csv`; el.click()
+            el.href = url; el.download = `store_monthly_temp_3yr+pred_${new Date().toISOString().slice(0,10)}.csv`; el.click()
             setTimeout(() => URL.revokeObjectURL(url), 10000)
           } catch { alert('Monthly temp fetch failed') } finally { setMLoading(false) }
         }} disabled={mLoading} style={{
           fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: mLoading ? 'wait' : 'pointer', fontWeight: 600,
           background: 'transparent', border: '1px solid #334155', color: mLoading ? '#475569' : '#94a3b8',
-        }}>{mLoading ? '⏳ Fetching...' : '⬇ Monthly Temp (10yr)'}</button>
+        }}>{mLoading ? '⏳ Fetching...' : '⬇ Monthly Temp (3yr+Pred)'}</button>
 
         {/* Temperature CSV download */}
         <button onClick={() => {

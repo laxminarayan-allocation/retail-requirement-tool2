@@ -1499,20 +1499,30 @@ function onSearch(v){
       })
       if (distMode) {
         marker.on('click', () => { if (onClickRef.current) onClickRef.current(s) })
-        const tipTemp = temps[s.code] != null ? ` · 🌡${temps[s.code]}°C` : ''
+        const td = temps[s.code] as any
+        const tipTemp = td != null ? ` · 🌡${td.cur ?? td}°C` : ''
         marker.bindTooltip(`${s.name || s.code} · ${s.city}${tipTemp}`, { direction: 'top', offset: [0,-6] })
       } else {
-        const tempC = temps[s.code]
-        const tempBadge = tempC != null
-          ? `<span style="display:inline-flex;align-items:center;gap:3px;background:#0f172a;color:${tempC >= 35 ? '#f87171' : tempC >= 25 ? '#fbbf24' : '#38bdf8'};border:1px solid #334155;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700">🌡 ${tempC}°C</span>`
+        const td = temps[s.code] as any
+        const cur  = td != null ? (td.cur  ?? td) : null
+        const tmax = td?.max ?? null
+        const tmin = td?.min ?? null
+        const curColor = cur == null ? '#38bdf8' : cur >= 35 ? '#f87171' : cur >= 25 ? '#fbbf24' : '#38bdf8'
+        const tempBadge = cur != null
+          ? `<div style="margin-top:5px;display:flex;align-items:center;gap:6px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:4px 8px">
+               <span style="font-size:13px">🌡</span>
+               <span style="color:${curColor};font-weight:800;font-size:13px">${cur}°C</span>
+               <span style="color:#475569;font-size:11px">now</span>
+               ${tmax != null ? `<span style="color:#64748b;font-size:10px">↑<b style="color:#fca5a5">${tmax}°</b> ↓<b style="color:#93c5fd">${tmin}°</b></span>` : ''}
+             </div>`
           : ''
         marker.bindPopup(
-          `<div style="font-size:12px;min-width:170px;line-height:1.7">
+          `<div style="font-size:12px;min-width:180px;line-height:1.7">
             <div style="font-size:14px;font-weight:800;color:${col};margin-bottom:2px">${s.name || s.code} <span style="font-size:10px;color:#888;font-weight:400">#${s.code}</span></div>
             <div><span style="color:#888">Zone:</span> <b>${s.zone}</b> &nbsp;·&nbsp; <span style="color:#888">Cluster:</span> <b>${s.cluster}</b></div>
             <div><span style="color:#888">Grade:</span> ${s.grade} &nbsp;·&nbsp; ${isUpcoming ? '<span style="color:#f59e0b">⬡ Upcoming</span>' : '<span style="color:#16a34a">● Active</span>'}</div>
             <div style="margin-top:2px;color:#555">📍 ${s.city}, ${s.state}</div>
-            ${tempBadge ? `<div style="margin-top:4px">${tempBadge}</div>` : ''}
+            ${tempBadge}
           </div>`
         )
       }

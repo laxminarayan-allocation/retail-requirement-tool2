@@ -1446,7 +1446,9 @@ async def store_temperatures():
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={lat_str}&longitude={lon_str}"
-            f"&current=temperature_2m&forecast_days=1&timezone=Asia%2FKolkata"
+            f"&current=temperature_2m"
+            f"&daily=temperature_2m_max,temperature_2m_min"
+            f"&forecast_days=1&timezone=Asia%2FKolkata"
         )
 
         req = urllib.request.Request(url, headers={"User-Agent": "CityKartAlloc/1.0"})
@@ -1460,8 +1462,10 @@ async def store_temperatures():
         result: dict = {}
         for code, item in zip(codes, payload):
             try:
-                temp = item["current"]["temperature_2m"]
-                result[str(code)] = round(float(temp), 1)
+                cur  = round(float(item["current"]["temperature_2m"]), 1)
+                tmax = round(float(item["daily"]["temperature_2m_max"][0]), 1)
+                tmin = round(float(item["daily"]["temperature_2m_min"][0]), 1)
+                result[str(code)] = {"cur": cur, "max": tmax, "min": tmin}
             except Exception:
                 pass
 

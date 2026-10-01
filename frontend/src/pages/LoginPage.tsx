@@ -148,10 +148,21 @@ export default function LoginPage() {
 
   async function handleForceLogin() {
     setLoading(true); setError('')
-    // Use saved ref credentials (autofill-safe) or fall back to state
+    // Read live DOM values (autofill-safe) — same technique as handleSubmit
+    const emailEl = document.querySelector('input[type="email"]') as HTMLInputElement | null
+    const pwEl    = document.querySelector('input[type="password"]') as HTMLInputElement | null
+    const liveEmail = emailEl?.value || ''
+    const livePw    = pwEl?.value    || ''
+    // Prefer saved ref creds, then live DOM, then state
     const creds = conflictCreds.current.email
       ? conflictCreds.current
-      : { email, password }
+      : liveEmail && livePw
+        ? { email: liveEmail, password: livePw }
+        : { email, password }
+    if (!creds.email || !creds.password) {
+      setError('Please fill in email and password before forcing login.')
+      setLoading(false); return
+    }
     try {
       const res = await axios.post('/api/auth/force-login', creds)
       if (!res.data.success) { setError(res.data.message || 'Force login failed.'); return }

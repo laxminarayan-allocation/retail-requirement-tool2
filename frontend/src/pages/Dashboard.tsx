@@ -1872,7 +1872,7 @@ function onSearch(v){
           async function downloadMonthly() {
             setMLoading(true)
             try {
-              const r = await (await import('../../api/http')).default.get('/dashboard/store-monthly-temps?years=10', { timeout: 120000 })
+              const r = await http.get('/dashboard/store-monthly-temps?years=10', { timeout: 120000 })
               if (!r.data.success) return
               const data: Record<string, Record<string, {min: number, max: number}>> = r.data.data
               // collect all months sorted

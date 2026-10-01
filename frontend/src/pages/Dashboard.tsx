@@ -1825,10 +1825,10 @@ function onSearch(v){
           const date = new Date().toISOString().slice(0, 10)
 
           function downloadMatrix() {
-            const codes = validStores.map(s => s.code)
-            const header = ['', ...codes].join(',')
-            const rows = validStores.map(a =>
-              [a.code, ...validStores.map(b => haversine(a.lat, a.lon, b.lat, b.lon))].join(',')
+            const labels = validStores.map(s => s.name || s.code)
+            const header = ['', ...labels].join(',')
+            const rows = validStores.map((a, i) =>
+              [labels[i], ...validStores.map(b => haversine(a.lat, a.lon, b.lat, b.lon))].join(',')
             )
             const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
             const url = URL.createObjectURL(blob)

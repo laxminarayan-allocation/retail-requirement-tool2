@@ -1050,6 +1050,7 @@ function StoreMapCard() {
   const [stores, setStores] = useState<MapStore[]>([])
   const [loading, setLoading] = useState(true)
   const [temps, setTemps] = useState<Record<string, number>>({})
+  const [mLoading, setMLoading] = useState(false)
   const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
   const [filterStatus, setFilterStatus] = useState<'all' | 'ACTIVE' | 'UPCOMING_STORE'>('all')
   // Zone/Cluster/State/City multi-select filter (empty = show all)
@@ -1867,36 +1868,31 @@ function onSearch(v){
         })()}
 
         {/* Monthly temp CSV (10 years) */}
-        {(() => {
-          const [mLoading, setMLoading] = React.useState(false)
-          async function downloadMonthly() {
-            setMLoading(true)
-            try {
-              const r = await http.get('/dashboard/store-monthly-temps?years=10', { timeout: 120000 })
-              if (!r.data.success) return
-              const data: Record<string, Record<string, {min: number, max: number}>> = r.data.data
-              // collect all months sorted
-              const months = Array.from(new Set(Object.values(data).flatMap(v => Object.keys(v)))).sort()
-              const header = ['Store Code', 'Store Name', 'City', 'State', 'Zone', 'Cluster',
-                ...months.flatMap(m => [`${m} Min (°C)`, `${m} Max (°C)`])].join(',')
-              const rows = stores.map(s => {
-                const sd = data[String(s.code)] ?? {}
-                const esc = (v: any) => `"${String(v ?? '').replace(/"/g,'""')}"`
-                const temps = months.flatMap(m => sd[m] ? [sd[m].min, sd[m].max] : ['', ''])
-                return [esc(s.code), esc(s.name), esc(s.city), esc(s.state), esc(s.zone), esc(s.cluster), ...temps].join(',')
-              })
-              const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
-              const url = URL.createObjectURL(blob)
-              const el = document.createElement('a')
-              el.href = url; el.download = `store_monthly_temp_10yr_${new Date().toISOString().slice(0,10)}.csv`; el.click()
-              setTimeout(() => URL.revokeObjectURL(url), 10000)
-            } catch { alert('Monthly temp fetch failed') } finally { setMLoading(false) }
-          }
-          return <button onClick={downloadMonthly} disabled={mLoading} style={{
-            fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: mLoading ? 'wait' : 'pointer', fontWeight: 600,
-            background: 'transparent', border: '1px solid #334155', color: mLoading ? '#475569' : '#94a3b8',
-          }}>{mLoading ? '⏳ Fetching...' : '⬇ Monthly Temp (10yr)'}</button>
-        })()}
+        <button onClick={async () => {
+          setMLoading(true)
+          try {
+            const r = await http.get('/dashboard/store-monthly-temps?years=10', { timeout: 120000 })
+            if (!r.data.success) return
+            const data: Record<string, Record<string, {min: number, max: number}>> = r.data.data
+            const months = Array.from(new Set(Object.values(data).flatMap(v => Object.keys(v)))).sort()
+            const header = ['Store Code', 'Store Name', 'City', 'State', 'Zone', 'Cluster',
+              ...months.flatMap(m => [`${m} Min (°C)`, `${m} Max (°C)`])].join(',')
+            const rows = stores.map(s => {
+              const sd = data[String(s.code)] ?? {}
+              const esc = (v: any) => `"${String(v ?? '').replace(/"/g,'""')}"`
+              const mtemps = months.flatMap(m => sd[m] ? [sd[m].min, sd[m].max] : ['', ''])
+              return [esc(s.code), esc(s.name), esc(s.city), esc(s.state), esc(s.zone), esc(s.cluster), ...mtemps].join(',')
+            })
+            const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const el = document.createElement('a')
+            el.href = url; el.download = `store_monthly_temp_10yr_${new Date().toISOString().slice(0,10)}.csv`; el.click()
+            setTimeout(() => URL.revokeObjectURL(url), 10000)
+          } catch { alert('Monthly temp fetch failed') } finally { setMLoading(false) }
+        }} disabled={mLoading} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: mLoading ? 'wait' : 'pointer', fontWeight: 600,
+          background: 'transparent', border: '1px solid #334155', color: mLoading ? '#475569' : '#94a3b8',
+        }}>{mLoading ? '⏳ Fetching...' : '⬇ Monthly Temp (10yr)'}</button>
 
         {/* Temperature CSV download */}
         <button onClick={() => {

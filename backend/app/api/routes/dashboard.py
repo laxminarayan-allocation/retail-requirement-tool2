@@ -1481,6 +1481,87 @@ async def store_temperatures():
         return APIResponse.ok(data={})
 
 
+# ── Store monthly temps — Open-Meteo archive (24-hour cache) ─────────────────
+_monthly_cache: dict = {}
+_monthly_cache_ts: float = 0.0
+_MONTHLY_TTL = 86400  # 24 hours
+
+
+@router.get("/store-monthly-temps", response_model=APIResponse)
+async def store_monthly_temps(years: int = 10):
+    """Fetch last N years of monthly min/max temp per store via Open-Meteo archive.
+    Returns {site_code: {YYYY-MM: {min, max}}}. Cached 24 hours."""
+    global _monthly_cache, _monthly_cache_ts
+    cache_key = str(years)
+    if _monthly_cache.get(cache_key) and (time.time() - _monthly_cache_ts) < _MONTHLY_TTL:
+        return APIResponse.ok(data=_monthly_cache[cache_key])
+
+    try:
+        df = _load_store_opening()
+        df["_lat"] = pd.to_numeric(df.get("longitude", df.get("_lat", None)), errors="coerce")
+        df["_lon"] = pd.to_numeric(df.get("latitude",  df.get("_lon", None)), errors="coerce")
+        valid = df.dropna(subset=["_lat", "_lon", "site_code"]).copy()
+        valid = valid[valid["_lat"].between(-90, 90) & valid["_lon"].between(-180, 180)]
+
+        codes = valid["site_code"].astype(str).tolist()
+        lats  = valid["_lat"].round(4).tolist()
+        lons  = valid["_lon"].round(4).tolist()
+
+        from datetime import date, timedelta
+        end   = date.today() - timedelta(days=1)
+        start = date(end.year - years, end.month, 1)
+
+        BATCH = 20
+        result: dict = {}
+
+        for b in range(0, len(codes), BATCH):
+            bc  = codes[b:b+BATCH]
+            bla = lats[b:b+BATCH]
+            blo = lons[b:b+BATCH]
+            url = (
+                f"https://archive-api.open-meteo.com/v1/archive"
+                f"?latitude={','.join(str(x) for x in bla)}"
+                f"&longitude={','.join(str(x) for x in blo)}"
+                f"&start_date={start}&end_date={end}"
+                f"&daily=temperature_2m_max,temperature_2m_min"
+                f"&timezone=Asia%2FKolkata"
+            )
+            req = urllib.request.Request(url, headers={"User-Agent": "CityKartAlloc/1.0"})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                payload = _json.loads(resp.read())
+            if isinstance(payload, dict):
+                payload = [payload]
+
+            for code, item in zip(bc, payload):
+                daily = item.get("daily", {})
+                dates  = daily.get("time", [])
+                tmaxs  = daily.get("temperature_2m_max", [])
+                tmins  = daily.get("temperature_2m_min", [])
+                monthly: dict = {}
+                for d_str, tmax, tmin in zip(dates, tmaxs, tmins):
+                    ym = d_str[:7]  # YYYY-MM
+                    if tmax is None or tmin is None:
+                        continue
+                    if ym not in monthly:
+                        monthly[ym] = {"max_vals": [], "min_vals": []}
+                    monthly[ym]["max_vals"].append(float(tmax))
+                    monthly[ym]["min_vals"].append(float(tmin))
+                result[str(code)] = {
+                    ym: {"max": round(max(v["max_vals"]), 1), "min": round(min(v["min_vals"]), 1)}
+                    for ym, v in monthly.items()
+                }
+
+        _monthly_cache[cache_key] = result
+        _monthly_cache_ts = time.time()
+        return APIResponse.ok(data=result)
+
+    except Exception as exc:
+        logger.warning("store-monthly-temps failed: %s", exc)
+        if _monthly_cache.get(cache_key):
+            return APIResponse.ok(data=_monthly_cache[cache_key])
+        return APIResponse.ok(data={})
+
+
 @router.get("/store-master-csv")
 def store_master_csv():
     """Download full store master as CSV."""

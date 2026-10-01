@@ -1504,7 +1504,10 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
             v = float(m.group(1)) if m else 0.0
             return v if v > 1 else None
 
-        df = _load_store_opening()
+        from app.core.parquet_cache import has_output, read_cache as _rc
+        if not has_output("MISRETAIL", "T_STORE_OPENING_DATE"):
+            return APIResponse.ok(data={})
+        df = _rc("MISRETAIL", "T_STORE_OPENING_DATE")
         df["_lat"] = df["longitude"].apply(_parse_coord)   # col named "longitude" holds ° N (lat)
         df["_lon"] = df["latitude"].apply(_parse_coord)    # col named "latitude" holds ° E (lon)
         valid = df.dropna(subset=["_lat", "_lon", "site_code"]).copy()
@@ -1515,7 +1518,10 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
         lons  = valid["_lon"].round(4).tolist()
 
         from datetime import date, timedelta
-        end   = date.today() - timedelta(days=1)
+        # Archive API has ~5 day lag; use end of last complete month to be safe
+        today = date.today()
+        first_of_month = today.replace(day=1)
+        end   = first_of_month - timedelta(days=1)   # last day of previous month
         start = date(end.year - years, end.month, 1)
 
         BATCH = 20

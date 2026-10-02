@@ -1742,6 +1742,62 @@ function onSearch(v){
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Row 1: Color mode + Status + Dropdowns */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflowX: 'auto', paddingBottom: 2 }}>
+        {/* Satellite toggle */}
+        <button onClick={() => {
+          const L = (window as any).L
+          if (!leafletMap.current || !L) return
+          const newSat = !satView
+          setSatView(newSat)
+          if (tileLayerRef.current) {
+            leafletMap.current.removeLayer(tileLayerRef.current)
+          }
+          tileLayerRef.current = newSat
+            ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19,
+              }).addTo(leafletMap.current)
+            : L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+              }).addTo(leafletMap.current)
+        }} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: satView ? '#f59e0b22' : 'transparent',
+          border: `1px solid ${satView ? '#f59e0b' : '#334155'}`,
+          color: satView ? '#f59e0b' : '#475569',
+        }}>🛰 Satellite</button>
+
+        {/* Rain Radar toggle (RainViewer) */}
+        <button onClick={async () => {
+          const L = (window as any).L
+          if (!leafletMap.current || !L) return
+          const newRain = !rainView
+          setRainView(newRain)
+          if (rainLayerRef.current) {
+            leafletMap.current.removeLayer(rainLayerRef.current)
+            rainLayerRef.current = null
+          }
+          if (newRain) {
+            try {
+              const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
+              const data = await res.json()
+              const frames = data?.radar?.past ?? []
+              const latest = frames[frames.length - 1]
+              if (latest?.path) {
+                rainLayerRef.current = L.tileLayer(
+                  `https://tilecache.rainviewer.com${latest.path}/512/{z}/{x}/{y}/4/1_1.png`,
+                  { opacity: 0.6, attribution: 'Rain data © <a href="https://rainviewer.com">RainViewer</a>', maxZoom: 19 }
+                ).addTo(leafletMap.current)
+              }
+            } catch { setRainView(false) }
+          }
+        }} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: rainView ? '#38bdf822' : 'transparent',
+          border: `1px solid ${rainView ? '#38bdf8' : '#334155'}`,
+          color: rainView ? '#38bdf8' : '#475569',
+        }}>🌧 Rain Radar</button>
+
         {/* Color by */}
         <div style={{ display: 'flex', gap: 3 }}>
           {(['zone','cluster'] as const).map(m => (
@@ -1789,62 +1845,6 @@ function onSearch(v){
           allKeys={allCities} selected={selectedCities} onToggle={toggleCity}
           colorFn={hashColor} label="City"
         />
-
-        {/* Satellite toggle */}
-        <button onClick={() => {
-          const L = (window as any).L
-          if (!leafletMap.current || !L) return
-          const newSat = !satView
-          setSatView(newSat)
-          if (tileLayerRef.current) {
-            leafletMap.current.removeLayer(tileLayerRef.current)
-          }
-          tileLayerRef.current = newSat
-            ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                maxZoom: 19,
-              }).addTo(leafletMap.current)
-            : L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                maxZoom: 19,
-              }).addTo(leafletMap.current)
-        }} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: satView ? '#f59e0b22' : 'transparent',
-          border: `1px solid ${satView ? '#f59e0b' : '#334155'}`,
-          color: satView ? '#f59e0b' : '#475569',
-        }}>🛰 Satellite</button>
-
-        {/* Rain Radar toggle (RainViewer — free, no key) */}
-        <button onClick={async () => {
-          const L = (window as any).L
-          if (!leafletMap.current || !L) return
-          const newRain = !rainView
-          setRainView(newRain)
-          if (rainLayerRef.current) {
-            leafletMap.current.removeLayer(rainLayerRef.current)
-            rainLayerRef.current = null
-          }
-          if (newRain) {
-            try {
-              const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
-              const data = await res.json()
-              const frames = data?.radar?.past ?? []
-              const latest = frames[frames.length - 1]
-              if (latest?.path) {
-                rainLayerRef.current = L.tileLayer(
-                  `https://tilecache.rainviewer.com${latest.path}/512/{z}/{x}/{y}/4/1_1.png`,
-                  { opacity: 0.6, attribution: 'Rain data © <a href="https://rainviewer.com">RainViewer</a>', maxZoom: 19 }
-                ).addTo(leafletMap.current)
-              }
-            } catch { setRainView(false) }
-          }
-        }} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: rainView ? '#38bdf822' : 'transparent',
-          border: `1px solid ${rainView ? '#38bdf8' : '#334155'}`,
-          color: rainView ? '#38bdf8' : '#475569',
-        }}>🌧 Rain Radar</button>
 
         {/* Boundary toggle + by selector */}
         <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>

@@ -1533,7 +1533,7 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
         for b in range(0, len(codes), BATCH):
             if b > 0:
                 import time as _time
-                _time.sleep(6)   # Open-Meteo free tier: ~10 req/min
+                _time.sleep(10)  # Open-Meteo free tier: keep under 6 req/min
             bc  = codes[b:b+BATCH]
             bla = lats[b:b+BATCH]
             blo = lons[b:b+BATCH]

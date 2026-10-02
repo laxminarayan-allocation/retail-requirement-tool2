@@ -1529,10 +1529,10 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
 
         BATCH = 20
         result: dict = {}
+        import time as _time
 
         for b in range(0, len(codes), BATCH):
             if b > 0:
-                import time as _time
                 _time.sleep(10)  # Open-Meteo free tier: keep under 6 req/min
             bc  = codes[b:b+BATCH]
             bla = lats[b:b+BATCH]
@@ -1546,8 +1546,17 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
                 f"&timezone=Asia%2FKolkata"
             )
             req = urllib.request.Request(url, headers={"User-Agent": "CityKartAlloc/1.0"})
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                payload = _json.loads(resp.read())
+            for _attempt in range(3):
+                try:
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        payload = _json.loads(resp.read())
+                    break
+                except Exception as _e:
+                    if _attempt < 2:
+                        logger.warning("batch %d attempt %d failed: %s — retrying in 60s", b // BATCH, _attempt, _e)
+                        _time.sleep(60)
+                    else:
+                        raise
             if isinstance(payload, dict):
                 payload = [payload]
 

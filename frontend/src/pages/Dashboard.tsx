@@ -1071,6 +1071,8 @@ function StoreMapCard() {
   const distLayerRef = useRef<any>(null)
   const tileLayerRef = useRef<any>(null)
   const [satView, setSatView] = useState(false)
+  const rainLayerRef = useRef<any>(null)
+  const [rainView, setRainView] = useState(false)
   const distModeRef = useRef(false)
   const distPointsRef = useRef<MapStore[]>([])
   const onClickRef = useRef<((s: MapStore) => void) | null>(null)
@@ -1812,6 +1814,37 @@ function onSearch(v){
           border: `1px solid ${satView ? '#f59e0b' : '#334155'}`,
           color: satView ? '#f59e0b' : '#475569',
         }}>🛰 Satellite</button>
+
+        {/* Rain Radar toggle (RainViewer — free, no key) */}
+        <button onClick={async () => {
+          const L = (window as any).L
+          if (!leafletMap.current || !L) return
+          const newRain = !rainView
+          setRainView(newRain)
+          if (rainLayerRef.current) {
+            leafletMap.current.removeLayer(rainLayerRef.current)
+            rainLayerRef.current = null
+          }
+          if (newRain) {
+            try {
+              const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
+              const data = await res.json()
+              const frames = data?.radar?.past ?? []
+              const latest = frames[frames.length - 1]
+              if (latest?.path) {
+                rainLayerRef.current = L.tileLayer(
+                  `https://tilecache.rainviewer.com${latest.path}/512/{z}/{x}/{y}/4/1_1.png`,
+                  { opacity: 0.6, attribution: 'Rain data © <a href="https://rainviewer.com">RainViewer</a>', maxZoom: 19 }
+                ).addTo(leafletMap.current)
+              }
+            } catch { setRainView(false) }
+          }
+        }} style={{
+          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+          background: rainView ? '#38bdf822' : 'transparent',
+          border: `1px solid ${rainView ? '#38bdf8' : '#334155'}`,
+          color: rainView ? '#38bdf8' : '#475569',
+        }}>🌧 Rain Radar</button>
 
         {/* Boundary toggle + by selector */}
         <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>

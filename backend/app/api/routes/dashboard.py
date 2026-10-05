@@ -1583,7 +1583,7 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
             from datetime import date as _date
             today = _date.today()
             for store_code, monthly in result.items():
-                for i in range(1, 13):
+                for i in range(0, 12):  # i=0 = current month (not yet complete in archive)
                     future_m = (today.month - 1 + i) % 12 + 1
                     future_y = today.year + (today.month - 1 + i) // 12
                     future_ym = f"{future_y}-{future_m:02d}"

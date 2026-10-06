@@ -41,6 +41,7 @@ from app.api.routes import warehouse_inventory as warehouse_inventory_routes
 from app.api.routes import data_store as data_store_routes
 from app.api.routes import preferences as preferences_routes
 from app.api.routes import pipeline as pipeline_routes
+from app.api.routes import prd_swap as prd_swap_routes
 
 import mimetypes
 mimetypes.add_type("application/javascript", ".js")
@@ -272,6 +273,9 @@ _ROUTE_ROLES: list[tuple] = [
     # Warehouse Inventory — viewer+
     ("/api/warehouse-inventory/",  None,          "viewer"),
     ("/api/warehouse-inventory",   None,          "viewer"),
+    # PRD Swap — planner+
+    ("/api/prd-swap/",             None,          "planner"),
+    ("/api/prd-swap",              None,          "planner"),
     # Fallback — any API route needs at least viewer
     ("/api/",                      None,          "viewer"),
 ]
@@ -430,6 +434,7 @@ app.include_router(warehouse_inventory_routes.router, prefix="/api")  # Warehous
 app.include_router(data_store_routes.router,         prefix="/api")  # Parquet Data Store
 app.include_router(preferences_routes.router,        prefix="/api")  # User Preferences
 app.include_router(pipeline_routes.router,            prefix="/api")  # Native pipeline
+app.include_router(prd_swap_routes.router,            prefix="/api")  # PRD Swap
 
 
 @app.get("/api", tags=["Root"])

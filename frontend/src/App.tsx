@@ -25,6 +25,7 @@ import AllocationPipeline from '@/pages/AllocationPipeline'
 import FlowDocumentation from '@/pages/FlowDocumentation'
 import SchemaMap from '@/pages/SchemaMap'
 import AllParameters from '@/pages/AllParameters'
+import PrdSwap from '@/pages/PrdSwap'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="flow-docs" element={<FlowDocumentation />} />
             <Route path="schema-map" element={<SchemaMap />} />
             <Route path="all-parameters" element={<AllParameters />} />
+            <Route path="prd-swap" element={<PrdSwap />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -39,6 +39,7 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role; group
   { to: '/flow-docs',           label: 'Flow Documentation', icon: '📋', minRole: 'viewer',   group: 'Simulation' },
   { to: '/schema-map',          label: 'Schema Map',         icon: '🗺️', minRole: 'viewer',   group: 'Simulation' },
   { to: '/all-parameters',      label: 'All Parameters',     icon: '🎛️', minRole: 'planner',  group: 'Simulation' },
+  { to: '/prd-swap',            label: 'PRD Swap',           icon: '📦', minRole: 'planner' },
 ]
 
 function NavSearch({ visibleNav, tokens }: {

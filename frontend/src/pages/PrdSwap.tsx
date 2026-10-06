@@ -121,6 +121,10 @@ export default function PrdSwap() {
   const [loadingMcReq, setLoadingMcReq] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Store priorities (store_name → priority number; auto-computed, user-overridable)
+  const [storePriorities, setStorePriorities] = useState<Record<string, number>>({})
+  const [priorityOpen, setPriorityOpen] = useState(false)
+
   // Results
   const [results, setResults] = useState<SwapResult[]>([])
   const [unassigned, setUnassigned] = useState<UnassignedItem[]>([])
@@ -167,11 +171,23 @@ export default function PrdSwap() {
     finally { setLoadingPrd(false) }
   }
 
+  function applyAutoPriority(rows: Req[]) {
+    // Sum req_qty per store, sort high→low, assign priority 1,2,3...
+    const totals: Record<string, number> = {}
+    for (const r of rows) totals[r.store_name] = (totals[r.store_name] ?? 0) + r.req_qty
+    const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1])
+    const pmap: Record<string, number> = {}
+    sorted.forEach(([s], i) => { pmap[s] = i + 1 })
+    return pmap
+  }
+
   async function loadMcReq() {
     setLoadingMcReq(true); setReqErr('')
     try {
       const data = await apiGet<{ requirements: Req[]; stores: number; rows: number }>('/prd-swap/mc-req')
       setReqs(data.requirements)
+      setStorePriorities(applyAutoPriority(data.requirements))
+      setPriorityOpen(true)
     } catch (e: any) { setReqErr(e.message) }
     finally { setLoadingMcReq(false) }
   }
@@ -186,6 +202,8 @@ export default function PrdSwap() {
         const parsed = parseRequirementsCsv(ev.target?.result as string)
         if (!parsed.length) throw new Error('No valid rows found')
         setReqs(parsed)
+        setStorePriorities(applyAutoPriority(parsed))
+        setPriorityOpen(true)
       } catch (err: any) { setReqErr(err.message) }
     }
     reader.readAsText(file)
@@ -196,8 +214,13 @@ export default function PrdSwap() {
     if (!reqs.length) { setRunErr('Load requirements CSV first'); return }
     setRunning(true); setRunErr(''); setResults([]); setUnassigned([])
     try {
+      // Merge user-set priorities into requirements before sending
+      const reqsWithPriority = reqs.map(r => ({
+        ...r,
+        priority: storePriorities[r.store_name] ?? r.priority,
+      }))
       const data = await apiPost<{ results: SwapResult[]; unassigned: UnassignedItem[]; summary: SwapSummary }>(
-        '/prd-swap/run', { stores: selectedStores, requirements: reqs, params })
+        '/prd-swap/run', { stores: selectedStores, requirements: reqsWithPriority, params })
       setResults(data.results)
       setUnassigned(data.unassigned)
       setSummary(data.summary)
@@ -400,6 +423,77 @@ export default function PrdSwap() {
           </code>
         </div>
         {reqErr && <div style={{ color: '#f85149', fontSize: 13, marginTop: 6 }}>{reqErr}</div>}
+
+        {/* Priority Editor */}
+        {reqs.length > 0 && (() => {
+          // Build per-store totals for display
+          const totals: Record<string, number> = {}
+          for (const r of reqs) totals[r.store_name] = (totals[r.store_name] ?? 0) + r.req_qty
+          const storeList = Object.entries(totals).sort(
+            (a, b) => (storePriorities[a[0]] ?? 999) - (storePriorities[b[0]] ?? 999)
+          )
+          return (
+            <div style={{ marginTop: 12, borderTop: `1px solid ${tokens.border ?? '#30363d'}`, paddingTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <button
+                  onClick={() => setPriorityOpen(o => !o)}
+                  style={{ ...btn('#30363d', tokens.textMuted as string), fontSize: 12, padding: '4px 12px' }}>
+                  {priorityOpen ? '▲' : '▼'} Store Priority Editor
+                  <span style={{ marginLeft: 6, color: '#58a6ff' }}>({storeList.length} stores)</span>
+                </button>
+                <button
+                  onClick={() => setStorePriorities(applyAutoPriority(reqs))}
+                  style={{ ...btn('#21262d', tokens.textMuted as string), fontSize: 12, padding: '4px 10px' }}>
+                  ↺ Reset Auto
+                </button>
+                <span style={{ fontSize: 12, color: tokens.textMuted }}>
+                  Priority 1 = highest; lower number → processed first
+                </span>
+              </div>
+              {priorityOpen && (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                  gap: 6, maxHeight: 280, overflowY: 'auto',
+                  background: tokens.inputBg ?? '#21262d', borderRadius: 6, padding: 10,
+                }}>
+                  {storeList.map(([store, total]) => (
+                    <div key={store} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: tokens.cardBg ?? '#161b22', borderRadius: 6,
+                      padding: '5px 10px', border: `1px solid ${tokens.border ?? '#30363d'}`,
+                    }}>
+                      <span style={{
+                        minWidth: 24, textAlign: 'center', fontWeight: 800, fontSize: 13,
+                        color: '#58a6ff',
+                      }}>#{storePriorities[store] ?? '?'}</span>
+                      <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: tokens.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={store}>{store}</span>
+                      <span style={{ fontSize: 11, color: '#3fb950', whiteSpace: 'nowrap' }}>
+                        {Math.round(total).toLocaleString()} req
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={storePriorities[store] ?? ''}
+                        onChange={e => {
+                          const v = parseInt(e.target.value)
+                          if (!isNaN(v) && v > 0)
+                            setStorePriorities(p => ({ ...p, [store]: v }))
+                        }}
+                        style={{
+                          width: 46, background: tokens.inputBg ?? '#21262d',
+                          border: `1px solid ${tokens.border ?? '#30363d'}`,
+                          borderRadius: 4, padding: '3px 6px', color: tokens.textPrimary,
+                          fontSize: 12, fontWeight: 700, textAlign: 'center', outline: 'none',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Parameters */}

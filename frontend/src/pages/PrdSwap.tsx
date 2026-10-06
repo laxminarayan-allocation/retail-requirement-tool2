@@ -124,6 +124,7 @@ export default function PrdSwap() {
   // Store priorities (store_name → priority number; auto-computed, user-overridable)
   const [storePriorities, setStorePriorities] = useState<Record<string, number>>({})
   const [priorityOpen, setPriorityOpen] = useState(false)
+  const [prioritySearch, setPrioritySearch] = useState('')
 
   // Results
   const [results, setResults] = useState<SwapResult[]>([])
@@ -459,12 +460,27 @@ export default function PrdSwap() {
                 </span>
               </div>
               {priorityOpen && (
-                <div style={{
-                  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                  gap: 6, maxHeight: 280, overflowY: 'auto',
-                  background: tokens.inputBg ?? '#21262d', borderRadius: 6, padding: 10,
-                }}>
-                  {storeList.map(([store, total]) => (
+                <div style={{ background: tokens.inputBg ?? '#21262d', borderRadius: 6, padding: 10 }}>
+                  {/* Search box */}
+                  <input
+                    value={prioritySearch}
+                    onChange={e => setPrioritySearch(e.target.value)}
+                    placeholder="Search store name..."
+                    style={{
+                      width: '100%', boxSizing: 'border-box', marginBottom: 8,
+                      background: tokens.cardBg ?? '#161b22',
+                      border: `1px solid ${tokens.border ?? '#30363d'}`,
+                      borderRadius: 6, padding: '6px 10px',
+                      color: tokens.textPrimary, fontSize: 13, outline: 'none',
+                    }}
+                  />
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                    gap: 6, maxHeight: 260, overflowY: 'auto',
+                  }}>
+                  {storeList
+                    .filter(([s]) => !prioritySearch || s.toLowerCase().includes(prioritySearch.toLowerCase()))
+                    .map(([store, total]) => (
                     <div key={store} style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       background: tokens.cardBg ?? '#161b22', borderRadius: 6,
@@ -497,6 +513,7 @@ export default function PrdSwap() {
                       />
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
             </div>

@@ -24,13 +24,12 @@ async function apiPost<T>(url: string, body: unknown): Promise<T> {
 
 interface PrdRow {
   CHALLAN_NO: string
-  SRC_SITEALIAS: string
+  OUT_LOCATION: string
   DES_SITEALIAS: string
   DEPARTMENT: string
-  ARTICLE_CODE: string
-  ARTICLE_NAME: string
-  TOTAL_QTY: number
-  TOTAL_AMOUNT: number
+  DISPLAY_TYPE: string
+  CHALLAN_QTY: number
+  CHALLAN_AMOUNT: number
 }
 
 interface SwapResult {
@@ -286,7 +285,7 @@ export default function PrdSwap() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'monospace' }}>
               <thead>
                 <tr style={{ background: tokens.inputBg ?? '#21262d', position: 'sticky', top: 0 }}>
-                  {['CHALLAN_NO','SRC','DEST','DEPARTMENT','ARTICLE','QTY','AMOUNT'].map(h => (
+                  {['CHALLAN_NO','FROM (WH)','DEST','DEPARTMENT','TYPE','QTY','AMOUNT'].map(h => (
                     <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#39d2c0', fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -295,12 +294,12 @@ export default function PrdSwap() {
                 {prdRows.slice(0, 200).map((r, i) => (
                   <tr key={i} style={{ borderBottom: `1px solid ${tokens.border ?? '#30363d'}` }}>
                     <td style={{ padding: '4px 10px', color: tokens.textPrimary }}>{r.CHALLAN_NO}</td>
-                    <td style={{ padding: '4px 10px', color: tokens.textMuted }}>{r.SRC_SITEALIAS}</td>
+                    <td style={{ padding: '4px 10px', color: tokens.textMuted }}>{r.OUT_LOCATION}</td>
                     <td style={{ padding: '4px 10px', color: '#d29922' }}>{r.DES_SITEALIAS}</td>
                     <td style={{ padding: '4px 10px', color: tokens.textPrimary }}>{r.DEPARTMENT}</td>
-                    <td style={{ padding: '4px 10px', color: tokens.textMuted }}>{r.ARTICLE_CODE}</td>
-                    <td style={{ padding: '4px 10px', textAlign: 'right', color: '#3fb950' }}>{r.TOTAL_QTY}</td>
-                    <td style={{ padding: '4px 10px', textAlign: 'right', color: tokens.textMuted }}>{r.TOTAL_AMOUNT}</td>
+                    <td style={{ padding: '4px 10px', color: tokens.textMuted }}>{r.DISPLAY_TYPE}</td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', color: '#3fb950' }}>{r.CHALLAN_QTY}</td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', color: tokens.textMuted }}>{r.CHALLAN_AMOUNT}</td>
                   </tr>
                 ))}
               </tbody>

@@ -2,9 +2,13 @@
 PRD Swap — Package Ready to Dispatch swap engine.
 Fetches pending challans from CK_A2166.V_PRD_SWAP and recommends
 KEEP / REDIRECT / UNASSIGNED decisions based on store requirements.
+
+View columns: CHALLAN_NO, DES_SITEALIAS, DEPARTMENT, DISPLAY_TYPE,
+              CHALLAN_QTY, CHALLAN_AMOUNT, OUT_LOCATION, CHALLAN_DATE,
+              CHALLAN_STATUS, CHALLAN_BARCODE, AGAINST_SO
 """
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -33,7 +37,7 @@ class Requirement(BaseModel):
 
 
 class RunSwapRequest(BaseModel):
-    stores: List[str]          # selected DES_SITEALIAS stores
+    stores: List[str]
     requirements: List[Requirement]
 
 
@@ -45,7 +49,6 @@ async def get_prd_stores():
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            # Use subquery-based distinct for better performance on large views
             cur.execute(
                 f"SELECT DES_SITEALIAS FROM ("
                 f"  SELECT DISTINCT DES_SITEALIAS FROM {PRD_VIEW}"
@@ -68,11 +71,11 @@ async def fetch_prd_data(req: FetchDataRequest):
         placeholders = ", ".join([f":s{i}" for i in range(len(req.stores))])
         params = {f"s{i}": s for i, s in enumerate(req.stores)}
         sql = (
-            f"SELECT CHALLAN_NO, SRC_SITEALIAS, DES_SITEALIAS, DEPARTMENT, "
-            f"       ARTICLE_CODE, ARTICLE_NAME, TOTAL_QTY, TOTAL_AMOUNT "
+            f"SELECT CHALLAN_NO, OUT_LOCATION, DES_SITEALIAS, DEPARTMENT, "
+            f"       DISPLAY_TYPE, CHALLAN_QTY, CHALLAN_AMOUNT "
             f"FROM {PRD_VIEW} "
             f"WHERE DES_SITEALIAS IN ({placeholders}) "
-            f"ORDER BY CHALLAN_NO, DEPARTMENT, ARTICLE_CODE"
+            f"ORDER BY CHALLAN_NO, DEPARTMENT"
         )
         with get_connection() as conn:
             cur = conn.cursor()
@@ -112,8 +115,8 @@ async def run_prd_swap(req: RunSwapRequest):
         placeholders = ", ".join([f":s{i}" for i in range(len(req.stores))])
         params = {f"s{i}": s for i, s in enumerate(req.stores)}
         sql = (
-            f"SELECT CHALLAN_NO, SRC_SITEALIAS, DES_SITEALIAS, DEPARTMENT, "
-            f"       TOTAL_QTY, TOTAL_AMOUNT "
+            f"SELECT CHALLAN_NO, OUT_LOCATION, DES_SITEALIAS, DEPARTMENT, "
+            f"       CHALLAN_QTY, CHALLAN_AMOUNT "
             f"FROM {PRD_VIEW} "
             f"WHERE DES_SITEALIAS IN ({placeholders}) "
             f"ORDER BY CHALLAN_NO, DEPARTMENT"
@@ -123,15 +126,15 @@ async def run_prd_swap(req: RunSwapRequest):
             cur.execute(sql, params)
             raw = cur.fetchall()
 
-        # 2. Build packages grouped by (SRC_SITEALIAS, CHALLAN_NO)
-        pkg_map: Dict[tuple, dict] = {}
+        # 2. Build packages grouped by CHALLAN_NO (OUT_LOCATION = source warehouse)
+        pkg_map: Dict[str, dict] = {}
         for row in raw:
             challan_no, src, dest, dept, qty, amount = row
-            key = (str(src), str(challan_no))
+            key = str(challan_no)
             if key not in pkg_map:
                 pkg_map[key] = {
-                    "pkg_id": str(challan_no),
-                    "from_store": str(src),
+                    "pkg_id": key,
+                    "from_store": str(src) if src else "-",
                     "current_dest": str(dest),
                     "all_depts": {},
                     "total_value": 0.0,
@@ -186,7 +189,7 @@ async def run_prd_swap(req: RunSwapRequest):
                 if prd_value_used.get(sid, 0) + pkg["total_value"] > STORE_VALUE_CAP:
                     continue
                 # Match top-7
-                tm = 0.0; ta = 0.0; det = {}
+                tm = 0.0; det = {}
                 for dept, pq in pkg["top7"]:
                     if dept not in sd:
                         continue
@@ -200,7 +203,7 @@ async def run_prd_swap(req: RunSwapRequest):
                     matched = min(eff, bal)
                     if matched <= 0:
                         continue
-                    tm += matched; ta += al
+                    tm += matched
                     det[dept] = round(matched, 2)
 
                 if not det or pkg["top7_total"] == 0:

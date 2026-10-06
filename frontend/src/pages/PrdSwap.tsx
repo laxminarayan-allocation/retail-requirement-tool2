@@ -127,10 +127,15 @@ export default function PrdSwap() {
   })
   const [priorityOpen, setPriorityOpen] = useState(false)
   const [prioritySearch, setPrioritySearch] = useState('')
+  const [prioritySaved, setPrioritySaved] = useState(false)
+  const prioritySavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function savePriorities(pmap: Record<string, number>) {
     setStorePriorities(pmap)
     try { localStorage.setItem('prd_swap_priorities', JSON.stringify(pmap)) } catch {}
+    setPrioritySaved(true)
+    if (prioritySavedTimer.current) clearTimeout(prioritySavedTimer.current)
+    prioritySavedTimer.current = setTimeout(() => setPrioritySaved(false), 2000)
   }
 
   // Results
@@ -471,6 +476,14 @@ export default function PrdSwap() {
                 <span style={{ fontSize: 12, color: tokens.textMuted }}>
                   Priority 1 = highest; lower number → processed first
                 </span>
+                {prioritySaved && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: '#3fb950',
+                    background: '#1a2e1a', border: '1px solid #3fb950',
+                    borderRadius: 4, padding: '2px 8px',
+                    transition: 'opacity 0.3s',
+                  }}>✓ Saved</span>
+                )}
               </div>
               {priorityOpen && (
                 <div style={{ background: tokens.inputBg ?? '#21262d', borderRadius: 6, padding: 10 }}>

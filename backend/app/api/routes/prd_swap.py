@@ -39,9 +39,17 @@ class Requirement(BaseModel):
     priority: int = 1
 
 
+class SwapParams(BaseModel):
+    value_cap: float = 2_000_000       # Rs per store
+    default_match_pct: float = 50.0    # % of req_qty allowed per dept
+    top_n_depts: int = 7               # top N depts by qty from each challan
+    min_util_pct: float = 0.0          # minimum util% to accept a match
+
+
 class RunSwapRequest(BaseModel):
     stores: List[str]
     requirements: List[Requirement]
+    params: SwapParams = SwapParams()
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -177,10 +185,11 @@ async def run_prd_swap(req: RunSwapRequest):
             pkg_map[key]["total_qty"] += q
             pkg_map[key]["total_value"] += v
 
+        p = req.params
         pkgs = []
         for pkg in pkg_map.values():
-            t7 = sorted(pkg["all_depts"].items(), key=lambda x: x[1], reverse=True)[:7]
-            pkgs.append({**pkg, "top7": t7, "top7_total": sum(q for _, q in t7)})
+            top_n = sorted(pkg["all_depts"].items(), key=lambda x: x[1], reverse=True)[:p.top_n_depts]
+            pkgs.append({**pkg, "top7": top_n, "top7_total": sum(q for _, q in top_n)})
 
         # 3. Build balance_req from requirements
         balance_req: Dict[str, Dict[str, dict]] = {}
@@ -188,7 +197,7 @@ async def run_prd_swap(req: RunSwapRequest):
             s = str(r.store_name).strip()
             d = str(r.department).strip()
             rq = float(r.req_qty)
-            mp = float(r.match_pct)
+            mp = float(r.match_pct) if r.match_pct else p.default_match_pct
             sp = int(r.priority)
             balance_req.setdefault(s, {})
             balance_req[s][d] = {
@@ -218,7 +227,7 @@ async def run_prd_swap(req: RunSwapRequest):
                 if sum(d["balance"] for d in sd.values()) <= 0:
                     continue
                 # Value cap
-                if prd_value_used.get(sid, 0) + pkg["total_value"] > STORE_VALUE_CAP:
+                if prd_value_used.get(sid, 0) + pkg["total_value"] > p.value_cap:
                     continue
                 # Match top-7
                 tm = 0.0; det = {}
@@ -241,7 +250,7 @@ async def run_prd_swap(req: RunSwapRequest):
                 if not det or pkg["top7_total"] == 0:
                     continue
                 up = (tm / pkg["top7_total"]) * 100
-                if up <= 0:
+                if up < p.min_util_pct:
                     continue
                 d0 = list(det.keys())[0]
                 sp = sd[d0]["store_priority"] if d0 in sd else 99

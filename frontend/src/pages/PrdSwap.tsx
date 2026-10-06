@@ -128,6 +128,14 @@ export default function PrdSwap() {
   const [running, setRunning] = useState(false)
   const [runErr, setRunErr] = useState('')
 
+  // Swap parameters
+  const [params, setParams] = useState({
+    value_cap: 2000000,
+    default_match_pct: 50,
+    top_n_depts: 7,
+    min_util_pct: 0,
+  })
+
   // Filter for results table
   const [actionFilter, setActionFilter] = useState<'ALL' | 'KEEP' | 'REDIRECT' | 'UNASSIGNED'>('ALL')
 
@@ -189,7 +197,7 @@ export default function PrdSwap() {
     setRunning(true); setRunErr(''); setResults([]); setUnassigned([])
     try {
       const data = await apiPost<{ results: SwapResult[]; unassigned: UnassignedItem[]; summary: SwapSummary }>(
-        '/prd-swap/run', { stores: selectedStores, requirements: reqs })
+        '/prd-swap/run', { stores: selectedStores, requirements: reqs, params })
       setResults(data.results)
       setUnassigned(data.unassigned)
       setSummary(data.summary)
@@ -392,6 +400,51 @@ export default function PrdSwap() {
           </code>
         </div>
         {reqErr && <div style={{ color: '#f85149', fontSize: 13, marginTop: 6 }}>{reqErr}</div>}
+      </div>
+
+      {/* Parameters */}
+      <div style={card}>
+        <div style={{ fontWeight: 800, color: '#58a6ff', fontSize: 15, marginBottom: 14 }}>⚙ Swap Parameters</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+          {([
+            { key: 'value_cap',         title: 'Value Cap per Store (₹)', hint: 'Max value allocated to one store', step: 100000, min: 0 },
+            { key: 'default_match_pct', title: 'Default Match %',          hint: 'Fraction of req_qty allowed per dept (if not set in MC_REQ)', step: 5, min: 1, max: 100 },
+            { key: 'top_n_depts',       title: 'Top N Departments',        hint: 'How many top depts (by qty) per challan to consider', step: 1, min: 1, max: 20 },
+            { key: 'min_util_pct',      title: 'Min Utilization %',        hint: 'Minimum util% to accept a store match', step: 5, min: 0, max: 100 },
+          ] as const).map(({ key, title, hint, step, min, max }) => (
+            <div key={key}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: tokens.textMuted, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 4 }}>{title}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number"
+                  value={params[key]}
+                  step={step}
+                  min={min}
+                  max={max}
+                  onChange={e => setParams(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
+                  style={{
+                    flex: 1, background: tokens.inputBg ?? '#21262d',
+                    border: `1px solid ${tokens.border ?? '#30363d'}`,
+                    borderRadius: 6, padding: '6px 10px', color: tokens.textPrimary,
+                    fontSize: 13, fontWeight: 700, outline: 'none',
+                  }}
+                />
+                {key === 'value_cap' && (
+                  <span style={{ fontSize: 12, color: '#3fb950', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                    {(params.value_cap / 100000).toFixed(1)}L
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: tokens.textMuted, marginTop: 3 }}>{hint}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+          <button style={{ ...btn('#30363d', tokens.textMuted), fontSize: 12 }}
+            onClick={() => setParams({ value_cap: 2000000, default_match_pct: 50, top_n_depts: 7, min_util_pct: 0 })}>
+            Reset to Defaults
+          </button>
+        </div>
       </div>
 
       {/* Step 4: Run */}

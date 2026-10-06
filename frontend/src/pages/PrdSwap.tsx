@@ -692,6 +692,19 @@ export default function PrdSwap() {
           {summary && (
             <button style={{ ...btn('#db6d28'), marginLeft: 'auto' }} onClick={exportCsv}>⬇ Export CSV</button>
           )}
+          <button
+            style={{ ...btn('#1f6feb') }}
+            onClick={async () => {
+              try {
+                const res = await http.get('/prd-swap/mc-listing-csv', { responseType: 'blob', timeout: 30000 })
+                const url = URL.createObjectURL(res.data)
+                const a = document.createElement('a')
+                a.href = url; a.download = 'MC_LISTING.csv'; a.click()
+                URL.revokeObjectURL(url)
+              } catch { alert('MC Listing file not found — refresh from Database Explorer first') }
+            }}>
+            ⬇ MC Listing CSV
+          </button>
         </div>
         {runErr && <div style={{ color: '#f85149', fontSize: 13, marginTop: 8 }}>{runErr}</div>}
       </div>

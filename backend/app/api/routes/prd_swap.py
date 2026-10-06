@@ -7,10 +7,12 @@ View columns: CHALLAN_NO, DES_SITEALIAS, DEPARTMENT, DISPLAY_TYPE,
               CHALLAN_QTY, CHALLAN_AMOUNT, OUT_LOCATION, CHALLAN_DATE,
               CHALLAN_STATUS, CHALLAN_BARCODE, AGAINST_SO
 """
+import io
 import logging
 from pathlib import Path
 from typing import List, Dict
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.db.connection import get_connection
@@ -111,6 +113,28 @@ async def get_prd_stores():
     except Exception as e:
         logger.exception("prd-swap/stores failed")
         return APIResponse.fail(f"Oracle error: {e}")
+
+
+@router.get("/mc-listing-csv")
+async def download_mc_listing_csv():
+    """Download MC listing as CSV (store_name, department, mc_listing)."""
+    if not MC_LISTING_FILE.exists():
+        return APIResponse.fail("MC Listing file not found — refresh from Database Explorer first")
+    try:
+        import pandas as pd
+        df = pd.read_parquet(MC_LISTING_FILE, columns=["store_name", "department", "mc_listing"])
+        df = df.sort_values(["store_name", "department"])
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        buf.seek(0)
+        return StreamingResponse(
+            io.BytesIO(buf.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=MC_LISTING.csv"},
+        )
+    except Exception as e:
+        logger.exception("mc-listing-csv failed")
+        return APIResponse.fail(f"Error: {e}")
 
 
 @router.post("/fetch")

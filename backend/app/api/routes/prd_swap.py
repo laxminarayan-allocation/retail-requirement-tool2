@@ -49,6 +49,7 @@ class SwapParams(BaseModel):
     default_match_pct: float = 50.0    # % of req_qty allowed per dept
     top_n_depts: int = 7               # top N depts by qty from each challan
     min_util_pct: float = 0.0          # minimum util% to accept a match
+    max_stores: int = 15               # only top-N priority stores considered
 
 
 class RunSwapRequest(BaseModel):
@@ -231,12 +232,12 @@ async def run_prd_swap(req: RunSwapRequest):
                 "allowed_limit": rq * (mp / 100.0),
             }
 
-        # 4. Ordered stores by priority
+        # 4. Ordered stores by priority — limit to top max_stores
         ordered_stores = sorted(
             balance_req.keys(),
             key=lambda s: next(iter(balance_req[s].values()))["store_priority"]
                           if balance_req[s] else 99
-        )
+        )[:p.max_stores]
 
         # 5. Run matching
         results = []

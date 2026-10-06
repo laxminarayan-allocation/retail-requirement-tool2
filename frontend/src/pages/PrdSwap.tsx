@@ -151,6 +151,7 @@ export default function PrdSwap() {
     default_match_pct: 50,
     top_n_depts: 7,
     min_util_pct: 0,
+    max_stores: 15,
   })
 
   // Filter for results table
@@ -556,6 +557,7 @@ export default function PrdSwap() {
             { key: 'default_match_pct', title: 'Default Match %',          hint: 'Fraction of req_qty allowed per dept (if not set in MC_REQ)', step: 5, min: 1, max: 100 },
             { key: 'top_n_depts',       title: 'Top N Departments',        hint: 'How many top depts (by qty) per challan to consider', step: 1, min: 1, max: 20 },
             { key: 'min_util_pct',      title: 'Min Utilization %',        hint: 'Minimum util% to accept a store match', step: 5, min: 0, max: 100 },
+            { key: 'max_stores',        title: 'Max Stores to Allocate',   hint: 'Only top-N priority stores considered (by Store Priority Editor)', step: 1, min: 1, max: 231 },
           ] as const).map(({ key, title, hint, step, min, max }) => (
             <div key={key}>
               <div style={{ fontSize: 11, fontWeight: 700, color: tokens.textMuted, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 4 }}>{title}</div>
@@ -586,7 +588,7 @@ export default function PrdSwap() {
         </div>
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <button style={{ ...btn('#30363d', tokens.textMuted), fontSize: 12 }}
-            onClick={() => setParams({ value_cap: 2000000, default_match_pct: 50, top_n_depts: 7, min_util_pct: 0 })}>
+            onClick={() => setParams({ value_cap: 2000000, default_match_pct: 50, top_n_depts: 7, min_util_pct: 0, max_stores: 15 })}>
             Reset to Defaults
           </button>
         </div>

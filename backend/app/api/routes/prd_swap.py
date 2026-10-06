@@ -8,12 +8,15 @@ View columns: CHALLAN_NO, DES_SITEALIAS, DEPARTMENT, DISPLAY_TYPE,
               CHALLAN_STATUS, CHALLAN_BARCODE, AGAINST_SO
 """
 import logging
+from pathlib import Path
 from typing import List, Dict
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.db.connection import get_connection
 from app.models.response_models import APIResponse
+
+MC_REQ_PARQUET = Path(__file__).parent.parent.parent.parent / "data" / "output" / "CK_A2166__V_MC_REQ_APPS_2.parquet"
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/prd-swap", tags=["PRD Swap"])
@@ -42,6 +45,32 @@ class RunSwapRequest(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/mc-req")
+async def get_mc_req():
+    """Load requirements from downloaded V_MC_REQ_APPS_2 parquet."""
+    try:
+        import pandas as pd
+        if not MC_REQ_PARQUET.exists():
+            return APIResponse.fail("MC_REQ file not found — refresh from Database Explorer first")
+        df = pd.read_parquet(MC_REQ_PARQUET, columns=["store_name", "department", "req", "attribute1"])
+        df = df[df["req"] > 0].copy()
+        # Group by store+dept, sum req
+        grp = df.groupby(["store_name", "department"], as_index=False)["req"].sum()
+        reqs = [
+            {"store_name": r["store_name"], "department": r["department"],
+             "req_qty": float(r["req"]), "match_pct": 50.0, "priority": 1}
+            for _, r in grp.iterrows()
+        ]
+        return APIResponse.ok(data={
+            "requirements": reqs,
+            "stores": int(grp["store_name"].nunique()),
+            "rows": len(reqs),
+        })
+    except Exception as e:
+        logger.exception("prd-swap/mc-req failed")
+        return APIResponse.fail(f"MC_REQ load error: {e}")
+
 
 @router.get("/stores")
 async def get_prd_stores():

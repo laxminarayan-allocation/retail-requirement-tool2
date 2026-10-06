@@ -113,6 +113,7 @@ export default function PrdSwap() {
   // Requirements
   const [reqs, setReqs] = useState<Req[]>([])
   const [reqErr, setReqErr] = useState('')
+  const [loadingMcReq, setLoadingMcReq] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Results
@@ -151,6 +152,15 @@ export default function PrdSwap() {
       setPrdMeta({ total_rows: data.total_rows, challans: data.challans })
     } catch (e: any) { setPrdErr(e.message) }
     finally { setLoadingPrd(false) }
+  }
+
+  async function loadMcReq() {
+    setLoadingMcReq(true); setReqErr('')
+    try {
+      const data = await apiGet<{ requirements: Req[]; stores: number; rows: number }>('/prd-swap/mc-req')
+      setReqs(data.requirements)
+    } catch (e: any) { setReqErr(e.message) }
+    finally { setLoadingMcReq(false) }
   }
 
   function handleReqFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -317,6 +327,9 @@ export default function PrdSwap() {
       <div style={card}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           <span style={{ fontWeight: 800, color: '#58a6ff', fontSize: 15 }}>Step 3 — Load Requirements</span>
+          <button style={btn('#3fb950', '#000')} onClick={loadMcReq} disabled={loadingMcReq}>
+            {loadingMcReq ? 'Loading...' : '📥 Load MC_REQ'}
+          </button>
           <button style={btn('#bc8cff')} onClick={() => fileRef.current?.click()}>
             Upload CSV
           </button>
@@ -328,10 +341,10 @@ export default function PrdSwap() {
           )}
         </div>
         <div style={{ color: tokens.textMuted, fontSize: 12 }}>
-          CSV format: <code style={{ background: tokens.inputBg, padding: '2px 6px', borderRadius: 4 }}>
+          Load MC_REQ from downloaded V_MC_REQ_APPS_2, or upload CSV:
+          <code style={{ background: tokens.inputBg, padding: '2px 6px', borderRadius: 4, marginLeft: 4 }}>
             store_name, department, req_qty, match_pct, priority
           </code>
-          {' '}(same as CL.py Requirements sheet — export as CSV)
         </div>
         {reqErr && <div style={{ color: '#f85149', fontSize: 13, marginTop: 6 }}>{reqErr}</div>}
       </div>

@@ -274,6 +274,7 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/warehouse-inventory/",  None,          "viewer"),
     ("/api/warehouse-inventory",   None,          "viewer"),
     # PRD Swap — planner+
+    ("/api/prd-swap/mc-req",        {"GET"},       "planner"),
     ("/api/prd-swap/",             None,          "planner"),
     ("/api/prd-swap",              None,          "planner"),
     # Fallback — any API route needs at least viewer

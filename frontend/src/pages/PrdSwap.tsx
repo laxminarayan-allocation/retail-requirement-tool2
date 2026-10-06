@@ -121,10 +121,17 @@ export default function PrdSwap() {
   const [loadingMcReq, setLoadingMcReq] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Store priorities (store_name → priority number; auto-computed, user-overridable)
-  const [storePriorities, setStorePriorities] = useState<Record<string, number>>({})
+  // Store priorities — persisted in localStorage
+  const [storePriorities, setStorePriorities] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('prd_swap_priorities') ?? '{}') } catch { return {} }
+  })
   const [priorityOpen, setPriorityOpen] = useState(false)
   const [prioritySearch, setPrioritySearch] = useState('')
+
+  function savePriorities(pmap: Record<string, number>) {
+    setStorePriorities(pmap)
+    try { localStorage.setItem('prd_swap_priorities', JSON.stringify(pmap)) } catch {}
+  }
 
   // Results
   const [results, setResults] = useState<SwapResult[]>([])
@@ -190,7 +197,11 @@ export default function PrdSwap() {
       const data = await apiGet<{ requirements: Req[]; stores: number; rows: number; sources: string[] }>('/prd-swap/mc-req')
       setReqs(data.requirements)
       setMcReqSources(data.sources ?? [])
-      setStorePriorities(applyAutoPriority(data.requirements))
+      // Auto-priority: only set for stores that have no saved priority yet
+      const saved = storePriorities
+      const auto = applyAutoPriority(data.requirements)
+      const merged = { ...auto, ...Object.fromEntries(Object.entries(saved).filter(([k]) => k in auto)) }
+      savePriorities(merged)
       setPriorityOpen(true)
     } catch (e: any) { setReqErr(e.message) }
     finally { setLoadingMcReq(false) }
@@ -206,7 +217,9 @@ export default function PrdSwap() {
         const parsed = parseRequirementsCsv(ev.target?.result as string)
         if (!parsed.length) throw new Error('No valid rows found')
         setReqs(parsed)
-        setStorePriorities(applyAutoPriority(parsed))
+        const auto = applyAutoPriority(parsed)
+        const merged = { ...auto, ...Object.fromEntries(Object.entries(storePriorities).filter(([k]) => k in auto)) }
+        savePriorities(merged)
         setPriorityOpen(true)
       } catch (err: any) { setReqErr(err.message) }
     }
@@ -451,7 +464,7 @@ export default function PrdSwap() {
                   <span style={{ marginLeft: 6, color: '#58a6ff' }}>({storeList.length} stores)</span>
                 </button>
                 <button
-                  onClick={() => setStorePriorities(applyAutoPriority(reqs))}
+                  onClick={() => savePriorities(applyAutoPriority(reqs))}
                   style={{ ...btn('#21262d', tokens.textMuted as string), fontSize: 12, padding: '4px 10px' }}>
                   ↺ Reset Auto
                 </button>
@@ -502,7 +515,7 @@ export default function PrdSwap() {
                         onChange={e => {
                           const v = parseInt(e.target.value)
                           if (!isNaN(v) && v > 0)
-                            setStorePriorities(p => ({ ...p, [store]: v }))
+                            savePriorities({ ...storePriorities, [store]: v })
                         }}
                         style={{
                           width: 46, background: tokens.inputBg ?? '#21262d',

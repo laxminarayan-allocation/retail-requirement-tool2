@@ -318,6 +318,11 @@ async def run_prd_swap(req: RunSwapRequest):
                     balance_req[best_sid][dept]["swapped"] += best_det[dept]
                 prd_value_used[best_sid] = prd_value_used.get(best_sid, 0) + pkg["total_value"]
                 action = "KEEP" if best_sid == pkg["current_dest"] else "REDIRECT"
+                # mc_listing status for each matched dept (all Y since filter passed)
+                listing_col = "; ".join(
+                    f"{d}={'Y' if not listing_loaded or (best_sid, d) in listing_ok else 'N'}"
+                    for d in best_det.keys()
+                )
                 results.append({
                     "challan_no": pkg["pkg_id"],
                     "from_store": pkg["from_store"],
@@ -325,6 +330,7 @@ async def run_prd_swap(req: RunSwapRequest):
                     "recommended_dest": best_sid,
                     "action": action,
                     "depts_matched": ", ".join(best_det.keys()),
+                    "mc_listing": listing_col,
                     "util_pct": best_up,
                     "store_priority": b[3],
                     "total_qty": round(pkg["total_qty"], 2),
@@ -333,6 +339,18 @@ async def run_prd_swap(req: RunSwapRequest):
                 })
             else:
                 top7_str = ", ".join(f"{d}({int(q)})" for d, q in pkg["top7"])
+                # Diagnose why unassigned: listing blocked or no req match
+                listing_blocked = listing_loaded and all(
+                    (sid, dept) not in listing_ok
+                    for sid in ordered_stores
+                    for dept, _ in pkg["top7"]
+                    if sid in balance_req
+                )
+                reason_str = (
+                    "Listing blocked — all top depts N for available stores"
+                    if listing_blocked
+                    else "No requirement store matched top-7 depts"
+                )
                 unassigned.append({
                     "challan_no": pkg["pkg_id"],
                     "from_store": pkg["from_store"],
@@ -340,7 +358,7 @@ async def run_prd_swap(req: RunSwapRequest):
                     "top7_depts": top7_str,
                     "total_qty": round(pkg["total_qty"], 2),
                     "total_value": round(pkg["total_value"], 2),
-                    "reason": "No requirement store matched top-7 depts.",
+                    "reason": reason_str,
                 })
 
         kept = sum(1 for r in results if r["action"] == "KEEP")

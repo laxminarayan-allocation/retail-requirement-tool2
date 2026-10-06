@@ -39,6 +39,7 @@ interface SwapResult {
   recommended_dest: string
   action: 'KEEP' | 'REDIRECT' | 'UNASSIGNED'
   depts_matched: string
+  mc_listing: string
   util_pct: number
   store_priority: number
   total_qty: number
@@ -260,16 +261,16 @@ export default function PrdSwap() {
       const s = String(v ?? '')
       return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
     }
-    const header = 'CHALLAN_NO,SRC_STORE,CURRENT_DEST,RECOMMENDED_DEST,ACTION,TOTAL_QTY,TOTAL_VALUE,DEPTS_MATCHED,UTIL_%,PRIORITY,REASON'
+    const header = 'CHALLAN_NO,SRC_STORE,CURRENT_DEST,RECOMMENDED_DEST,ACTION,TOTAL_QTY,TOTAL_VALUE,DEPTS_MATCHED,MC_LISTING,UTIL_%,PRIORITY,REASON'
     const assignedRows = results.map(r => [
       esc(r.challan_no), esc(r.from_store), esc(r.current_dest), esc(r.recommended_dest),
       r.action, r.total_qty ?? '', r.total_value ?? '',
-      esc(r.depts_matched), r.util_pct, r.store_priority, esc(r.reason),
+      esc(r.depts_matched), esc(r.mc_listing ?? 'Y'), r.util_pct, r.store_priority, esc(r.reason),
     ].join(','))
     const unassignedRows = unassigned.map(u => [
       esc(u.challan_no), esc(u.from_store), esc(u.current_dest), '-',
       'UNASSIGNED', u.total_qty ?? '', u.total_value ?? '',
-      esc(u.top7_depts), '', '', esc(u.reason),
+      esc(u.top7_depts), 'N - Listing blocked / No req match', '', '', esc(u.reason),
     ].join(','))
     const blob = new Blob([header + '\n' + [...assignedRows, ...unassignedRows].join('\n')], { type: 'text/csv' })
     const a = document.createElement('a')

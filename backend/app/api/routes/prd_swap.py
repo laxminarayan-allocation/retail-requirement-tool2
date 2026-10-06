@@ -74,17 +74,18 @@ async def get_mc_req():
 
 @router.get("/stores")
 async def get_prd_stores():
-    """Distinct destination stores (DES_SITEALIAS) in V_PRD_SWAP."""
+    """Destination stores with challan counts, sorted high-to-low."""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                f"SELECT DES_SITEALIAS FROM ("
-                f"  SELECT DISTINCT DES_SITEALIAS FROM {PRD_VIEW}"
-                f"  WHERE DES_SITEALIAS IS NOT NULL"
-                f") ORDER BY DES_SITEALIAS"
+                f"SELECT DES_SITEALIAS, COUNT(DISTINCT CHALLAN_NO) AS CNT "
+                f"FROM {PRD_VIEW} "
+                f"WHERE DES_SITEALIAS IS NOT NULL "
+                f"GROUP BY DES_SITEALIAS "
+                f"ORDER BY CNT DESC"
             )
-            stores = [r[0] for r in cur.fetchall()]
+            stores = [{"store": r[0], "count": int(r[1])} for r in cur.fetchall()]
         return APIResponse.ok(data=stores)
     except Exception as e:
         logger.exception("prd-swap/stores failed")
@@ -166,12 +167,14 @@ async def run_prd_swap(req: RunSwapRequest):
                     "from_store": str(src) if src else "-",
                     "current_dest": str(dest),
                     "all_depts": {},
+                    "total_qty": 0.0,
                     "total_value": 0.0,
                 }
             d = str(dept).strip()
             q = float(qty) if qty is not None else 0.0
             v = float(amount) if amount is not None else 0.0
             pkg_map[key]["all_depts"][d] = pkg_map[key]["all_depts"].get(d, 0) + q
+            pkg_map[key]["total_qty"] += q
             pkg_map[key]["total_value"] += v
 
         pkgs = []
@@ -262,6 +265,8 @@ async def run_prd_swap(req: RunSwapRequest):
                     "depts_matched": ", ".join(best_det.keys()),
                     "util_pct": best_up,
                     "store_priority": b[3],
+                    "total_qty": round(pkg["total_qty"], 2),
+                    "total_value": round(pkg["total_value"], 2),
                     "reason": f"{len(best_det)} dept(s) matched at {best_up}% utilization",
                 })
             else:
@@ -271,6 +276,8 @@ async def run_prd_swap(req: RunSwapRequest):
                     "from_store": pkg["from_store"],
                     "current_dest": pkg["current_dest"],
                     "top7_depts": top7_str,
+                    "total_qty": round(pkg["total_qty"], 2),
+                    "total_value": round(pkg["total_value"], 2),
                     "reason": "No requirement store matched top-7 depts.",
                 })
 

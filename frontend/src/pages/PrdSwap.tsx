@@ -41,6 +41,8 @@ interface SwapResult {
   depts_matched: string
   util_pct: number
   store_priority: number
+  total_qty: number
+  total_value: number
   reason: string
 }
 
@@ -49,6 +51,8 @@ interface UnassignedItem {
   from_store: string
   current_dest: string
   top7_depts: string
+  total_qty: number
+  total_value: number
   reason: string
 }
 
@@ -99,10 +103,11 @@ export default function PrdSwap() {
   })
 
   // Stores
-  const [stores, setStores] = useState<string[]>([])
+  const [stores, setStores] = useState<{ store: string; count: number }[]>([])
   const [selectedStores, setSelectedStores] = useState<string[]>([])
   const [loadingStores, setLoadingStores] = useState(false)
   const [storeErr, setStoreErr] = useState('')
+  const [storeSearch, setStoreSearch] = useState('')
 
   // PRD data
   const [prdRows, setPrdRows] = useState<PrdRow[]>([])
@@ -131,9 +136,9 @@ export default function PrdSwap() {
   async function fetchStores() {
     setLoadingStores(true); setStoreErr('')
     try {
-      const data = await apiGet<string[]>('/prd-swap/stores')
+      const data = await apiGet<{ store: string; count: number }[]>('/prd-swap/stores')
       setStores(data)
-      setSelectedStores(data) // select all by default
+      setSelectedStores(data.map(s => s.store)) // select all by default
     } catch (e: any) { setStoreErr(e.message) }
     finally { setLoadingStores(false) }
   }
@@ -193,20 +198,22 @@ export default function PrdSwap() {
   }
 
   function exportCsv() {
-    const all: (SwapResult | (UnassignedItem & { action: string; recommended_dest: string; depts_matched: string; util_pct: string; store_priority: string; reason: string }))[] = [
-      ...results,
-      ...unassigned.map(u => ({
-        ...u, action: 'UNASSIGNED', recommended_dest: '-',
-        depts_matched: u.top7_depts, util_pct: '', store_priority: '', reason: u.reason,
-      })),
-    ]
-    const header = 'CHALLAN_NO,FROM_STORE,CURRENT_DEST,RECOMMENDED_DEST,ACTION,DEPTS_MATCHED,UTIL_%,PRIORITY,REASON'
-    const rows = all.map(r => [
-      r.challan_no, r.from_store, r.current_dest, (r as any).recommended_dest,
-      r.action, (r as any).depts_matched, (r as any).util_pct,
-      (r as any).store_priority, `"${(r as any).reason}"`,
+    const esc = (v: any) => {
+      const s = String(v ?? '')
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const header = 'CHALLAN_NO,SRC_STORE,CURRENT_DEST,RECOMMENDED_DEST,ACTION,TOTAL_QTY,TOTAL_VALUE,DEPTS_MATCHED,UTIL_%,PRIORITY,REASON'
+    const assignedRows = results.map(r => [
+      esc(r.challan_no), esc(r.from_store), esc(r.current_dest), esc(r.recommended_dest),
+      r.action, r.total_qty ?? '', r.total_value ?? '',
+      esc(r.depts_matched), r.util_pct, r.store_priority, esc(r.reason),
     ].join(','))
-    const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
+    const unassignedRows = unassigned.map(u => [
+      esc(u.challan_no), esc(u.from_store), esc(u.current_dest), '-',
+      'UNASSIGNED', u.total_qty ?? '', u.total_value ?? '',
+      esc(u.top7_depts), '', '', esc(u.reason),
+    ].join(','))
+    const blob = new Blob([header + '\n' + [...assignedRows, ...unassignedRows].join('\n')], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `PRD_Swap_${new Date().toISOString().slice(0,10)}.csv`
@@ -245,34 +252,72 @@ export default function PrdSwap() {
 
       {/* Step 1: Destination Stores */}
       <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 800, color: '#58a6ff', fontSize: 15 }}>Step 1 — Select Destination Stores</span>
-          <button style={btn('#58a6ff')} onClick={fetchStores} disabled={loadingStores}>
-            {loadingStores ? 'Loading...' : 'Fetch from Oracle'}
+          <button style={{ ...btn('#58a6ff'), display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={fetchStores} disabled={loadingStores}>
+            {loadingStores ? '⏳ Loading...' : '🔄 Refresh'}
           </button>
           {stores.length > 0 && <>
-            <button style={btn('#3fb950', '#000')} onClick={() => setSelectedStores([...stores])}>Select All</button>
+            <button style={btn('#3fb950', '#000')} onClick={() => setSelectedStores(stores.map(s => s.store))}>Select All</button>
             <button style={btn('#f85149')} onClick={() => setSelectedStores([])}>Clear</button>
-            <span style={{ color: tokens.textMuted, fontSize: 13 }}>{selectedStores.length}/{stores.length} selected</span>
+            <span style={{ color: tokens.textMuted, fontSize: 13, fontWeight: 600 }}>
+              {selectedStores.length}/{stores.length} selected
+              {selectedStores.length > 0 && (
+                <span style={{ color: '#3fb950', marginLeft: 6 }}>
+                  ({stores.filter(s => selectedStores.includes(s.store)).reduce((a, s) => a + s.count, 0).toLocaleString()} challans)
+                </span>
+              )}
+            </span>
           </>}
         </div>
         {storeErr && <div style={{ color: '#f85149', fontSize: 13, marginBottom: 8 }}>{storeErr}</div>}
         {stores.length > 0 && (
-          <div style={{
-            display: 'flex', flexWrap: 'wrap', gap: 6,
-            maxHeight: 160, overflowY: 'auto',
-            background: tokens.inputBg ?? '#21262d', borderRadius: 6, padding: 10,
-          }}>
-            {stores.map(s => (
-              <div key={s} onClick={() => toggleStore(s)} style={{
-                padding: '4px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                background: selectedStores.includes(s) ? '#58a6ff' : (tokens.cardBg ?? '#161b22'),
-                color: selectedStores.includes(s) ? '#000' : tokens.textMuted,
-                border: `1px solid ${selectedStores.includes(s) ? '#58a6ff' : (tokens.border ?? '#30363d')}`,
-                userSelect: 'none',
-              }}>{s}</div>
-            ))}
-          </div>
+          <>
+            {/* Search */}
+            <input
+              value={storeSearch}
+              onChange={e => setStoreSearch(e.target.value)}
+              placeholder="Search stores..."
+              style={{
+                width: '100%', boxSizing: 'border-box', marginBottom: 8,
+                background: tokens.inputBg ?? '#21262d', border: `1px solid ${tokens.border ?? '#30363d'}`,
+                borderRadius: 6, padding: '6px 12px', color: tokens.textPrimary, fontSize: 13,
+                outline: 'none',
+              }}
+            />
+            {/* Store chips — sorted high-to-low count (already from backend), filtered by search */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 6,
+              maxHeight: 220, overflowY: 'auto',
+              background: tokens.inputBg ?? '#21262d', borderRadius: 6, padding: 10,
+            }}>
+              {stores
+                .filter(s => !storeSearch || s.store.toLowerCase().includes(storeSearch.toLowerCase()))
+                .map(s => {
+                  const sel = selectedStores.includes(s.store)
+                  return (
+                    <div key={s.store} onClick={() => toggleStore(s.store)} style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '4px 10px', borderRadius: 20, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                      background: sel ? '#58a6ff' : (tokens.cardBg ?? '#161b22'),
+                      color: sel ? '#000' : tokens.textMuted,
+                      border: `1px solid ${sel ? '#58a6ff' : (tokens.border ?? '#30363d')}`,
+                      userSelect: 'none',
+                    }}>
+                      {sel && <span style={{ fontSize: 10 }}>✓</span>}
+                      {s.store}
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        background: sel ? 'rgba(0,0,0,0.2)' : (tokens.inputBg ?? '#21262d'),
+                        borderRadius: 10, padding: '1px 5px',
+                        color: sel ? '#000' : '#58a6ff',
+                      }}>{s.count}</span>
+                    </div>
+                  )
+                })}
+            </div>
+          </>
         )}
       </div>
 

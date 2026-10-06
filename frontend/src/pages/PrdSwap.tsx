@@ -102,6 +102,10 @@ export default function PrdSwap() {
     fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
   })
 
+  // Manual store entry (pre-Step 1)
+  const [manualInput, setManualInput] = useState('')
+  const [manualOpen, setManualOpen] = useState(false)
+
   // Stores
   const [stores, setStores] = useState<{ store: string; count: number }[]>([])
   const [selectedStores, setSelectedStores] = useState<string[]>([])
@@ -302,6 +306,62 @@ export default function PrdSwap() {
         <p style={{ margin: '4px 0 0', color: tokens.textMuted, fontSize: 13 }}>
           Package Ready to Dispatch — match pending challans against store requirements
         </p>
+      </div>
+
+      {/* Manual Store Entry (pre-Step 1) */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => setManualOpen(o => !o)}
+            style={{ ...btn('#30363d', tokens.textMuted as string), fontSize: 12, padding: '4px 12px' }}>
+            {manualOpen ? '▲' : '▼'} Manual Store Entry
+          </button>
+          <span style={{ fontSize: 12, color: tokens.textMuted }}>
+            Already decided stores? Type directly — no Oracle refresh needed
+          </span>
+        </div>
+        {manualOpen && (
+          <div style={{ marginTop: 10 }}>
+            <textarea
+              value={manualInput}
+              onChange={e => setManualInput(e.target.value)}
+              placeholder={'Enter store aliases, comma or newline separated\ne.g. MIC, GWG, MCN\nor one per line'}
+              rows={4}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: tokens.inputBg ?? '#21262d',
+                border: `1px solid ${tokens.border ?? '#30363d'}`,
+                borderRadius: 6, padding: '8px 10px',
+                color: tokens.textPrimary, fontSize: 13,
+                resize: 'vertical', outline: 'none', fontFamily: 'monospace',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <button
+                style={{ ...btn('#238636'), fontSize: 12, padding: '5px 14px' }}
+                onClick={() => {
+                  const names = manualInput
+                    .split(/[\n,]+/)
+                    .map(s => s.trim().toUpperCase())
+                    .filter(Boolean)
+                  if (!names.length) return
+                  setSelectedStores(prev => {
+                    const merged = [...new Set([...prev, ...names])]
+                    return merged
+                  })
+                  setManualInput('')
+                  setManualOpen(false)
+                }}>
+                ✓ Add to Selection
+              </button>
+              <button
+                style={{ ...btn('#30363d', tokens.textMuted as string), fontSize: 12, padding: '5px 14px' }}
+                onClick={() => setManualInput('')}>
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Step 1: Destination Stores */}

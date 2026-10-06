@@ -16,7 +16,11 @@ from pydantic import BaseModel
 from app.db.connection import get_connection
 from app.models.response_models import APIResponse
 
-MC_REQ_PARQUET = Path(__file__).parent.parent.parent.parent / "data" / "output" / "CK_A2166__V_MC_REQ_APPS_2.parquet"
+_DATA_DIR = Path(__file__).parent.parent.parent.parent / "data" / "output"
+MC_REQ_FILES = [
+    _DATA_DIR / "CK_A2166__V_MC_REQ_APPS_2.parquet",
+    _DATA_DIR / "CK_A2166__V_MC_REQ_GM.parquet",
+]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/prd-swap", tags=["PRD Swap"])
@@ -56,15 +60,21 @@ class RunSwapRequest(BaseModel):
 
 @router.get("/mc-req")
 async def get_mc_req():
-    """Load requirements from downloaded V_MC_REQ_APPS_2 parquet."""
+    """Load requirements from both V_MC_REQ_APPS_2 and V_MC_REQ_GM parquet files."""
     try:
         import pandas as pd
-        if not MC_REQ_PARQUET.exists():
-            return APIResponse.fail("MC_REQ file not found — refresh from Database Explorer first")
-        df = pd.read_parquet(MC_REQ_PARQUET, columns=["store_name", "department", "req", "attribute1"])
-        df = df[df["req"] > 0].copy()
-        # Group by store+dept, sum req
-        grp = df.groupby(["store_name", "department"], as_index=False)["req"].sum()
+        frames = []
+        loaded = []
+        for f in MC_REQ_FILES:
+            if f.exists():
+                df = pd.read_parquet(f, columns=["store_name", "department", "req"])
+                df = df[df["req"] > 0].copy()
+                frames.append(df)
+                loaded.append(f.stem)
+        if not frames:
+            return APIResponse.fail("MC_REQ files not found — refresh from Database Explorer first")
+        combined = pd.concat(frames, ignore_index=True)
+        grp = combined.groupby(["store_name", "department"], as_index=False)["req"].sum()
         reqs = [
             {"store_name": r["store_name"], "department": r["department"],
              "req_qty": float(r["req"]), "match_pct": 50.0, "priority": 1}
@@ -74,6 +84,7 @@ async def get_mc_req():
             "requirements": reqs,
             "stores": int(grp["store_name"].nunique()),
             "rows": len(reqs),
+            "sources": loaded,
         })
     except Exception as e:
         logger.exception("prd-swap/mc-req failed")

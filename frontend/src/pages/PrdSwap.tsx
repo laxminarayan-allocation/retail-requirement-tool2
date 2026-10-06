@@ -181,11 +181,14 @@ export default function PrdSwap() {
     return pmap
   }
 
+  const [mcReqSources, setMcReqSources] = useState<string[]>([])
+
   async function loadMcReq() {
     setLoadingMcReq(true); setReqErr('')
     try {
-      const data = await apiGet<{ requirements: Req[]; stores: number; rows: number }>('/prd-swap/mc-req')
+      const data = await apiGet<{ requirements: Req[]; stores: number; rows: number; sources: string[] }>('/prd-swap/mc-req')
       setReqs(data.requirements)
+      setMcReqSources(data.sources ?? [])
       setStorePriorities(applyAutoPriority(data.requirements))
       setPriorityOpen(true)
     } catch (e: any) { setReqErr(e.message) }
@@ -413,6 +416,11 @@ export default function PrdSwap() {
           {reqs.length > 0 && (
             <span style={{ color: '#3fb950', fontSize: 13, fontWeight: 700 }}>
               ✓ {reqs.length} rows | {new Set(reqs.map(r => r.store_name)).size} stores
+              {mcReqSources.length > 0 && (
+                <span style={{ color: tokens.textMuted, fontWeight: 400, marginLeft: 6 }}>
+                  ({mcReqSources.length} files: {mcReqSources.map(s => s.replace('CK_A2166__', '')).join(' + ')})
+                </span>
+              )}
             </span>
           )}
         </div>

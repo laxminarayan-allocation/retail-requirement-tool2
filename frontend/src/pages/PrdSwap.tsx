@@ -56,7 +56,7 @@ interface UnassignedItem {
   reason: string
 }
 
-interface SwapSummary { keep: number; redirect: number; unassigned: number; total_challans: number }
+interface SwapSummary { keep: number; redirect: number; unassigned: number; total_challans: number; listing_filter?: boolean; listing_pairs?: number }
 
 // ── Requirement upload parser ─────────────────────────────────────────────────
 // Expects CSV with columns: store_name, department, req_qty, match_pct, priority
@@ -558,7 +558,7 @@ export default function PrdSwap() {
             {running ? '⏳ Running PRD Swap...' : '▶ Run PRD Swap'}
           </button>
           {summary && (
-            <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               {[
                 { label: 'KEEP', val: summary.keep, color: '#3fb950' },
                 { label: 'REDIRECT', val: summary.redirect, color: '#d29922' },
@@ -570,6 +570,18 @@ export default function PrdSwap() {
                   <div style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 700 }}>{l}</div>
                 </div>
               ))}
+              {summary.listing_filter !== undefined && (
+                <div style={{
+                  fontSize: 11, padding: '4px 10px', borderRadius: 12,
+                  background: summary.listing_filter ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)',
+                  color: summary.listing_filter ? '#3fb950' : '#f85149',
+                  fontWeight: 700, border: `1px solid ${summary.listing_filter ? '#3fb950' : '#f85149'}`,
+                }}>
+                  {summary.listing_filter
+                    ? `✓ MC Listing filter ON (${summary.listing_pairs?.toLocaleString()} Y pairs)`
+                    : '⚠ MC Listing file missing — no filter applied'}
+                </div>
+              )}
             </div>
           )}
           {summary && (

@@ -21,6 +21,7 @@ MC_REQ_FILES = [
     _DATA_DIR / "CK_A2166__V_MC_REQ_APPS_2.parquet",
     _DATA_DIR / "CK_A2166__V_MC_REQ_GM.parquet",
 ]
+MC_LISTING_FILE = _DATA_DIR / "MISRETAIL__T_STORE_MC_LISTING.parquet"
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/prd-swap", tags=["PRD Swap"])
@@ -202,7 +203,20 @@ async def run_prd_swap(req: RunSwapRequest):
             top_n = sorted(pkg["all_depts"].items(), key=lambda x: x[1], reverse=True)[:p.top_n_depts]
             pkgs.append({**pkg, "top7": top_n, "top7_total": sum(q for _, q in top_n)})
 
-        # 3. Build balance_req from requirements
+        # 3. Load MC listing filter (store+dept where mc_listing=Y)
+        listing_ok: set = set()   # empty = no filter (file missing)
+        listing_loaded = False
+        if MC_LISTING_FILE.exists():
+            import pandas as pd
+            ldf = pd.read_parquet(MC_LISTING_FILE, columns=["store_name", "department", "mc_listing"])
+            ldf_y = ldf[ldf["mc_listing"].str.upper() == "Y"]
+            listing_ok = set(zip(ldf_y["store_name"].str.strip(), ldf_y["department"].str.strip()))
+            listing_loaded = True
+            logger.info("MC listing loaded: %d Y pairs", len(listing_ok))
+        else:
+            logger.warning("MC_LISTING file not found — listing filter skipped")
+
+        # 4. Build balance_req from requirements
         balance_req: Dict[str, Dict[str, dict]] = {}
         for r in req.requirements:
             s = str(r.store_name).strip()
@@ -244,6 +258,9 @@ async def run_prd_swap(req: RunSwapRequest):
                 tm = 0.0; det = {}
                 for dept, pq in pkg["top7"]:
                     if dept not in sd:
+                        continue
+                    # MC listing filter: skip if listing=N for this store+dept
+                    if listing_loaded and (sid, dept) not in listing_ok:
                         continue
                     bal = sd[dept]["balance"]
                     if bal <= 0:
@@ -311,6 +328,8 @@ async def run_prd_swap(req: RunSwapRequest):
                 "redirect": redirected,
                 "unassigned": len(unassigned),
                 "total_challans": len(pkgs),
+                "listing_filter": listing_loaded,
+                "listing_pairs": len(listing_ok) if listing_loaded else 0,
             },
         })
     except Exception as e:

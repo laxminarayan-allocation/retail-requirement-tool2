@@ -42,6 +42,8 @@ from app.api.routes import data_store as data_store_routes
 from app.api.routes import preferences as preferences_routes
 from app.api.routes import pipeline as pipeline_routes
 from app.api.routes import prd_swap as prd_swap_routes
+from app.api.routes import results_journey as results_journey_routes
+from app.api.routes import run_logs as run_logs_routes
 
 import mimetypes
 mimetypes.add_type("application/javascript", ".js")
@@ -436,6 +438,8 @@ app.include_router(data_store_routes.router,         prefix="/api")  # Parquet D
 app.include_router(preferences_routes.router,        prefix="/api")  # User Preferences
 app.include_router(pipeline_routes.router,            prefix="/api")  # Native pipeline
 app.include_router(prd_swap_routes.router,            prefix="/api")  # PRD Swap
+app.include_router(results_journey_routes.router,     prefix="/api")  # Results & Number Journey
+app.include_router(run_logs_routes.router,            prefix="/api")  # Run & Parameter Logs
 
 
 @app.get("/api", tags=["Root"])
@@ -472,7 +476,7 @@ class _CharsetMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(_CharsetMiddleware)
 
-if _DIST_DIR.exists():
+if _DIST_DIR.exists() and (_DIST_DIR / "assets").exists():
     app.mount(
         "/assets",
         StaticFiles(directory=str(_DIST_DIR / "assets")),

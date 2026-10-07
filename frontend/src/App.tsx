@@ -26,6 +26,8 @@ import FlowDocumentation from '@/pages/FlowDocumentation'
 import SchemaMap from '@/pages/SchemaMap'
 import AllParameters from '@/pages/AllParameters'
 import PrdSwap from '@/pages/PrdSwap'
+import ResultsJourney from '@/pages/ResultsJourney'
+import RunLogs from '@/pages/RunLogs'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
@@ -66,6 +68,8 @@ export default function App() {
             <Route path="schema-map" element={<SchemaMap />} />
             <Route path="all-parameters" element={<AllParameters />} />
             <Route path="prd-swap" element={<PrdSwap />} />
+            <Route path="results-journey" element={<ResultsJourney />} />
+            <Route path="run-logs" element={<RunLogs />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -44,6 +44,21 @@ _jobs_lock = threading.Lock()
 # ── Temp output folder (session CSV cache) ───────────────────────────────────
 _OUT = Path(tempfile.gettempdir()) / "ss27_pipeline"
 _OUT.mkdir(exist_ok=True)
+_LOGS = _OUT / "logs"
+_LOGS.mkdir(exist_ok=True)
+
+_log_lock = threading.Lock()
+
+
+def _append_log(filename: str, record: dict) -> None:
+    """Append a JSON record (one line) to a JSONL log file."""
+    p = _LOGS / filename
+    try:
+        with _log_lock:
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -898,6 +913,13 @@ async def run_module(mod_id: str, request: Request) -> JSONResponse:
     with _jobs_lock:
         _jobs[job_id] = []
 
+    _append_log("runs.jsonl", {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "job_id": job_id,
+        "module": mod_id,
+        "source": body.get("source", ""),
+    })
+
     if mod_id == "4":
         filters = body.get("filters", [])
         threading.Thread(target=_run_module4, args=(job_id, filters), daemon=True).start()
@@ -947,6 +969,18 @@ async def get_config() -> JSONResponse:
 
 @router.post("/pipeline/config")
 async def save_config(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+        changes = body.get("changes", [])
+        run_no = body.get("run", 1)
+        if changes:
+            _append_log("param_changes.jsonl", {
+                "when": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "run": run_no,
+                "changes": changes,
+            })
+    except Exception:
+        pass
     return JSONResponse({"success": True})
 
 

@@ -1,0 +1,65 @@
+"""
+run_logs.py — Run & Parameter Logs for the SS27 allocation pipeline.
+
+Reads append-only JSONL files from <_OUT_BASE>/logs/:
+  runs.jsonl          — one record per pipeline run
+  param_changes.jsonl — one record per parameter change
+
+GET /pipeline/logs/runs            — paginated run records (newest first)
+GET /pipeline/logs/param-changes   — paginated parameter change records (newest first)
+GET /pipeline/logs/timeline        — merged timeline of runs + changes (newest first)
+"""
+from __future__ import annotations
+
+import json
+import tempfile
+from pathlib import Path
+
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
+
+router = APIRouter()
+
+_LOGS = Path(tempfile.gettempdir()) / "ss27_pipeline" / "logs"
+
+
+def _read_jsonl(name: str) -> list[dict]:
+    p = _LOGS / name
+    if not p.exists():
+        return []
+    out = []
+    try:
+        with open(p, encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        out.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+    except Exception:
+        pass
+    return list(reversed(out))  # newest first
+
+
+@router.get("/pipeline/logs/runs")
+def logs_runs(limit: int = Query(100), offset: int = Query(0)) -> JSONResponse:
+    rows = _read_jsonl("runs.jsonl")
+    total = len(rows)
+    return JSONResponse({"ok": True, "data": {"total": total, "rows": rows[offset: offset + limit]}})
+
+
+@router.get("/pipeline/logs/param-changes")
+def logs_param_changes(limit: int = Query(200), offset: int = Query(0)) -> JSONResponse:
+    rows = _read_jsonl("param_changes.jsonl")
+    total = len(rows)
+    return JSONResponse({"ok": True, "data": {"total": total, "rows": rows[offset: offset + limit]}})
+
+
+@router.get("/pipeline/logs/timeline")
+def logs_timeline(limit: int = Query(200), offset: int = Query(0)) -> JSONResponse:
+    runs = [{"_type": "run", **r} for r in _read_jsonl("runs.jsonl")]
+    changes = [{"_type": "param_change", **r} for r in _read_jsonl("param_changes.jsonl")]
+    merged = sorted(runs + changes, key=lambda r: r.get("ts", r.get("when", "")), reverse=True)
+    total = len(merged)
+    return JSONResponse({"ok": True, "data": {"total": total, "rows": merged[offset: offset + limit]}})

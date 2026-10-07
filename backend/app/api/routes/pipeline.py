@@ -94,6 +94,17 @@ def _query(sql: str) -> pd.DataFrame:
 def _emit(job_id: str, event: dict) -> None:
     with _jobs_lock:
         _jobs[job_id].append(event)
+    # persist run completion to JSONL log
+    status = event.get("status")
+    if status in ("finished", "error"):
+        # find the run record by job_id and update it
+        _append_log("run_events.jsonl", {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "job_id": job_id,
+            "status": status,
+            "message": event.get("message", ""),
+            "files": [f.get("name", "") for f in (event.get("files") or [])],
+        })
 
 
 def _sse_lines(job_id: str, last_id: int = 0) -> Generator[str, None, None]:

@@ -124,7 +124,7 @@ function ParamChangesTab() {
 // ── Runs tab ──────────────────────────────────────────────────────────────────
 
 function RunsTab() {
-  const [rows, setRows] = useState<RunRecord[]>([])
+  const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -134,14 +134,21 @@ function RunsTab() {
   }, [])
 
   if (loading) return <div style={emptyStyle}>Loading…</div>
-  if (rows.length === 0) return <div style={emptyStyle}>No pipeline runs recorded yet.</div>
+  if (rows.length === 0) return <div style={emptyStyle}>No pipeline runs recorded yet.<br/><span style={{fontSize:12,opacity:0.7}}>Backend restart karo aur ek module run karo.</span></div>
+
+  function statusColor(s: string) {
+    if (s === 'finished') return '#22c55e'
+    if (s === 'error') return '#ef4444'
+    if (s === 'running') return '#f59e0b'
+    return 'var(--text-muted)'
+  }
 
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: 'var(--bg-card, #1e1e2e)' }}>
-            {['WHEN', 'MODULE', 'JOB ID', 'SOURCE'].map(h => (
+            {['WHEN', 'MODULE', 'STATUS', 'JOB ID', 'SOURCE'].map(h => (
               <th key={h} style={thStyle}>{h}</th>
             ))}
           </tr>
@@ -159,6 +166,9 @@ function RunsTab() {
                   <div>{time}</div>
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 700 }}>Module {row.module}</td>
+                <td style={{ ...tdStyle, fontWeight: 600, color: statusColor(row.status ?? '') }}>
+                  {row.status === 'finished' ? '✓ Done' : row.status === 'error' ? '✕ Error' : row.status === 'running' ? '⏳ Running' : '—'}
+                </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>{row.job_id}</td>
                 <td style={{ ...tdStyle, color: 'var(--text-muted)' }}>{row.source || '—'}</td>
               </tr>

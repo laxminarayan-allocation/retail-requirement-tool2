@@ -1,16 +1,56 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 import { useAuth } from '@/context/AuthContext'
 
-type ModuleStatus = 'idle' | 'running' | 'done' | 'error'
-type Source = 'csv' | 'db'
-type FilterOp = '=' | '!=' | 'in'
+// ── Global pipeline state (survives page navigation) ─────────────────────────
+// Stored outside the component so React re-mount doesn't reset it.
 
-interface ModuleResult {
+type ModuleStatusG = 'idle' | 'running' | 'done' | 'error'
+
+interface GlobalJobState {
+  jobId: string
+  moduleId: number
+  status: ModuleStatusG
+  logs: string[]
   rows?: number
   files?: { name: string; download: string; rows?: number }[]
   error?: string
 }
+
+// keyed by module id
+const _globalJobs: Record<number, GlobalJobState> = {}
+// callbacks registered by the mounted component to receive updates
+const _listeners: Set<() => void> = new Set()
+
+function _notify() { _listeners.forEach(fn => fn()) }
+
+function _updateJob(id: number, patch: Partial<GlobalJobState>) {
+  if (!_globalJobs[id]) return
+  Object.assign(_globalJobs[id], patch)
+  _notify()
+}
+
+function _appendLog(id: number, msg: string) {
+  if (!_globalJobs[id]) return
+  _globalJobs[id].logs.push(msg)
+  _notify()
+}
+
+// Persist active jobs to sessionStorage so the UI can show "running" badge
+// even before the component reconnects.
+function _saveSession() {
+  try {
+    const active = Object.values(_globalJobs).filter(j => j.status === 'running').map(j => ({ jobId: j.jobId, moduleId: j.moduleId }))
+    sessionStorage.setItem('ss27_active_jobs', JSON.stringify(active))
+  } catch { /* ignore */ }
+}
+
+function _clearSession() {
+  try { sessionStorage.removeItem('ss27_active_jobs') } catch { /* ignore */ }
+}
+
+type Source = 'csv' | 'db'
+type FilterOp = '=' | '!=' | 'in'
 
 interface FilterRow {
   id: number
@@ -52,16 +92,95 @@ const COLUMN_OPTIONS = [
 
 let filterIdSeq = 1
 
+// ── Global runModule — runs outside React so navigation doesn't kill it ───────
+
+async function _runModuleGlobal(
+  id: number,
+  source: Source,
+  filters: FilterRow[],
+  token: string | null,
+): Promise<boolean> {
+  _globalJobs[id] = { jobId: '', moduleId: id, status: 'running', logs: [] }
+  _notify()
+  _saveSession()
+  try {
+    const res = await fetch(`/api/pipeline/module/${id}/run`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(id === 4 ? { source, filters } : { source }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const { job_id } = await res.json()
+    if (!job_id) throw new Error('No job_id returned')
+    _globalJobs[id].jobId = job_id
+    _notify()
+
+    const streamResp = await fetch(`/api/pipeline/stream/${job_id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!streamResp.ok || !streamResp.body) throw new Error(`Stream ${streamResp.status}`)
+
+    const reader = streamResp.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    let lastEventId = -1
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      const parts = buf.split('\n\n')
+      buf = parts.pop() ?? ''
+      for (const block of parts) {
+        let evtId: number | null = null
+        let dataLine: string | null = null
+        for (const line of block.split('\n')) {
+          if (line.startsWith('id: ')) evtId = parseInt(line.slice(4), 10)
+          if (line.startsWith('data: ')) dataLine = line.slice(6)
+        }
+        if (evtId !== null && evtId <= lastEventId) continue
+        if (evtId !== null) lastEventId = evtId
+        if (!dataLine) continue
+        try {
+          const evt = JSON.parse(dataLine)
+          if (evt.event === 'start') continue
+          if (evt.step) _appendLog(id, `Step ${evt.step}: ${evt.name ?? ''}${evt.detail ? ' — ' + evt.detail : ''}`)
+          if (evt.status === 'finished') {
+            _updateJob(id, { status: 'done', rows: evt.files?.[0]?.rows, files: evt.files })
+            _clearSession()
+            return true
+          }
+          if (evt.status === 'error') {
+            _updateJob(id, { status: 'error', error: evt.message || 'Module failed' })
+            _clearSession()
+            return false
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+    _updateJob(id, { status: 'done' })
+    _clearSession()
+    return true
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    if (_globalJobs[id]) _updateJob(id, { status: 'error', error: msg })
+    _clearSession()
+    return false
+  }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function AllocationPipeline() {
   const { tokens: T } = useTheme()
   const { token } = useAuth()
 
   const [source, setSource] = useState<Source>('csv')
-  const [statuses, setStatuses] = useState<Record<number, ModuleStatus>>({
-    1: 'idle', 2: 'idle', 3: 'idle', 4: 'idle', 5: 'idle', 6: 'idle', 7: 'idle',
-  })
-  const [results, setResults] = useState<Record<number, ModuleResult>>({})
-  const [stepLogs, setStepLogs] = useState<Record<number, string[]>>({})
+  // local render counter — incremented by global listener to force re-render
+  const [, setTick] = useState(0)
   const [runningAll, setRunningAll] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState<number | null>(null)
 
@@ -71,92 +190,24 @@ export default function AllocationPipeline() {
   const [newOp, setNewOp] = useState<FilterOp>('=')
   const [newVal, setNewVal] = useState('')
 
-  function setStatus(id: number, s: ModuleStatus) {
-    setStatuses(prev => ({ ...prev, [id]: s }))
-  }
+  // Register global listener so we re-render when _globalJobs updates
+  useEffect(() => {
+    const fn = () => setTick(t => t + 1)
+    _listeners.add(fn)
+    return () => { _listeners.delete(fn) }
+  }, [])
 
-  function appendLog(id: number, msg: string) {
-    setStepLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), msg] }))
-  }
+  // Derive display state from global jobs
+  function jobFor(id: number): GlobalJobState | undefined { return _globalJobs[id] }
+  function statusOf(id: number): ModuleStatusG { return _globalJobs[id]?.status ?? 'idle' }
+  function logsOf(id: number): string[] { return _globalJobs[id]?.logs ?? [] }
+  function resultOf(id: number): ModuleResult { return _globalJobs[id] ? { rows: _globalJobs[id].rows, files: _globalJobs[id].files, error: _globalJobs[id].error } : {} }
+
+  // Check if any module is currently running globally
+  const anyRunning = Object.values(_globalJobs).some(j => j.status === 'running')
 
   async function runModule(id: number): Promise<boolean> {
-    setStatus(id, 'running')
-    setStepLogs(prev => ({ ...prev, [id]: [] }))
-    setResults(prev => ({ ...prev, [id]: {} }))
-    try {
-      const res = await fetch(`/api/pipeline/module/${id}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(id === 4 ? { source, filters } : { source }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const { job_id } = await res.json()
-      if (!job_id) throw new Error('No job_id returned')
-
-      // Use fetch+ReadableStream instead of EventSource so we can send the auth header
-      const streamResp = await fetch(`/api/pipeline/stream/${job_id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      if (!streamResp.ok || !streamResp.body) throw new Error(`Stream ${streamResp.status}`)
-
-      const reader = streamResp.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      let lastEventId = -1  // track SSE id: field to deduplicate on reconnect
-
-      return new Promise<boolean>(async (resolve) => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buf += decoder.decode(value, { stream: true })
-            const parts = buf.split('\n\n')
-            buf = parts.pop() ?? ''
-            for (const block of parts) {
-              let evtId: number | null = null
-              let dataLine: string | null = null
-              for (const line of block.split('\n')) {
-                if (line.startsWith('id: ')) evtId = parseInt(line.slice(4), 10)
-                if (line.startsWith('data: ')) dataLine = line.slice(6)
-              }
-              // skip events we've already processed (reconnect replay guard)
-              if (evtId !== null && evtId <= lastEventId) continue
-              if (evtId !== null) lastEventId = evtId
-              if (!dataLine) continue
-              try {
-                const evt = JSON.parse(dataLine)
-                if (evt.event === 'start') continue
-                if (evt.step) appendLog(id, `Step ${evt.step}: ${evt.name ?? ''}${evt.detail ? ' — ' + evt.detail : ''}`)
-                if (evt.status === 'finished') {
-                  setResults(prev => ({ ...prev, [id]: { rows: evt.files?.[0]?.rows, files: evt.files } }))
-                  setStatus(id, 'done')
-                  resolve(true)
-                  return
-                }
-                if (evt.status === 'error') {
-                  setResults(prev => ({ ...prev, [id]: { error: evt.message || 'Module failed' } }))
-                  setStatus(id, 'error')
-                  resolve(false)
-                  return
-                }
-              } catch { /* skip malformed lines */ }
-            }
-          }
-          resolve(true)
-        } catch {
-          setStatus(id, 'error')
-          resolve(false)
-        }
-      })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unknown error'
-      setResults(prev => ({ ...prev, [id]: { error: msg } }))
-      setStatus(id, 'error')
-      return false
-    }
+    return _runModuleGlobal(id, source, filters, token)
   }
 
   async function runAll() {
@@ -179,23 +230,31 @@ export default function AllocationPipeline() {
   }
 
   // Step circle color helpers
-  function circleColor(s: ModuleStatus) {
+  function circleColor(s: ModuleStatusG) {
     if (s === 'done') return T.success
     if (s === 'running') return T.accent
     if (s === 'error') return T.danger
     return T.textMuted
   }
-  function circleBg(s: ModuleStatus) {
+  function circleBg(s: ModuleStatusG) {
     if (s === 'done') return `${T.success}22`
     if (s === 'running') return `${T.accent}22`
     if (s === 'error') return `${T.danger}22`
     return `${T.textMuted}18`
   }
-  function statusLabel(s: ModuleStatus) {
+  function statusLabel(s: ModuleStatusG) {
     if (s === 'done') return 'Done'
     if (s === 'running') return 'Running...'
     if (s === 'error') return 'Error'
     return 'Not run'
+  }
+
+  function stopModule(id: number) {
+    if (!_globalJobs[id] || _globalJobs[id].status !== 'running') return
+    _updateJob(id, { status: 'error', error: 'Stopped by user' })
+    _clearSession()
+    // Also stop runAll if active
+    setRunningAll(false)
   }
 
   const pillBase: React.CSSProperties = {
@@ -241,26 +300,48 @@ export default function AllocationPipeline() {
             ))}
           </div>
 
-          {/* Run all */}
-          <button
-            onClick={runAll}
-            disabled={runningAll}
-            style={{
-              ...pillBase,
-              background: runningAll ? T.textMuted : T.accent,
-              color: '#fff',
-              border: 'none',
-              fontWeight: 600,
-              fontSize: 13,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              opacity: runningAll ? 0.7 : 1,
-              cursor: runningAll ? 'not-allowed' : 'pointer',
-            }}
-          >
-            <span>▶</span> {runningAll ? 'Running…' : 'Run all modules'}
-          </button>
+          {/* Stop all / Run all */}
+          {anyRunning ? (
+            <button
+              onClick={() => {
+                MODULES.forEach(m => { if (statusOf(m.id) === 'running') stopModule(m.id) })
+                setRunningAll(false)
+              }}
+              style={{
+                ...pillBase,
+                background: T.danger,
+                color: '#fff',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span>⏹</span> Stop
+            </button>
+          ) : (
+            <button
+              onClick={runAll}
+              disabled={runningAll}
+              style={{
+                ...pillBase,
+                background: runningAll ? T.textMuted : T.accent,
+                color: '#fff',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                opacity: runningAll ? 0.7 : 1,
+                cursor: runningAll ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <span>▶</span> Run all modules
+            </button>
+          )}
         </div>
       </div>
 
@@ -276,7 +357,7 @@ export default function AllocationPipeline() {
         <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 640 }}>
           {STEP_LABELS.map((label, i) => {
             const id = i + 1
-            const s = statuses[id]
+            const s = statusOf(id)
             return (
               <div key={id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
                 {/* Connector line left */}
@@ -287,7 +368,7 @@ export default function AllocationPipeline() {
                     right: '50%',
                     left: '-50%',
                     height: 2,
-                    background: statuses[i] === 'done' ? T.success : T.cardBorder,
+                    background: statusOf(i) === 'done' ? T.success : T.cardBorder,
                     zIndex: 0,
                   }} />
                 )}
@@ -321,7 +402,9 @@ export default function AllocationPipeline() {
       {/* ── Module cards ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {MODULES.map(m => {
-          const s = statuses[m.id]
+          const s = statusOf(m.id)
+          const res = resultOf(m.id)
+          const logs = logsOf(m.id)
           return (
             <div key={m.id}>
               <div style={{
@@ -372,14 +455,14 @@ export default function AllocationPipeline() {
                     }}>
                       {statusLabel(s)}
                     </div>
-                    {s === 'done' && results[m.id]?.rows != null && (
+                    {s === 'done' && res.rows != null && (
                       <span style={{ fontSize: 11, color: T.textMuted }}>
-                        {results[m.id].rows!.toLocaleString()} rows
+                        {res.rows!.toLocaleString()} rows
                       </span>
                     )}
-                    {s === 'error' && results[m.id]?.error && (
+                    {s === 'error' && res.error && (
                       <span style={{ fontSize: 11, color: T.danger, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {results[m.id].error}
+                        {res.error}
                       </span>
                     )}
                   </div>
@@ -401,6 +484,27 @@ export default function AllocationPipeline() {
                 >
                   Configure →
                 </button>
+
+                {/* Stop button — only when running */}
+                {s === 'running' && (
+                  <button
+                    onClick={() => stopModule(m.id)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      border: `1px solid ${T.danger}`,
+                      background: `${T.danger}18`,
+                      color: T.danger,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    ⏹ Stop
+                  </button>
+                )}
 
                 {/* Run module button */}
                 <button
@@ -425,7 +529,7 @@ export default function AllocationPipeline() {
               </div>
 
               {/* Step logs */}
-              {(stepLogs[m.id]?.length > 0 || results[m.id]?.files?.length) && (
+              {(logs.length > 0 || res.files?.length) && (
                 <div style={{
                   background: T.inputBg,
                   border: `1px solid ${T.cardBorder}`,
@@ -435,10 +539,10 @@ export default function AllocationPipeline() {
                   color: T.textMuted,
                   fontFamily: 'monospace',
                 }}>
-                  {stepLogs[m.id]?.map((l, i) => (
+                  {logs.map((l, i) => (
                     <div key={i} style={{ lineHeight: 1.6 }}>▸ {l}</div>
                   ))}
-                  {results[m.id]?.files?.map((f, i) => (
+                  {res.files?.map((f, i) => (
                     <a
                       key={i}
                       href={`http://10.0.1.12:8642${f.download}`}

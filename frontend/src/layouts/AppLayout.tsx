@@ -41,6 +41,7 @@ const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role; group
   { to: '/all-parameters',      label: 'All Parameters',     icon: '🎛️', minRole: 'planner',  group: 'Simulation' },
   { to: '/results-journey',     label: 'Results Journey',    icon: '🔍', minRole: 'planner',  group: 'Simulation' },
   { to: '/run-logs',            label: 'Run & Param Logs',   icon: '📋', minRole: 'viewer',   group: 'Simulation' },
+  { to: '/run-deploy',          label: 'Deploy Agent',        icon: '🚀', minRole: 'admin',    group: 'Simulation' },
   { to: '/prd-swap',            label: 'PRD Swap',           icon: '📦', minRole: 'viewer'  },
 ]
 

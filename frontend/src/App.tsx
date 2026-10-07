@@ -28,6 +28,7 @@ import AllParameters from '@/pages/AllParameters'
 import PrdSwap from '@/pages/PrdSwap'
 import ResultsJourney from '@/pages/ResultsJourney'
 import RunLogs from '@/pages/RunLogs'
+import DeployAgent from '@/pages/DeployAgent'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="prd-swap" element={<PrdSwap />} />
             <Route path="results-journey" element={<ResultsJourney />} />
             <Route path="run-logs" element={<RunLogs />} />
+            <Route path="run-deploy" element={<DeployAgent />} />
           </Route>
         </Routes>
       </BrowserRouter>

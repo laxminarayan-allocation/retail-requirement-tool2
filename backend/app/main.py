@@ -44,6 +44,7 @@ from app.api.routes import pipeline as pipeline_routes
 from app.api.routes import prd_swap as prd_swap_routes
 from app.api.routes import results_journey as results_journey_routes
 from app.api.routes import run_logs as run_logs_routes
+from app.api.routes import deploy as deploy_routes
 
 import mimetypes
 mimetypes.add_type("application/javascript", ".js")
@@ -266,6 +267,8 @@ _ROUTE_ROLES: list[tuple] = [
     ("/api/option-listing/",       None,          "planner"),
     # Pipeline proxy → 8642 (planner+)
     ("/api/pipeline/",             None,          "planner"),
+    # Deploy agent — admin only
+    ("/api/deploy/",               None,          "admin"),
     # Oracle / Excel Refresh (planner+)
     ("/api/oracle-refresh/",       None,          "planner"),
     # Version Control — GET public, write ops admin
@@ -440,6 +443,7 @@ app.include_router(pipeline_routes.router,            prefix="/api")  # Native p
 app.include_router(prd_swap_routes.router,            prefix="/api")  # PRD Swap
 app.include_router(results_journey_routes.router,     prefix="/api")  # Results & Number Journey
 app.include_router(run_logs_routes.router,            prefix="/api")  # Run & Parameter Logs
+app.include_router(deploy_routes.router,              prefix="/api")  # Deploy Agent
 
 
 @app.get("/api", tags=["Root"])

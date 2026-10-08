@@ -44,8 +44,8 @@ _jobs_lock = threading.Lock()
 # ── Temp output folder (session CSV cache) ───────────────────────────────────
 _OUT = Path(tempfile.gettempdir()) / "ss27_pipeline"
 _OUT.mkdir(exist_ok=True)
-_LOGS = _OUT / "logs"
-_LOGS.mkdir(exist_ok=True)
+_LOGS = Path(__file__).parent.parent.parent.parent / "data" / "output" / "logs"
+_LOGS.mkdir(parents=True, exist_ok=True)
 
 _log_lock = threading.Lock()
 

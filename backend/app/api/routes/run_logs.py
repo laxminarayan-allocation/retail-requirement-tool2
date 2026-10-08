@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
-_LOGS = Path(tempfile.gettempdir()) / "ss27_pipeline" / "logs"
+_LOGS = Path(__file__).parent.parent.parent.parent / "data" / "output" / "logs"
 
 
 _LOGS.mkdir(parents=True, exist_ok=True)

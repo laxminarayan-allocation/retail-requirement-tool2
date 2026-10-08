@@ -117,8 +117,8 @@ const ROLE_COLOR: Record<string, string> = {
 
 // styles are now computed dynamically via theme tokens — see mkStyles() below
 
-function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOver, onDrop, onDragEnd, onTouchStart, onTouchMove, onTouchEnd }: {
-  to: string; label: string; icon: string
+function NavItem({ to, label, icon, badge, reorderMode, dragOver, onDragStart, onDragOver, onDrop, onDragEnd, onTouchStart, onTouchMove, onTouchEnd }: {
+  to: string; label: string; icon: string; badge?: boolean
   reorderMode?: boolean
   dragOver?: boolean
   onDragStart?: () => void
@@ -170,6 +170,12 @@ function NavItem({ to, label, icon, reorderMode, dragOver, onDragStart, onDragOv
       >
         <span>{icon}</span>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        {badge && (
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0,
+            boxShadow: '0 0 6px #22c55e', animation: 'pulse-green 1.2s ease-in-out infinite',
+          }} />
+        )}
       </NavLink>
     </div>
   )
@@ -396,6 +402,32 @@ export default function AppLayout() {
   const { user, token, loading, signout, pageAccess, previewRole, setPreviewRole } = useAuth()
   const { tokens, theme } = useTheme()
   const { isRunning: oracleRunning } = useOracleRefresh()
+  const [pipelineRunning, setPipelineRunning] = useState(false)
+  const [allocationRunning, setAllocationRunning] = useState(false)
+  const [dataStoreRunning, setDataStoreRunning] = useState(false)
+  useEffect(() => {
+    const poll = () => {
+      const t = localStorage.getItem('ck_ss27_token') ?? ''
+      if (!t) return
+      // Option Listing pipeline
+      fetch('/api/option-listing/pipeline/status', { headers: { Authorization: `Bearer ${t}` } })
+        .then(r => r.json()).then(d => setPipelineRunning(d?.status === 'running')).catch(() => {})
+      // Data Store downloads
+      fetch('/api/data-store/status', { headers: { Authorization: `Bearer ${t}` } })
+        .then(r => r.json()).then(d => {
+          const sources = Array.isArray(d?.data) ? d.data : []
+          setDataStoreRunning(sources.some((s: any) => s.download_status === 'running'))
+        }).catch(() => {})
+      // Allocation pipeline — check sessionStorage for active jobs
+      try {
+        const jobs = JSON.parse(sessionStorage.getItem('ss27_active_jobs') ?? '[]')
+        setAllocationRunning(Array.isArray(jobs) && jobs.length > 0)
+      } catch { setAllocationRunning(false) }
+    }
+    poll()
+    const id = setInterval(poll, 3000)
+    return () => clearInterval(id)
+  }, [])
   const realIsMobile = useIsMobile()
   const [viewMode, setViewModeState] = useState<ViewMode>(loadViewMode)
 
@@ -621,7 +653,7 @@ export default function AppLayout() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: tokens.shellBg, ...(isMobile ? { height: 'auto', overflow: 'visible' } : {}) }}>
-      <style>{`@keyframes oracleSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes oracleSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } @keyframes pulse-green { 0%,100% { opacity:1; box-shadow:0 0 6px #22c55e; } 50% { opacity:0.4; box-shadow:0 0 2px #22c55e; } }`}</style>
       <AssistantWidget />
       <ZoomPill />
       {/* Device name prompt modal */}
@@ -731,6 +763,11 @@ export default function AppLayout() {
                         to={item.to}
                         label={item.label}
                         icon={item.icon}
+                        badge={
+                          (item.to === '/option-listing' && pipelineRunning) ||
+                          (item.to === '/allocation-pipeline' && allocationRunning) ||
+                          (item.to === '/data-store' && dataStoreRunning)
+                        }
                         reorderMode={reorderMode}
                         dragOver={dragOverIdx === idx}
                         onDragStart={() => { dragIdxRef.current = idx }}

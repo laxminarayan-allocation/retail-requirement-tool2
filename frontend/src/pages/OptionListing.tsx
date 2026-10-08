@@ -157,7 +157,51 @@ function PipelineTab({ tokens, lastCompletedAt }: { tokens: any; lastCompletedAt
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [logs])
-  useEffect(() => { loadOutputFiles(); return () => clearInterval(pollRef.current) }, [])
+  useEffect(() => {
+    loadOutputFiles()
+    // Resume polling if pipeline was running when user navigated away
+    const token = localStorage.getItem('ck_ss27_token') ?? ''
+    fetch('/api/option-listing/pipeline/status', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then((data: PipelineStatus) => {
+        if (data.status === 'running') {
+          setRunning(true)
+          addLog('↩ Reconnected to running pipeline...', 'sys')
+          pollRef.current = setInterval(async () => {
+            try {
+              const res  = await fetch('/api/option-listing/pipeline/status', { headers: { Authorization: `Bearer ${token}` } })
+              const d: PipelineStatus = await res.json()
+              const statuses: Record<string,string> = {}
+              const completed = new Set<string>()
+              for (const e of d.entries ?? []) {
+                statuses[e.step] = e.ok ? 'done' : 'failed'
+                completed.add(e.step)
+                const key = e.step + '_' + e.ts
+                if (!seenLogs.current[key]) {
+                  seenLogs.current[key] = true
+                  const step = PIPELINE_STEPS.find(s => s.id === e.step)
+                  addLog(`── Step ${e.step}: ${step?.label?.slice(0,50) ?? ''}`, 'sys')
+                  ;(e.log || '').split('\n').filter(l => l.trim()).forEach(l => addLog(l, e.ok ? '' : 'err'))
+                  addLog(e.ok ? '✓ done' : '✗ failed', e.ok ? 'ok' : 'err')
+                }
+              }
+              if (d.status === 'running') {
+                const next = PIPELINE_STEPS.find(s => !completed.has(s.id))
+                if (next) { statuses[next.id] = 'active'; setActiveStep(next.id) }
+              } else { setActiveStep(null) }
+              setStepStatus(statuses)
+              if (d.status === 'done') {
+                addLog('✓ Pipeline completed successfully.', 'ok')
+                setResult('done'); setRunning(false); clearInterval(pollRef.current); loadOutputFiles()
+              } else if (d.status === 'failed') {
+                addLog('✗ Pipeline failed.', 'err')
+                setResult('failed'); setRunning(false); clearInterval(pollRef.current)
+              }
+            } catch {}
+          }, 800)
+        }
+      }).catch(() => {})
+    return () => clearInterval(pollRef.current)
+  }, [])
 
   function addLog(text: string, cls = '') {
     setLogs(p => [...p, { text, cls, key: Date.now() + Math.random() }])

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 
 // ── Types & Data ──────────────────────────────────────────────────────────────
@@ -271,20 +271,36 @@ function EngineParamRow({
 export default function AllParameters() {
   const { tokens } = useTheme()
 
-  // Common param values
-  const [commonVals, setCommonVals] = useState<Record<string, number>>(
-    Object.fromEntries(COMMON_PARAMS.map(p => [p.key, p.defaultVal]))
+  const defaultCommon = Object.fromEntries(COMMON_PARAMS.map(p => [p.key, p.defaultVal]))
+  const defaultEngine = Object.fromEntries(
+    ENGINE_SECTIONS.flatMap(s => s.params.map(p => [`${s.key}__${p.key}`, p.defaultVal]))
   )
 
-  // Engine param values
-  const [engineVals, setEngineVals] = useState<Record<string, number>>(
-    Object.fromEntries(
-      ENGINE_SECTIONS.flatMap(s => s.params.map(p => [`${s.key}__${p.key}`, p.defaultVal]))
-    )
-  )
-
-  // Collapsed state per engine section
+  const [commonVals, setCommonVals] = useState<Record<string, number>>(defaultCommon)
+  const [engineVals, setEngineVals] = useState<Record<string, number>>(defaultEngine)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+
+  // Load saved params on mount
+  useEffect(() => {
+    const token = localStorage.getItem('ck_ss27_token') ?? ''
+    fetch('/api/pipeline/params', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(r => {
+        if (!r.ok || !r.data) return
+        const saved = r.data as Record<string, number>
+        setCommonVals(prev => ({ ...prev, ...Object.fromEntries(COMMON_PARAMS.map(p => [p.key, saved[p.key] ?? p.defaultVal])) }))
+        setEngineVals(prev => ({
+          ...prev,
+          ...Object.fromEntries(ENGINE_SECTIONS.flatMap(s => s.params.map(p => {
+            const k = `${s.key}__${p.key}`
+            return [k, saved[k] ?? p.defaultVal]
+          })))
+        }))
+      })
+      .catch(() => {})
+  }, [])
 
   const totalDirty =
     COMMON_PARAMS.filter(p => commonVals[p.key] !== p.defaultVal).length +
@@ -293,8 +309,26 @@ export default function AllParameters() {
       return engineVals[`${sKey}__${p.key}`] !== p.defaultVal
     }).length
 
-  function handleSave() {
-    alert(`Saved ${totalDirty} modified parameter(s).`)
+  async function handleSave() {
+    setSaving(true)
+    setSaveMsg(null)
+    const token = localStorage.getItem('ck_ss27_token') ?? ''
+    const payload = { ...commonVals, ...engineVals }
+    try {
+      const r = await fetch('/api/pipeline/params', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      })
+      const data = await r.json()
+      if (data.ok) setSaveMsg(`✓ ${totalDirty} parameter(s) saved`)
+      else setSaveMsg('✗ Save failed: ' + (data.error ?? 'Unknown'))
+    } catch (e) {
+      setSaveMsg('✗ Network error')
+    } finally {
+      setSaving(false)
+      setTimeout(() => setSaveMsg(null), 3000)
+    }
   }
 
   const s: Record<string, React.CSSProperties> = {
@@ -345,9 +379,16 @@ export default function AllParameters() {
       {/* Top bar */}
       <div style={s.topBar}>
         <h1 style={s.heading}>All Parameters</h1>
-        <button style={s.saveBtn} onClick={handleSave}>
-          💾 Save all changes{totalDirty > 0 ? ` (${totalDirty})` : ''}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {saveMsg && (
+            <span style={{ fontSize: 13, color: saveMsg.startsWith('✓') ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+              {saveMsg}
+            </span>
+          )}
+          <button style={{ ...s.saveBtn, opacity: saving ? 0.7 : 1 }} onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : `💾 Save all changes${totalDirty > 0 ? ` (${totalDirty})` : ''}`}
+          </button>
+        </div>
       </div>
 
       {/* Section 1: Common params */}

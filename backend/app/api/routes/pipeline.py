@@ -973,6 +973,31 @@ async def stream_job(job_id: str, request: Request) -> StreamingResponse:
     )
 
 
+_PARAMS_FILE = Path(__file__).parent.parent.parent.parent / "data" / "output" / "pipeline_params.json"
+
+
+@router.get("/pipeline/params")
+async def get_params() -> JSONResponse:
+    if _PARAMS_FILE.exists():
+        try:
+            data = json.loads(_PARAMS_FILE.read_text(encoding="utf-8"))
+            return JSONResponse({"ok": True, "data": data})
+        except Exception:
+            pass
+    return JSONResponse({"ok": True, "data": {}})
+
+
+@router.post("/pipeline/params")
+async def save_params(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+        _PARAMS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PARAMS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
 @router.get("/pipeline/config")
 async def get_config() -> JSONResponse:
     return JSONResponse({"source_mode": "db", "note": "Native SS27 pipeline"})

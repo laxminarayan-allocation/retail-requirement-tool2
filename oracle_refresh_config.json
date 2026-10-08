@@ -1,9 +1,10 @@
 {
-  "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data",
+  "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs",
   "files": [
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\BARCODE_APPS_REQ_ASN.xlsb"
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\02_STOCK-DC_TRADING_STK.xlsb"
   ],
   "recent_folders": [
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs",
     "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data"
   ],
   "schedules": [

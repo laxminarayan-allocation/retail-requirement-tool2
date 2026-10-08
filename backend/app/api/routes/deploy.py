@@ -25,6 +25,9 @@ router = APIRouter()
 _ROOT    = Path(__file__).resolve().parents[4]          # retail_requirement_tool/
 _BACKEND = _ROOT / "backend"
 _FRONTEND = _ROOT / "frontend"
+
+# Git executable — full path so it works regardless of PATH in the server process
+_GIT = "C:/Users/allocation_user/AppData/Local/Programs/Git/cmd/git.exe"
 _LOGS_DIR = _ROOT / "data" / "output" / "logs"
 _LOGS_DIR.mkdir(parents=True, exist_ok=True)
 _LOG_FILE     = _LOGS_DIR / "deploy.log"
@@ -74,7 +77,7 @@ def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 120) -> tuple[i
 def _changed_files(before_sha: str, after_sha: str) -> list[str]:
     if before_sha == after_sha:
         return []
-    rc, out = _run(["git", "diff", "--name-only", before_sha, after_sha])
+    rc, out = _run([_GIT, "diff", "--name-only", before_sha, after_sha])
     if rc != 0:
         return []
     return [l.strip() for l in out.splitlines() if l.strip()]
@@ -97,17 +100,17 @@ def _deploy(build_frontend: bool = False) -> None:
 
     try:
         # 1. Current HEAD
-        _, before_sha = _run(["git", "rev-parse", "HEAD"])
+        _, before_sha = _run([_GIT, "rev-parse", "HEAD"])
         before_sha = before_sha.strip()
         _log(f"Before: {before_sha[:10]}")
 
         # 2. Fetch + pull
         _log("git fetch …")
-        rc, out = _run(["git", "fetch", "--no-tags"], timeout=30)
+        rc, out = _run([_GIT, "fetch", "--no-tags"], timeout=30)
         _log(f"  {out[:200]}" if out else "  (no output)")
 
         _log("git pull …")
-        rc, out = _run(["git", "pull", "--ff-only"], timeout=60)
+        rc, out = _run([_GIT, "pull", "--ff-only"], timeout=60)
         _log(f"  {out[:300]}")
         if rc != 0:
             _log("ERROR: git pull failed")
@@ -121,7 +124,7 @@ def _deploy(build_frontend: bool = False) -> None:
             return
 
         # 3. New HEAD
-        _, after_sha = _run(["git", "rev-parse", "HEAD"])
+        _, after_sha = _run([_GIT, "rev-parse", "HEAD"])
         after_sha = after_sha.strip()
         _log(f"After:  {after_sha[:10]}")
 
@@ -137,6 +140,7 @@ def _deploy(build_frontend: bool = False) -> None:
             return
 
         changed = _changed_files(before_sha, after_sha)
+
         _log(f"Changed files ({len(changed)}): {', '.join(changed[:10])}")
 
         backend_changed  = any(f.startswith("backend/") for f in changed)
@@ -246,10 +250,10 @@ async def deploy_webhook(request: Request) -> JSONResponse:
 
 @router.get("/deploy/status")
 def deploy_status() -> JSONResponse:
-    _, current_sha  = _run(["git", "rev-parse", "--short", "HEAD"])
-    _, branch       = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-    _, last_msg     = _run(["git", "log", "-1", "--format=%s"])
-    _, remote_sha   = _run(["git", "rev-parse", "--short", "origin/master"])
+    _, current_sha  = _run([_GIT, "rev-parse", "--short", "HEAD"])
+    _, branch       = _run([_GIT, "rev-parse", "--abbrev-ref", "HEAD"])
+    _, last_msg     = _run([_GIT, "log", "-1", "--format=%s"])
+    _, remote_sha   = _run([_GIT, "rev-parse", "--short", "origin/master"])
 
     with _lock:
         state_copy = dict(_state)

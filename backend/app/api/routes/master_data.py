@@ -280,10 +280,10 @@ async def master_table_status(key: str):
         return APIResponse.ok(data={**base, "exists": False})
 
     meta = get_meta(t["owner"], t["name"]) or {}
-    stats = get_access_stats(t["owner"], t["name"])
     age_s = round(_t.time() - meta.get("fetched_at_ts", _t.time()))
     stale = age_s > t["stale_hours"] * 3600
 
+    # access stats fetched separately (can be slow) — skip here for fast response
     return APIResponse.ok(data={
         **base, "exists": True,
         "rows": meta.get("rows", 0),
@@ -292,8 +292,8 @@ async def master_table_status(key: str):
         "age_seconds": age_s,
         "age_label": _age_label(age_s),
         "stale": stale,
-        "access_count": stats["access_count"],
-        "last_accessed": stats["last_accessed"],
+        "access_count": 0,
+        "last_accessed": None,
     })
 
 

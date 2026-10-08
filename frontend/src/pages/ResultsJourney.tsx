@@ -148,6 +148,8 @@ export default function ResultsJourney() {
   const [error, setError] = useState<string | null>(null)
   const [trace, setTrace] = useState<TraceData | null>(null)
   const [traceLoading, setTraceLoading] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState('')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const limit = 100
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -162,7 +164,7 @@ export default function ResultsJourney() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    const params = new URLSearchParams({ file, search, limit: String(limit), offset: String(offset) })
+    const params = new URLSearchParams({ file, search, limit: String(limit), offset: String(offset), sort_col: sortCol, sort_dir: sortDir })
     apiFetch(`/pipeline/results/rows?${params}`)
       .then(r => {
         if (!r.ok) { setError(r.error ?? 'Unknown error'); return }
@@ -172,7 +174,17 @@ export default function ResultsJourney() {
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
-  }, [file, search, offset])
+  }, [file, search, offset, sortCol, sortDir])
+
+  function handleSort(col: string) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+    setOffset(0)
+  }
 
   function handleSearch(v: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -275,11 +287,14 @@ export default function ResultsJourney() {
             <thead>
               <tr style={{ position: 'sticky', top: 0, background: 'var(--bg-card, #1e1e2e)', zIndex: 1 }}>
                 {columns.map(c => (
-                  <th key={c} style={{
+                  <th key={c} onClick={() => handleSort(c)} style={{
                     padding: '6px 8px', textAlign: 'left', whiteSpace: 'nowrap',
                     borderBottom: '2px solid var(--border, #333)',
-                    color: 'var(--text-muted, #94a3b8)', fontWeight: 600, fontSize: 11,
-                  }}>{c}</th>
+                    color: sortCol === c ? '#6366f1' : 'var(--text-muted, #94a3b8)',
+                    fontWeight: 600, fontSize: 11, cursor: 'pointer', userSelect: 'none',
+                  }}>
+                    {c} {sortCol === c ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                  </th>
                 ))}
               </tr>
             </thead>

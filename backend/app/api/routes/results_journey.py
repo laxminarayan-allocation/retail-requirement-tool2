@@ -85,6 +85,8 @@ def results_rows(
     search: str = Query(""),
     limit: int = Query(100),
     offset: int = Query(0),
+    sort_col: str = Query(""),
+    sort_dir: str = Query("asc"),
 ) -> JSONResponse:
     df = _load(file)
     if df is None:
@@ -94,10 +96,22 @@ def results_rows(
     if search.strip():
         q = search.strip().upper()
         mask = pd.Series(False, index=df.index)
-        for col in ("BARCODE", "STORE_NAME", "ARTICLE_NAME", "MC", "DEPARTMENT"):
+        for col in ("BARCODE", "STORE_NAME", "ARTICLE_NAME", "MC", "DEPARTMENT", "ICODE", "ALLOCATION_OPTION"):
             if col in df.columns:
-                mask |= df[col].astype(str).str.upper().str.contains(q, na=False)
+                mask |= df[col].astype(str).str.upper().str.contains(q, na=False, regex=False)
         df = df[mask]
+
+    if sort_col and sort_col in df.columns:
+        numeric_cols = {"GRC_Q", "MRP", "BAR_REQ", "MC_REQ", "ARTICLE_REQ", "MRP_REQ",
+                        "OPTION_REQ", "SPARKY_REQ", "SZ_REQ", "TABLE_REQ", "ELIGIBLE_QTY"}
+        if sort_col in numeric_cols:
+            df = df.copy()
+            df["_sort_key"] = pd.to_numeric(df[sort_col], errors="coerce")
+            df = df.sort_values("_sort_key", ascending=(sort_dir == "asc"), na_position="last")
+            df = df.drop(columns=["_sort_key"])
+        else:
+            df = df.sort_values(sort_col, ascending=(sort_dir == "asc"), na_position="last",
+                                key=lambda s: s.astype(str).str.upper())
 
     total = len(df)
     page = df.iloc[offset: offset + limit]

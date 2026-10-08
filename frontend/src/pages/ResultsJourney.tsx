@@ -32,7 +32,8 @@ interface TraceData {
 const API = (path: string) => `/api${path}`
 
 async function apiFetch(path: string) {
-  const r = await fetch(API(path))
+  const token = localStorage.getItem('ck_ss27_token') ?? ''
+  const r = await fetch(API(path), { headers: { Authorization: `Bearer ${token}` } })
   return r.json()
 }
 

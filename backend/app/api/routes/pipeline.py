@@ -990,10 +990,41 @@ async def get_params() -> JSONResponse:
 @router.post("/pipeline/params")
 async def save_params(request: Request) -> JSONResponse:
     try:
-        body = await request.json()
+        new_vals = await request.json()
         _PARAMS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _PARAMS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
-        return JSONResponse({"ok": True})
+
+        # Load old values to compute diff
+        old_vals: dict = {}
+        if _PARAMS_FILE.exists():
+            try:
+                old_vals = json.loads(_PARAMS_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # Compute changed keys
+        all_keys = set(old_vals) | set(new_vals)
+        changes = []
+        for k in sorted(all_keys):
+            o = str(old_vals.get(k, ""))
+            n = str(new_vals.get(k, ""))
+            if o != n:
+                changes.append({"key": k, "old": o, "new": n})
+
+        # Persist new params
+        _PARAMS_FILE.write_text(json.dumps(new_vals, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # Log to param_changes.jsonl
+        if changes:
+            _logs_dir = Path(__file__).parent.parent.parent.parent / "data" / "output" / "logs"
+            _logs_dir.mkdir(parents=True, exist_ok=True)
+            with open(_logs_dir / "param_changes.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "when": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "run": 0,
+                    "changes": changes,
+                }, ensure_ascii=False) + "\n")
+
+        return JSONResponse({"ok": True, "changed": len(changes)})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)})
 

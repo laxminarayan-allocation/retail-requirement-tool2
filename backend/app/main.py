@@ -93,6 +93,9 @@ async def lifespan(app: FastAPI):
     from app.core.pipeline_scheduler import start_scheduler as pipeline_start_scheduler
     pipeline_start_scheduler()
 
+    from app.core.allocation_scheduler import start_scheduler as alloc_start_scheduler
+    alloc_start_scheduler()
+
     # DB Explorer: start configurable auto-refresh scheduler
     from app.core.db_scheduler import start_scheduler as db_start_scheduler
     if settings.is_oracle_configured:

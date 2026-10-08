@@ -9,6 +9,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import http from '@/api/http'
 import { useAuth, hasRole } from '@/context/AuthContext'
 import Procedures from '@/pages/Procedures'
+import DeployAgent from '@/pages/DeployAgent'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -645,14 +646,16 @@ function VersionControlCard() {
 
 export default function Settings() {
   const [searchParams] = useSearchParams()
-  const [pageTab, setPageTab] = useState<'settings' | 'procedures'>(
-    searchParams.get('tab') === 'procedures' ? 'procedures' : 'settings'
+  const [pageTab, setPageTab] = useState<'settings' | 'procedures' | 'deploy'>(
+    searchParams.get('tab') === 'procedures' ? 'procedures' :
+    searchParams.get('tab') === 'deploy' ? 'deploy' : 'settings'
   )
   const tabBar = (
     <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--card-border)', flexShrink: 0, background: 'var(--content-bg)', marginBottom: 12 }}>
       {([
         { key: 'settings', label: '⚙️ Settings' },
         { key: 'procedures', label: '📋 Procedures' },
+        { key: 'deploy', label: '🚀 Deploy Agent' },
       ] as const).map(({ key, label }) => (
         <button key={key} onClick={() => setPageTab(key)} style={{
           background: pageTab === key ? '#1e293b' : 'transparent',
@@ -797,6 +800,17 @@ export default function Settings() {
         {tabBar}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <Procedures />
+        </div>
+      </div>
+    )
+  }
+
+  if (pageTab === 'deploy') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+        {tabBar}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <DeployAgent />
         </div>
       </div>
     )

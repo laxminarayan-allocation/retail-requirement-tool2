@@ -197,6 +197,34 @@ export default function AllocationPipeline() {
     return () => { _listeners.delete(fn) }
   }, [])
 
+  // On mount: restore completed module status from run history (survives page reload)
+  useEffect(() => {
+    const anyAlreadySet = Object.keys(_globalJobs).length > 0
+    if (anyAlreadySet) return  // already populated this session
+    fetch('/api/pipeline/logs/runs', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) return
+        const rows: { module: string; status?: string; job_id?: string }[] = r.data?.rows ?? []
+        // For each module, find the latest run; if finished → mark done
+        const latestByModule: Record<string, string> = {}
+        for (const row of [...rows].reverse()) {
+          const mod = String(row.module)
+          if (!latestByModule[mod]) latestByModule[mod] = row.status ?? ''
+        }
+        let changed = false
+        for (const [mod, status] of Object.entries(latestByModule)) {
+          const id = parseInt(mod)
+          if (!isNaN(id) && !_globalJobs[id] && status === 'finished') {
+            _globalJobs[id] = { jobId: '', moduleId: id, status: 'done', logs: [] }
+            changed = true
+          }
+        }
+        if (changed) _notify()
+      })
+      .catch(() => {})
+  }, [token])
+
   // Derive display state from global jobs
   function jobFor(id: number): GlobalJobState | undefined { return _globalJobs[id] }
   function statusOf(id: number): ModuleStatusG { return _globalJobs[id]?.status ?? 'idle' }

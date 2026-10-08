@@ -199,25 +199,31 @@ export default function AllocationPipeline() {
 
   // On mount: restore completed module status from run history (survives page reload)
   useEffect(() => {
-    const anyAlreadySet = Object.keys(_globalJobs).length > 0
-    if (anyAlreadySet) return  // already populated this session
+    // Only restore if no module is already actively running (don't clobber live state)
+    const anyRunning = Object.values(_globalJobs).some(j => j.status === 'running')
+    if (anyRunning) return
     fetch('/api/pipeline/logs/runs', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.json())
       .then(r => {
         if (!r.ok) return
         const rows: { module: string; status?: string; job_id?: string }[] = r.data?.rows ?? []
-        // For each module, find the latest run; if finished → mark done
+        // rows are newest-first; first occurrence per module = most recent run
         const latestByModule: Record<string, string> = {}
-        for (const row of [...rows].reverse()) {
+        for (const row of rows) {
           const mod = String(row.module)
-          if (!latestByModule[mod]) latestByModule[mod] = row.status ?? ''
+          if (!(mod in latestByModule)) latestByModule[mod] = row.status ?? ''
         }
         let changed = false
         for (const [mod, status] of Object.entries(latestByModule)) {
           const id = parseInt(mod)
-          if (!isNaN(id) && !_globalJobs[id] && status === 'finished') {
-            _globalJobs[id] = { jobId: '', moduleId: id, status: 'done', logs: [] }
-            changed = true
+          if (!isNaN(id) && !_globalJobs[id]) {
+            if (status === 'finished') {
+              _globalJobs[id] = { jobId: '', moduleId: id, status: 'done', logs: [] }
+              changed = true
+            } else if (status === 'running') {
+              _globalJobs[id] = { jobId: '', moduleId: id, status: 'running', logs: ['Resumed from history…'] }
+              changed = true
+            }
           }
         }
         if (changed) _notify()

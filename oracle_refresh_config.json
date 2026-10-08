@@ -1,18 +1,17 @@
 {
   "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data",
   "files": [
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\03_ART_Requirment.xlsb",
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\03_MC_Requirment.xlsb"
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\BARCODE_APPS_REQ_ASN.xlsb"
   ],
   "recent_folders": [
     "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data"
   ],
   "schedules": [
     {
-      "id": "077d6e45-fa8a-4744-b5b3-0647444e8227",
+      "id": "ad7dfbc5-4801-4dfd-8096-dcd95f5ea80f",
       "enabled": true,
       "cron": "0 8 * * 1-6",
-      "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data"
+      "folder": ""
     }
   ]
 }

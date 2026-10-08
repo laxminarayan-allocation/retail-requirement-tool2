@@ -1,5 +1,617 @@
 [
   {
+    "id": "v1.3.110-auto",
+    "version": "1.3.110",
+    "date": "2026-10-02",
+    "type": "fix",
+    "title": "3 updates (2026-10-02)",
+    "desc": "• feat: add RainViewer radar overlay toggle on store map\n• fix: add 3-attempt retry with 60s backoff for Open-Meteo 429 in backend\n• fix: increase Open-Meteo batch sleep 6sâ†’10s to avoid 429",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "ca7678d988d57a3288a4399c624fcb22bd71d91f",
+    "auto": true
+  },
+  {
+    "id": "v1.3.111-auto",
+    "version": "1.3.111",
+    "date": "2026-10-01",
+    "type": "fix",
+    "title": "19 updates (2026-10-01)",
+    "desc": "• feat: add satellite/street view toggle on store map\n• fix: urllib import + 6s rate-limit delay for Open-Meteo monthly temp\n• fix: monthly temp - inline parquet load + correct archive end_date\n• fix: force-login reads live DOM values when conflictCreds ref is empty\n• feat: split Store Network tabs + restrict Allocation Report to admin\n• fix: surface errors instead of silent fallbacks (High #2 & #3)\n• feat: add next-12-month temperature prediction to monthly temp export\n• fix: store-monthly-temps use regex _parse for lat/lon (degree symbol, not numeric)\n• fix: vite proxy localhost â†’ 127.0.0.1 (Windows IPv6 resolution issue)\n• fix: move mLoading state to component level, remove IIFE wrapper for monthly temp button\n• fix: use top-level http import in monthly temp button (remove dynamic import)\n• feat: store monthly min/max temp for last 10 years (Open-Meteo archive)\n• fix: dist pairs full NxN (both directions + self=0) for 231x231=53361 rows\n• fix: dist pairs uses all stores (not just lat/lon valid), empty cell if coords missing\n• fix: use store name (ALC) instead of numeric code in distance matrix headers\n• feat: add store distance matrix + pairs CSV download\n• feat: add Temp CSV download button to Store Network map\n• feat: add today's high/low temperature to store map popup\n• feat: store-wise current temperature on Store Network map",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "88878c4dda06c2db78673c170d407a41b6a2dfbc",
+    "auto": true
+  },
+  {
+    "id": "v1.3.112-auto",
+    "version": "1.3.112",
+    "date": "2026-09-29",
+    "type": "fix",
+    "title": "correct JS/CSS MIME types for mobile browser compatibility",
+    "desc": "• fix: correct JS/CSS MIME types for mobile browser compatibility",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "d6edd79b121ebbf1fba1d6239053c746665443df",
+    "auto": true
+  },
+  {
+    "id": "v1.3.113-auto",
+    "version": "1.3.113",
+    "date": "2026-09-19",
+    "type": "fix",
+    "title": "7 updates (2026-09-19)",
+    "desc": "• fix: force-close Oracle pool on shutdown to avoid --reload hang\n• fix: preserve sql_text in meta.json after QUERY file refresh\n• fix: strip trailing semicolons from QUERY sql_text before execute\n• fix: execute SET ROLE ALL on every pool connection acquire\n• feat: inline SQL editor for QUERY-owner files in Downloaded Files\n• fix: enable all Oracle roles on pool connections via session_callback\n• fix: custom SQL queries (QUERY owner) refresh using stored sql_text",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "ba12365a4f2df75477d0b7ffe932d52947328179",
+    "auto": true
+  },
+  {
+    "id": "v1.3.109-auto",
+    "version": "1.3.109",
+    "date": "2026-09-19",
+    "type": "fix",
+    "title": "3 updates (2026-09-19)",
+    "desc": "• fix: state boundary on mobile link - serve GeoJSON from same origin\n• fix: avoid DPY-2017 by using shared _ensure_thick_mode from oracle.py\n• fix: satellite map + state name deduplication",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "137e4b0d183fd0b9eeb43137b437fe6c6a017a56",
+    "auto": true
+  },
+  {
+    "id": "v1.3.90-auto",
+    "version": "1.3.90",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "state boundary store count + auto-enable on state filter select",
+    "desc": "• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "79604ea7a7dc0763b07edd418325c28bc27ed9e9",
+    "auto": true
+  },
+  {
+    "id": "v1.3.88-auto",
+    "version": "1.3.88",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "2 updates (2026-09-18)",
+    "desc": "• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "c5879e9d0ef91a2eb3ffb470bade54f3bb455336",
+    "auto": true
+  },
+  {
+    "id": "v1.3.86-auto",
+    "version": "1.3.86",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "3 updates (2026-09-18)",
+    "desc": "• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "ab32fe5f03db6b349fd3a5710152f436cc90ec2a",
+    "auto": true
+  },
+  {
+    "id": "v1.3.84-auto",
+    "version": "1.3.84",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "4 updates (2026-09-18)",
+    "desc": "• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "94ff9863e7da19a238140930c476205f970d7ab1",
+    "auto": true
+  },
+  {
+    "id": "v1.3.82-auto",
+    "version": "1.3.82",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "5 updates (2026-09-18)",
+    "desc": "• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "b72cc3d0d32d5468865ba9d0f928e622900e3c20",
+    "auto": true
+  },
+  {
+    "id": "v1.3.80-auto",
+    "version": "1.3.80",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "6 updates (2026-09-18)",
+    "desc": "• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "586085b524ae86d905b937a7fe2e14dd08cd3f9c",
+    "auto": true
+  },
+  {
+    "id": "v1.3.78-auto",
+    "version": "1.3.78",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "7 updates (2026-09-18)",
+    "desc": "• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "f6ed30b99c412d7505c255865bcb69e7555f908e",
+    "auto": true
+  },
+  {
+    "id": "v1.3.76-auto",
+    "version": "1.3.76",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "8 updates (2026-09-18)",
+    "desc": "• feat: pipeline Module 3 â€” Apply system filters (native)\n• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "022fe8c6186cae7c4b48966c9d528901da209dc9",
+    "auto": true
+  },
+  {
+    "id": "v1.3.74-auto",
+    "version": "1.3.74",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "9 updates (2026-09-18)",
+    "desc": "• feat: implement allocation pipeline modules 4-7\n• feat: pipeline Module 3 â€” Apply system filters (native)\n• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "2386e7b4b176dd2ea7f53b85b310f8190ec46f63",
+    "auto": true
+  },
+  {
+    "id": "v1.3.72-auto",
+    "version": "1.3.72",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "10 updates (2026-09-18)",
+    "desc": "• feat: remove Simulation from frontend nav (name reserved for new section)\n• feat: implement allocation pipeline modules 4-7\n• feat: pipeline Module 3 â€” Apply system filters (native)\n• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "fd0a7d37db979e60bd44f914d9d3fec7d5b2d404",
+    "auto": true
+  },
+  {
+    "id": "v1.3.69-auto",
+    "version": "1.3.69",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "11 updates (2026-09-18)",
+    "desc": "• feat: group Simulation pages under collapsible sidebar section\n• feat: remove Simulation from frontend nav (name reserved for new section)\n• feat: implement allocation pipeline modules 4-7\n• feat: pipeline Module 3 â€” Apply system filters (native)\n• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "946274aa7920c6dc651532ef711d3e4e2c5b0c7e",
+    "auto": true
+  },
+  {
+    "id": "v1.3.66-auto",
+    "version": "1.3.66",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "12 updates (2026-09-18)",
+    "desc": "• fix: deduplicate SSE step logs â€” track event id per block\n• feat: group Simulation pages under collapsible sidebar section\n• feat: remove Simulation from frontend nav (name reserved for new section)\n• feat: implement allocation pipeline modules 4-7\n• feat: pipeline Module 3 â€” Apply system filters (native)\n• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "2962113097d274b2571c01e6e691bb346f82d864",
+    "auto": true
+  },
+  {
+    "id": "v1.3.63-auto",
+    "version": "1.3.63",
+    "date": "2026-09-18",
+    "type": "feature",
+    "title": "13 updates (2026-09-18)",
+    "desc": "• feat: add pipeline.py to Source Viewer\n• fix: deduplicate SSE step logs â€” track event id per block\n• feat: group Simulation pages under collapsible sidebar section\n• feat: remove Simulation from frontend nav (name reserved for new section)\n• feat: implement allocation pipeline modules 4-7\n• feat: pipeline Module 3 â€” Apply system filters (native)\n• feat: pipeline Module 2 â€” Build grid + enrich (native)\n• feat: native pipeline â€” replace 8642 proxy with SS27-native Oracle runner\n• fix: send source value the 8642 pipeline API accepts\n• fix: make pipeline proxy reach 8642 and stream with auth\n• feat: connect AllocationPipeline to real 8642 backend via proxy\n• feat: duplicate Allocation Pipeline Studio (8642) into SS27 app\n• feat: state boundary store count + auto-enable on state filter select",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "9847aa33432c99af88f377ca65e223dc97f6d439",
+    "auto": true
+  },
+  {
+    "id": "v1.3.99-auto",
+    "version": "1.3.99",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "10 updates (2026-09-17)",
+    "desc": "• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "7ecc39ffe7e62a784141a528276a96ae5245fc27",
+    "auto": true
+  },
+  {
+    "id": "v1.3.98-auto",
+    "version": "1.3.98",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "11 updates (2026-09-17)",
+    "desc": "• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "20f4944b71d982bbe0d6da9a101a86c7f8de05e0",
+    "auto": true
+  },
+  {
+    "id": "v1.3.97-auto",
+    "version": "1.3.97",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "12 updates (2026-09-17)",
+    "desc": "• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "3a0536855bd464333a1f6588a64e1992dcc7ac00",
+    "auto": true
+  },
+  {
+    "id": "v1.3.96-auto",
+    "version": "1.3.96",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "13 updates (2026-09-17)",
+    "desc": "• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "0c5248a60c3c400551a5d71c22a2ea3731cc4fc2",
+    "auto": true
+  },
+  {
+    "id": "v1.3.95-auto",
+    "version": "1.3.95",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "14 updates (2026-09-17)",
+    "desc": "• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "04b84f7c99b2ba53518cfe93f22a598ff298d359",
+    "auto": true
+  },
+  {
+    "id": "v1.3.94-auto",
+    "version": "1.3.94",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "15 updates (2026-09-17)",
+    "desc": "• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "fea4df76a854d2955f4be5b6a77c9ad9ee87b38a",
+    "auto": true
+  },
+  {
+    "id": "v1.3.93-auto",
+    "version": "1.3.93",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "16 updates (2026-09-17)",
+    "desc": "• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "55224a8b6daa8dd465b03175449787510cf293c6",
+    "auto": true
+  },
+  {
+    "id": "v1.3.92-auto",
+    "version": "1.3.92",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "17 updates (2026-09-17)",
+    "desc": "• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "552a569dbe4f13be145de0ca2e1bf0e94c2a60f1",
+    "auto": true
+  },
+  {
+    "id": "v1.3.91-auto",
+    "version": "1.3.91",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "18 updates (2026-09-17)",
+    "desc": "• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "54ec86c5e547d3385f9aba239066e5cfc39b65bf",
+    "auto": true
+  },
+  {
+    "id": "v1.3.89-auto",
+    "version": "1.3.89",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "19 updates (2026-09-17)",
+    "desc": "• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "1ca4cbcf57d9da037e95e879a4c9d93261f9e528",
+    "auto": true
+  },
+  {
+    "id": "v1.3.87-auto",
+    "version": "1.3.87",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "20 updates (2026-09-17)",
+    "desc": "• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "8f4e7d576981b3ac63741e9ba89835fa12be025c",
+    "auto": true
+  },
+  {
+    "id": "v1.3.85-auto",
+    "version": "1.3.85",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "21 updates (2026-09-17)",
+    "desc": "• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "442acac00c51b3e99e6efe715ecf0f6370514782",
+    "auto": true
+  },
+  {
+    "id": "v1.3.83-auto",
+    "version": "1.3.83",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "22 updates (2026-09-17)",
+    "desc": "• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "a1eaec6dad25fcbd258c6df92207d4a075958668",
+    "auto": true
+  },
+  {
+    "id": "v1.3.81-auto",
+    "version": "1.3.81",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "23 updates (2026-09-17)",
+    "desc": "• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "dbc87d737eec27d4ed05b3bbb2af4a6b5afe0f37",
+    "auto": true
+  },
+  {
+    "id": "v1.3.79-auto",
+    "version": "1.3.79",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "24 updates (2026-09-17)",
+    "desc": "• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "8c8750443728eafb8ce901072671287bcd7e67ac",
+    "auto": true
+  },
+  {
+    "id": "v1.3.77-auto",
+    "version": "1.3.77",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "25 updates (2026-09-17)",
+    "desc": "• feat: State/City multi-select filter dropdowns on map\n• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "25c33cfec5f46607510c80bf5743cfc22d5ad806",
+    "auto": true
+  },
+  {
+    "id": "v1.3.75-auto",
+    "version": "1.3.75",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "26 updates (2026-09-17)",
+    "desc": "• feat: permanent CityKart network boundary covering all stores\n• feat: State/City multi-select filter dropdowns on map\n• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "6f140607d13520058a82863214c6b7e67218d482",
+    "auto": true
+  },
+  {
+    "id": "v1.3.73-auto",
+    "version": "1.3.73",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "27 updates (2026-09-17)",
+    "desc": "• fix: state/city boundaries - solid outline only, no fill to prevent overlap confusion\n• feat: permanent CityKart network boundary covering all stores\n• feat: State/City multi-select filter dropdowns on map\n• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "6191ca8a8044c63402170b9db4bcaa6990a76b7b",
+    "auto": true
+  },
+  {
+    "id": "v1.3.70-auto",
+    "version": "1.3.70",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "28 updates (2026-09-17)",
+    "desc": "• feat: state/city boundary - real map double-stroke border style\n• fix: state/city boundaries - solid outline only, no fill to prevent overlap confusion\n• feat: permanent CityKart network boundary covering all stores\n• feat: State/City multi-select filter dropdowns on map\n• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "2d1e7046d6ac18d28aaf4f707a09252bc70e6627",
+    "auto": true
+  },
+  {
+    "id": "v1.3.67-auto",
+    "version": "1.3.67",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "29 updates (2026-09-17)",
+    "desc": "• feat: state boundary uses real India GeoJSON (not convex hull)\n• feat: state/city boundary - real map double-stroke border style\n• fix: state/city boundaries - solid outline only, no fill to prevent overlap confusion\n• feat: permanent CityKart network boundary covering all stores\n• feat: State/City multi-select filter dropdowns on map\n• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "41eb71e6cbda63b24b2b8f8e07c965bb56c6de7b",
+    "auto": true
+  },
+  {
+    "id": "v1.3.64-auto",
+    "version": "1.3.64",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "30 updates (2026-09-17)",
+    "desc": "• fix: state boundary GeoJSON rendering - clean two-layer approach\n• feat: state boundary uses real India GeoJSON (not convex hull)\n• feat: state/city boundary - real map double-stroke border style\n• fix: state/city boundaries - solid outline only, no fill to prevent overlap confusion\n• feat: permanent CityKart network boundary covering all stores\n• feat: State/City multi-select filter dropdowns on map\n• feat: boundary by State/City in addition to Zone/Cluster\n• feat: map fullscreen overlay (replaces new-window approach)\n• feat: new window map - zone/cluster filter, boundary, satellite toggle\n• fix: new window map â€” Blob URL instead of document.write, plain JS (no template literals)\n• fix: new window map â€” use cdnjs (not unpkg) + invalidateSize on load\n• fix: limit map popup to single window (reuse existing via named target)\n• fix: new window segment labels â€” use string concat (no template literal escaping), hâ†’hr\n• feat: Open map in new window button â€” standalone Leaflet page with full distance tool\n• feat: drag & drop reordering for distance route chips\n• fix: show store name in distance route chips (5 ALC instead of just 5)\n• feat: upgrade Distance tool â€” store search, multi-stop, warehouse points\n• feat: add Used In + Source columns to Downloaded Files panel\n• fix: req_scheduler use get_connection instead of broken oracledb pool\n• fix: db_scheduler now uses cx_Oracle/get_connection and skips missing Oracle objects\n• fix: state normalization + single-file refresh with progress\n• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "80f8c8fd882ebd9204194f15f150913ef34e9586",
+    "auto": true
+  },
+  {
+    "id": "v1.3.108-auto",
+    "version": "1.3.108",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "add Closed store section + state/city counts to Store Network card",
+    "desc": "• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "776aa36e1eec4148cd01ab1bf496c06e92f7c2cc",
+    "auto": true
+  },
+  {
+    "id": "v1.3.107-auto",
+    "version": "1.3.107",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "2 updates (2026-09-17)",
+    "desc": "• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "d793392ec7458c4081e75f9c0f45710f52da50c5",
+    "auto": true
+  },
+  {
+    "id": "v1.3.106-auto",
+    "version": "1.3.106",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "3 updates (2026-09-17)",
+    "desc": "• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "f761deeb986869d775ef471b9862ff65180bdf1b",
+    "auto": true
+  },
+  {
+    "id": "v1.3.105-auto",
+    "version": "1.3.105",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "4 updates (2026-09-17)",
+    "desc": "• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "53c73cd602507bdacc6280592bfec9a8b781391e",
+    "auto": true
+  },
+  {
+    "id": "v1.3.104-auto",
+    "version": "1.3.104",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "5 updates (2026-09-17)",
+    "desc": "• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "dabcd42a9a72d2e3d6d6f19f820c809c05a36f01",
+    "auto": true
+  },
+  {
+    "id": "v1.3.103-auto",
+    "version": "1.3.103",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "6 updates (2026-09-17)",
+    "desc": "• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "bc71945829b5c84d195267a19331d77cad7f8d20",
+    "auto": true
+  },
+  {
+    "id": "v1.3.102-auto",
+    "version": "1.3.102",
+    "date": "2026-09-17",
+    "type": "fix",
+    "title": "7 updates (2026-09-17)",
+    "desc": "• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "a414b3511e4663d5baf0d7b3e8e250ded94508f8",
+    "auto": true
+  },
+  {
+    "id": "v1.3.101-auto",
+    "version": "1.3.101",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "8 updates (2026-09-17)",
+    "desc": "• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "28c8d29dc866154bbd8c9991938692084068ac73",
+    "auto": true
+  },
+  {
+    "id": "v1.3.100-auto",
+    "version": "1.3.100",
+    "date": "2026-09-17",
+    "type": "feature",
+    "title": "9 updates (2026-09-17)",
+    "desc": "• feat: zone/cluster multi-select searchable dropdown + auto boundary + OSM tiles\n• feat: add interactive store map with zone/cluster colors, boundaries & distance\n• feat: split state/city counts â€” active shows own states/cities, upcoming shows new cities only\n• fix: compute zone dist from store_master for both active and upcoming\n• feat: add closed store counts to Zone and State/City cards\n• fix: fixed-width columns for active/upcoming numbers in State/City and Zone cards\n• fix: normalize state abbreviations (JH->JHARKHAND) for unique_state_count\n• fix: move States/Cities above TY Open (below ACTIVE headline, not CLOSED)\n• feat: add Closed store section + state/city counts to Store Network card",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "45739fa939058d115cc353bdfdea91f2023b5979",
+    "auto": true
+  },
+  {
+    "id": "v1.3.71-auto",
+    "version": "1.3.71",
+    "date": "2026-09-16",
+    "type": "fix",
+    "title": "db_scheduler catch-up missed daily refresh on backend startup",
+    "desc": "• fix: db_scheduler catch-up missed daily refresh on backend startup",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "fdb78ef9f8249c56778966dd72723b8a57d7a75c",
+    "auto": true
+  },
+  {
+    "id": "v1.3.68-auto",
+    "version": "1.3.68",
+    "date": "2026-09-16",
+    "type": "feature",
+    "title": "2 updates (2026-09-16)",
+    "desc": "• feat: add Refresh All Daily button (admin only) in Database Explorer\n• fix: db_scheduler catch-up missed daily refresh on backend startup",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "ba15e6256ca14d63b87509fc4d3e5a819066aa0f",
+    "auto": true
+  },
+  {
+    "id": "v1.3.65-auto",
+    "version": "1.3.65",
+    "date": "2026-09-16",
+    "type": "fix",
+    "title": "3 updates (2026-09-16)",
+    "desc": "• fix: use per-week store_count from opening_date for sale dashboard denominator\n• feat: add Refresh All Daily button (admin only) in Database Explorer\n• fix: db_scheduler catch-up missed daily refresh on backend startup",
+    "released": true,
+    "added_by": "laxmi.narayan@citykart.org",
+    "git_hash": "37ba7e291c086656a906e5e1574ee4189f7fe600",
+    "auto": true
+  },
+  {
     "id": "v1.3.60-auto",
     "version": "1.3.60",
     "date": "2026-09-16",
@@ -30,7 +642,7 @@
     "type": "feature",
     "title": "32 updates (2026-09-12)",
     "desc": "• feat: enhance Data Structure tool â€” search, schema chips, 5 detail tabs, ER diagram\n• feat: Sale Dashboard â€” merge 2Y Weekly tab + per-period store count\n• feat: merge 2Y Weekly into Sale Dashboard as inline tab\n• feat: NSO-format store names in Sale Dashboard + 2yr sale_raw range\n• feat: 2-year weekly sale page + store name fix in sale dashboard\n• fix: sale dashboard store names â€” join on SITE_CODE not LOCATION\n• feat: sale dashboard â€” 8-week range, Max Wk multi-select (W1-W8)\n• feat: sale dashboard â€” store count row, MTD/LM columns, top-N max week\n• feat: sale dashboard â€” 6-week rolling window with week collapse/expand\n• feat: Sale Dashboard â€” store x date MTD pivot table\n• fix: source viewer use d.success instead of d.ok for API response check\n• feat: add Source Viewer page for admin â€” view backend Python route files\n• fix: remove duplicate parquet merge in stores-by â€” store_master already has UPCOMING_STORE\n• fix: show only ACTIVE/UPCOMING_STORE in zone modal + add store master CSV download\n• feat: admin-only backend pages + NSO column order save confirmation\n• feat: add ZONE column to store_master DataStore via LEFT JOIN V_STORE_MASTER\n• feat: parquet-first repos, global NSO col order, Sale Dashboard admin-only\n• perf: parquet-first + 23h TTL cache across all repositories\n• perf: StoreRepository loads from parquet first, warms at startup\n• feat: NSO column order saved globally per user (backend SQLite)\n• feat: Sale Dashboard â€” under construction, admin-only visibility\n• feat: NSO Dashboard drag & drop column reordering\n• fix: parquet_store â€” atomic rename + SALE Raw/PBS SQL column fixes\n• feat: add Parquet Data Store â€” Oracle â†’ local cache layer\n• fix: define auth header inside SchedulerTab component\n• feat: add Run Days selector (Daily / Mon-Sat / Mon-Fri) to Pipeline Scheduler\n• refactor: move Pipeline Scheduler inside Option Listing as a tab\n• feat: Pipeline Scheduler page with live log, Run Now, and time config\n• feat: add MC Search as Step 1 in pipeline + Oracle Queries page\n• feat: pipeline scheduler calls Load from Oracle before running 8 steps\n• feat: add daily 09:00 IST auto-scheduler for all 8 pipeline steps\n• feat: move Results as tab inside Simulation (Calculation page)",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "a38dabd56de2209cd4010e86bf7b6f75060d501a",
     "auto": true
@@ -42,7 +654,7 @@
     "type": "feature",
     "title": "42 updates (2026-09-12)",
     "desc": "• fix: add touch event support for nav reorder on mobile\n• feat: enhance Data Structure tool â€” search, schema chips, 5 detail tabs, ER diagram\n• feat: Sale Dashboard â€” merge 2Y Weekly tab + per-period store count\n• feat: merge 2Y Weekly into Sale Dashboard as inline tab\n• feat: NSO-format store names in Sale Dashboard + 2yr sale_raw range\n• feat: 2-year weekly sale page + store name fix in sale dashboard\n• fix: sale dashboard store names â€” join on SITE_CODE not LOCATION\n• feat: sale dashboard â€” 8-week range, Max Wk multi-select (W1-W8)\n• feat: sale dashboard â€” store count row, MTD/LM columns, top-N max week\n• feat: sale dashboard â€” 6-week rolling window with week collapse/expand\n• feat: Sale Dashboard â€” store x date MTD pivot table\n• fix: source viewer use d.success instead of d.ok for API response check\n• feat: add Source Viewer page for admin â€” view backend Python route files\n• fix: remove duplicate parquet merge in stores-by â€” store_master already has UPCOMING_STORE\n• fix: show only ACTIVE/UPCOMING_STORE in zone modal + add store master CSV download\n• feat: admin-only backend pages + NSO column order save confirmation\n• feat: add ZONE column to store_master DataStore via LEFT JOIN V_STORE_MASTER\n• feat: parquet-first repos, global NSO col order, Sale Dashboard admin-only\n• perf: parquet-first + 23h TTL cache across all repositories\n• perf: StoreRepository loads from parquet first, warms at startup\n• feat: NSO column order saved globally per user (backend SQLite)\n• feat: Sale Dashboard â€” under construction, admin-only visibility\n• feat: NSO Dashboard drag & drop column reordering\n• fix: parquet_store â€” atomic rename + SALE Raw/PBS SQL column fixes\n• feat: add Parquet Data Store â€” Oracle â†’ local cache layer\n• fix: define auth header inside SchedulerTab component\n• feat: add Run Days selector (Daily / Mon-Sat / Mon-Fri) to Pipeline Scheduler\n• refactor: move Pipeline Scheduler inside Option Listing as a tab\n• feat: Pipeline Scheduler page with live log, Run Now, and time config\n• feat: add MC Search as Step 1 in pipeline + Oracle Queries page\n• feat: pipeline scheduler calls Load from Oracle before running 8 steps\n• feat: add daily 09:00 IST auto-scheduler for all 8 pipeline steps\n• feat: move Results as tab inside Simulation (Calculation page)\n• feat: remove Calculation from nav, keep Simulation only\n• feat: per-user tab-level access control via pageAccess overrides\n• feat: restrict viewer tab access across 3 pages\n• fix: restrict Results page to planner+ role (remove viewer access)\n• feat: move View As button to Users tab, per-user preview\n• feat: add View As admin preview mode (viewer/planner nav simulation)\n• fix: Downloaded Files mobile â€” toolbar horizontal scroll + table minWidth\n• fix: mobile horizontal scroll â€” wrap all tables with overflow-x:auto + minWidth\n• fix: allow horizontal scroll in main content for mobile/landscape",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "6a84c27cdf1ad7204b8190b7cdfa9a3ed605887e",
     "auto": true
@@ -54,7 +666,7 @@
     "type": "feature",
     "title": "41 updates (2026-09-12)",
     "desc": "• feat: Sale Pivot page inside Sale Dashboard\n• feat: Sale Dashboard â€” merge 2Y Weekly tab + per-period store count\n• feat: merge 2Y Weekly into Sale Dashboard as inline tab\n• feat: NSO-format store names in Sale Dashboard + 2yr sale_raw range\n• feat: 2-year weekly sale page + store name fix in sale dashboard\n• fix: sale dashboard store names â€” join on SITE_CODE not LOCATION\n• feat: sale dashboard â€” 8-week range, Max Wk multi-select (W1-W8)\n• feat: sale dashboard â€” store count row, MTD/LM columns, top-N max week\n• feat: sale dashboard â€” 6-week rolling window with week collapse/expand\n• feat: Sale Dashboard â€” store x date MTD pivot table\n• fix: source viewer use d.success instead of d.ok for API response check\n• feat: add Source Viewer page for admin â€” view backend Python route files\n• fix: remove duplicate parquet merge in stores-by â€” store_master already has UPCOMING_STORE\n• fix: show only ACTIVE/UPCOMING_STORE in zone modal + add store master CSV download\n• feat: admin-only backend pages + NSO column order save confirmation\n• feat: add ZONE column to store_master DataStore via LEFT JOIN V_STORE_MASTER\n• feat: parquet-first repos, global NSO col order, Sale Dashboard admin-only\n• perf: parquet-first + 23h TTL cache across all repositories\n• perf: StoreRepository loads from parquet first, warms at startup\n• feat: NSO column order saved globally per user (backend SQLite)\n• feat: Sale Dashboard â€” under construction, admin-only visibility\n• feat: NSO Dashboard drag & drop column reordering\n• fix: parquet_store â€” atomic rename + SALE Raw/PBS SQL column fixes\n• feat: add Parquet Data Store â€” Oracle â†’ local cache layer\n• fix: define auth header inside SchedulerTab component\n• feat: add Run Days selector (Daily / Mon-Sat / Mon-Fri) to Pipeline Scheduler\n• refactor: move Pipeline Scheduler inside Option Listing as a tab\n• feat: Pipeline Scheduler page with live log, Run Now, and time config\n• feat: add MC Search as Step 1 in pipeline + Oracle Queries page\n• feat: pipeline scheduler calls Load from Oracle before running 8 steps\n• feat: add daily 09:00 IST auto-scheduler for all 8 pipeline steps\n• feat: move Results as tab inside Simulation (Calculation page)\n• feat: remove Calculation from nav, keep Simulation only\n• feat: per-user tab-level access control via pageAccess overrides\n• feat: restrict viewer tab access across 3 pages\n• fix: restrict Results page to planner+ role (remove viewer access)\n• feat: move View As button to Users tab, per-user preview\n• feat: add View As admin preview mode (viewer/planner nav simulation)\n• fix: Downloaded Files mobile â€” toolbar horizontal scroll + table minWidth\n• fix: mobile horizontal scroll â€” wrap all tables with overflow-x:auto + minWidth\n• fix: allow horizontal scroll in main content for mobile/landscape",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "edddd31f930e5d13d74cce0b2613b6362368cbe4",
     "auto": true
@@ -66,7 +678,7 @@
     "type": "feature",
     "title": "5 updates (2026-09-11)",
     "desc": "• fix: add /simulation to AdminPanel ALL_PAGES for per-user access override\n• feat: add Data Table tab to Sale Dashboard; rename Article Detail to Data Table in NSO\n• feat: admin password reset in Admin Panel Users tab\n• feat: 5 SS27 upgrades â€” nav, modal, errors, icon, password security\n• perf: 10x faster warehouse inventory load",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "6afd1ae590e9a84d7fcfca943de1d37d920878fa",
     "auto": true
@@ -78,7 +690,7 @@
     "type": "feature",
     "title": "8 updates (2026-09-11)",
     "desc": "• feat: add Admin Live Sessions tab + admin-sessions endpoint\n• fix: add /simulation to AdminPanel ALL_PAGES for per-user access override\n• feat: add Data Table tab to Sale Dashboard; rename Article Detail to Data Table in NSO\n• feat: admin password reset in Admin Panel Users tab\n• feat: 5 SS27 upgrades â€” nav, modal, errors, icon, password security\n• perf: 10x faster warehouse inventory load\n• feat: self-service password reset in forgot password flow\n• feat: CSV download in Warehouse Inventory data table",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "ed60826223e853ee48c579b30725816db32aaf52",
     "auto": true
@@ -90,7 +702,7 @@
     "type": "feature",
     "title": "Warehouse Inventory page with Excel/Power BI style pivot",
     "desc": "• feat: Warehouse Inventory page with Excel/Power BI style pivot",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "da1ffbfb292d5df7262d529db3d011bb03b37cac",
     "auto": true
@@ -102,7 +714,7 @@
     "type": "feature",
     "title": "User Manual — Updated with All Procedures + Version Control",
     "desc": "User Manual mein Distribution Model, Option Listing Filter, Store Status, Settings & Server, Login & Sessions sections add kiye. Settings mein What's New card aur Version Control system add kiya.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -112,7 +724,7 @@
     "type": "fix",
     "title": "Fix — Sign out from All Devices",
     "desc": "Force login ab sabhi device types ke sessions kick karta hai (pehle sirf same device type kick hota tha). Conflict dialog mein inline error message bhi dikhta hai.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -122,7 +734,7 @@
     "type": "feature",
     "title": "19 updates (2026-09-09)",
     "desc": "• fix: zone drill-down duplicate index error + faster dashboard warmup (5s delay)\n• feat: add Aptos Narrow font option in display settings, set as default\n• feat: Aptos Narrow as global font (system font, zero performance cost)\n• feat: Downloaded Files table â€” Master Data style (proper table with cols)\n• feat: output folder panel collapse/expand toggle\n• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "4b740729a4acff3cc884800f91be360bd199e38f",
     "auto": true
@@ -134,7 +746,7 @@
     "type": "feature",
     "title": "add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
     "desc": "• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "1c3ef83951bd61eddc424430c366f3e0aacf95e6",
     "auto": true
@@ -146,7 +758,7 @@
     "type": "feature",
     "title": "2 updates (2026-09-09)",
     "desc": "• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "1345ad6764f726e96c42f95159cb08fd8ac9231c",
     "auto": true
@@ -158,7 +770,7 @@
     "type": "feature",
     "title": "3 updates (2026-09-09)",
     "desc": "• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "bf8c8586dc7c886003e1d2f496fd21f2788911dc",
     "auto": true
@@ -170,7 +782,7 @@
     "type": "feature",
     "title": "4 updates (2026-09-09)",
     "desc": "• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "98b9f1275ce96cc24e538f74cf9d753828d5a715",
     "auto": true
@@ -182,7 +794,7 @@
     "type": "feature",
     "title": "5 updates (2026-09-09)",
     "desc": "• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "51f6d4e051761bb727e10ba785e0c7eb4886a600",
     "auto": true
@@ -194,7 +806,7 @@
     "type": "feature",
     "title": "6 updates (2026-09-09)",
     "desc": "• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "71cebeb0f9811e2b28a65faed1b35be388615b07",
     "auto": true
@@ -206,7 +818,7 @@
     "type": "feature",
     "title": "7 updates (2026-09-09)",
     "desc": "• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "e7e4a152d514011458e4301aaa8cb58f13129b68",
     "auto": true
@@ -218,7 +830,7 @@
     "type": "feature",
     "title": "8 updates (2026-09-09)",
     "desc": "• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "f57af6f922e04944a4a97722da1d83d89ba00c37",
     "auto": true
@@ -230,7 +842,7 @@
     "type": "feature",
     "title": "9 updates (2026-09-09)",
     "desc": "• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "dddf5e7d1f1792952d04652df83180a73732661b",
     "auto": true
@@ -242,7 +854,7 @@
     "type": "feature",
     "title": "10 updates (2026-09-09)",
     "desc": "• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "8f5111861df3921ca772a216f68e283d29b4fb61",
     "auto": true
@@ -254,7 +866,7 @@
     "type": "feature",
     "title": "11 updates (2026-09-09)",
     "desc": "• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "3aaf4ba5de771ffcda88323f571c3593b7b65bac",
     "auto": true
@@ -266,7 +878,7 @@
     "type": "feature",
     "title": "12 updates (2026-09-09)",
     "desc": "• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "9c9adeb7ebd626a8ccdd5c652dbdf58b47b107d6",
     "auto": true
@@ -278,7 +890,7 @@
     "type": "feature",
     "title": "20 updates — 2026-09-09",
     "desc": "• feat: FY/CY year rows clickable â€” store drill-down with opening date\n• fix: zone drill-down duplicate index error + faster dashboard warmup (5s delay)\n• feat: add Aptos Narrow font option in display settings, set as default\n• feat: Aptos Narrow as global font (system font, zero performance cost)\n• feat: Downloaded Files table â€” Master Data style (proper table with cols)\n• feat: output folder panel collapse/expand toggle\n• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "0701245ba7166dd2cff1924bbc22652a916d1b54",
     "auto": true
@@ -290,7 +902,7 @@
     "type": "feature",
     "title": "13 updates (2026-09-09)",
     "desc": "• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "5d3cb67b65bd22d3635ddeb64d1c1d7648b24f47",
     "auto": true
@@ -302,7 +914,7 @@
     "type": "feature",
     "title": "14 updates (2026-09-09)",
     "desc": "• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "2e213b60bde7ad6b8fa97b26bc70bc41487d583e",
     "auto": true
@@ -314,7 +926,7 @@
     "type": "feature",
     "title": "15 updates (2026-09-09)",
     "desc": "• feat: output folder panel collapse/expand toggle\n• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "97fccedad8749b6e7ff5800455150584fd7f7dd0",
     "auto": true
@@ -326,7 +938,7 @@
     "type": "feature",
     "title": "16 updates (2026-09-09)",
     "desc": "• feat: Downloaded Files table â€” Master Data style (proper table with cols)\n• feat: output folder panel collapse/expand toggle\n• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "b578d5e4ee7661fcdc1cbfe981f68bfa48df8b5a",
     "auto": true
@@ -338,7 +950,7 @@
     "type": "feature",
     "title": "17 updates (2026-09-09)",
     "desc": "• feat: Aptos Narrow as global font (system font, zero performance cost)\n• feat: Downloaded Files table â€” Master Data style (proper table with cols)\n• feat: output folder panel collapse/expand toggle\n• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "b22f9aad585d2b76bee9fe95c077479c72727bc7",
     "auto": true
@@ -350,7 +962,7 @@
     "type": "feature",
     "title": "18 updates (2026-09-09)",
     "desc": "• feat: add Aptos Narrow font option in display settings, set as default\n• feat: Aptos Narrow as global font (system font, zero performance cost)\n• feat: Downloaded Files table â€” Master Data style (proper table with cols)\n• feat: output folder panel collapse/expand toggle\n• fix: pass lastCompletedAt as prop to PipelineTab â€” fixes blank Option Listing page\n• fix: safe fallback in useOracleRefresh to prevent blank Option Listing page\n• feat: show failed file names in Audit tab row\n• feat: auto-load MC candidates in Option Listing after Oracle Refresh completes\n• ui: scheduler cards â€” bold time + folder name clearly visible in header\n• feat: file-level lock â€” block 2nd user from running same file simultaneously\n• feat: multiple schedulers â€” per-folder separate time, add/delete/toggle each entry\n• feat: current file progress + Done button after job completes\n• feat: stop/cancel running refresh job â€” Stop button + cancel endpoint\n• feat: delete recent folders â€” âœ• button on chips in Refresh + Scheduler tabs\n• feat: scheduler folder-wise apply â€” schedule runs on specific folder, recent folders dropdown\n• feat: full Oracle Refresh UI â€” folder browse, file select, audit, health check, log, scheduler\n• fix: oracle refresh routes cleanup and http client switch\n• feat: add Option Listing and Oracle Refresh to Admin Panel Access Matrix",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "34085c9f9cfec4c37c0db1c0980cac39cd17173b",
     "auto": true
@@ -362,7 +974,7 @@
     "type": "feature",
     "title": "Settings — Server Control (Restart Backend + Build Frontend)",
     "desc": "Settings page mein Server Control card: ↺ Restart Backend (uvicorn SIGTERM restart, 5-10s disconnect) aur ⚙ Build Frontend (npm run build for mobile update).",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -372,7 +984,7 @@
     "type": "feature",
     "title": "3 updates — 2026-09-08",
     "desc": "• feat: React-based Oracle/Excel refresh page with background job tracking\n• feat: add distribution model, simulation page, new UI components\n• Fix login autofill, force-login race condition, encoding, and widget rename",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "a253fa434c62541774a258a8bd534d2cdf0d769c",
     "auto": true
@@ -384,7 +996,7 @@
     "type": "improvement",
     "title": "Fix login autofill, force-login race condition, encoding, and widget rename",
     "desc": "• Fix login autofill, force-login race condition, encoding, and widget rename",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "1db38d59e7be0d677011e671e48d416eb68fec05",
     "auto": true
@@ -396,7 +1008,7 @@
     "type": "improvement",
     "title": "2 updates (2026-09-08)",
     "desc": "• feat: add distribution model, simulation page, new UI components\n• Fix login autofill, force-login race condition, encoding, and widget rename",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "ddc3d853624af79f5ebd400064ecf33913d31ae7",
     "auto": true
@@ -408,7 +1020,7 @@
     "type": "fix",
     "title": "Fix — Hard Refresh Values Preserve",
     "desc": "Distribution run inputs (max rounds, hold rules, OL toggle) ab Ctrl+Shift+R ke baad bhi preserve hote hain — sessionStorage se localStorage mein migrate kiya.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -418,7 +1030,7 @@
     "type": "feature",
     "title": "Option Listing Filter — PREWINTER / LT WINTER Hold",
     "desc": "Distribution Model mein Option Listing Filter toggle. T_CLR_CONCEPT_AW26_V1 (REPORT) se store×concept_new join. LIST_TAG=YES → allocate, NO/missing → HOLD FOR OPTION_LISTING NO remark. list_tag column CSV/Excel mein bhi.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -428,7 +1040,7 @@
     "type": "fix",
     "title": "Fix — Dashboard Store Network 3 Stores",
     "desc": "Last opened date pe multiple stores ka naam dikhne laga (pehle sirf BHI dikhta tha). T_STORE_OPENING_DATE parquet se correct data — CPA, HMR, BHI sab naam show hote hain.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -438,7 +1050,7 @@
     "type": "fix",
     "title": "Fix — attribute1/concept_new in Distribution Output",
     "desc": "Pandas merge suffix collision fix (attribute1_x/_y). Distribution output aur CSV/Excel mein ab attribute1 aur concept_new sahi columns aate hain.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -448,7 +1060,7 @@
     "type": "feature",
     "title": "Distribution Model — Store-Level Distribution",
     "desc": "Distribution Model tab: warehouse stock ko PBS ke against stores mein distribute karna. Hold Rules (store/attr1), Max Rounds, WH Column selection, CSV/Excel download with attribute1, concept_new columns.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -458,7 +1070,7 @@
     "type": "feature",
     "title": "Initial Release — SS27 Retail Requirement Tool",
     "desc": "Calculation engine, factor sets, store-level PBS replenishment, Oracle integration, role-based access (Viewer/Planner/Admin), History, Results, Excel export.",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org"
   },
   {
@@ -468,7 +1080,7 @@
     "type": "improvement",
     "title": "12 updates — 2026-08-26",
     "desc": "• Show DC stock in Store view: DC sites appear as own rows with dc_stk_q\n• Fix allocation summary: separate STORE vs DC location for stock & store count\n• Add BARCODE, OPTION, LIST Req pivot tabs\n• Fix NSO Dashboard sticky header transparency while scrolling\n• Exclude warehouse stores (%-WH-%) from all 4 pivot store counts\n• Add searchable store multi-select filter with NSO/All preset to Size, MRP, Art, MC tabs\n• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "412c477fa45bb14db021c8d9692471962f90485f",
     "auto": true
@@ -480,7 +1092,7 @@
     "type": "fix",
     "title": "default description to table name in Master Data; proxy port 8000",
     "desc": "• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "85cbc6dde4ad4b363c5ced3202a62b6d7e492f92",
     "auto": true
@@ -492,7 +1104,7 @@
     "type": "improvement",
     "title": "2 updates (2026-08-26)",
     "desc": "• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "cb7a68574f563e5b80a48ea53c9b5ef8f1d75c76",
     "auto": true
@@ -504,7 +1116,7 @@
     "type": "improvement",
     "title": "3 updates (2026-08-26)",
     "desc": "• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "0788b007386f4b699e00256e91cc68ba59b25155",
     "auto": true
@@ -516,7 +1128,7 @@
     "type": "improvement",
     "title": "4 updates (2026-08-26)",
     "desc": "• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "e33a814eb56d4de963ab62cc9182e129e33ac787",
     "auto": true
@@ -528,7 +1140,7 @@
     "type": "improvement",
     "title": "5 updates (2026-08-26)",
     "desc": "• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "689280bf0e9871a060fe8f03117ba64266bcc0e8",
     "auto": true
@@ -540,7 +1152,7 @@
     "type": "improvement",
     "title": "6 updates (2026-08-26)",
     "desc": "• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "e949f58587be0e07e10945a869bf3ff7030724d2",
     "auto": true
@@ -552,7 +1164,7 @@
     "type": "improvement",
     "title": "7 updates (2026-08-26)",
     "desc": "• Add searchable store multi-select filter with NSO/All preset to Size, MRP, Art, MC tabs\n• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "5fc4a56d34f491c2e1308aba9c050ae591189875",
     "auto": true
@@ -564,7 +1176,7 @@
     "type": "improvement",
     "title": "8 updates (2026-08-26)",
     "desc": "• Exclude warehouse stores (%-WH-%) from all 4 pivot store counts\n• Add searchable store multi-select filter with NSO/All preset to Size, MRP, Art, MC tabs\n• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "9dd89f7272a29379c0bb3f08fb1177d75f99e012",
     "auto": true
@@ -576,7 +1188,7 @@
     "type": "improvement",
     "title": "9 updates (2026-08-26)",
     "desc": "• Fix NSO Dashboard sticky header transparency while scrolling\n• Exclude warehouse stores (%-WH-%) from all 4 pivot store counts\n• Add searchable store multi-select filter with NSO/All preset to Size, MRP, Art, MC tabs\n• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "6d68e3fc58a950c6340dabdf493dcdbe31c29b74",
     "auto": true
@@ -588,7 +1200,7 @@
     "type": "improvement",
     "title": "10 updates (2026-08-26)",
     "desc": "• Add BARCODE, OPTION, LIST Req pivot tabs\n• Fix NSO Dashboard sticky header transparency while scrolling\n• Exclude warehouse stores (%-WH-%) from all 4 pivot store counts\n• Add searchable store multi-select filter with NSO/All preset to Size, MRP, Art, MC tabs\n• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "da1a79b8db1f40c5962319637394b0399c84d754",
     "auto": true
@@ -600,7 +1212,7 @@
     "type": "improvement",
     "title": "11 updates (2026-08-26)",
     "desc": "• Fix allocation summary: separate STORE vs DC location for stock & store count\n• Add BARCODE, OPTION, LIST Req pivot tabs\n• Fix NSO Dashboard sticky header transparency while scrolling\n• Exclude warehouse stores (%-WH-%) from all 4 pivot store counts\n• Add searchable store multi-select filter with NSO/All preset to Size, MRP, Art, MC tabs\n• Fix sticky table headers in NSO Dashboard\n• Add searchable store name multi-select filter to NSO Dashboard\n• Add Division + Attribute1 multi-select filters to Size Req tab\n• Add Division + Attribute1 multi-select filters to MRP/Art/MC tabs\n• Add MRP, Article, MC Req pivot tabs with full table rendering\n• fix: default description to table name in Master Data; proxy port 8000",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "9bb7505fda8e1b0349f8a6a27f0a0afbc9d43f71",
     "auto": true
@@ -612,7 +1224,7 @@
     "type": "improvement",
     "title": "22 updates — 2026-08-25",
     "desc": "• feat: add Store Count column to Size Req pivot\n• feat: add Store Count column to Sparky Req pivot\n• feat: Size Req pivot tab (V_SZ_REQ_APPS + V_WH_STOCK + T_ALLOCATION)\n• feat: year-wise store opening card, remove Active NSO card\n• feat: add State Split card to Dashboard store network section\n• fix: Sparky pivot â€” parquet cache instead of live Oracle per-request\n• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section\n• Dashboard: allocation summary 3-view switcher (All / Store Wise / DivÂ·SectionÂ·Dept)\n• Dashboard: store network section + T_ALLOCATION_FOR_ALL_DIVISION summary\n• Master Data: table fills full available height instead of 340px cap\n• Master Data: expand modal to near-fullscreen (was 86vh capped)\n• Master Data: remove Refresh button from all rows (standard + custom)\n• Master Data: hide Refresh button for standard tables (sales/stock/mdq)\n• NSO Dashboard: add in_transit_v column in desktop table and mobile card",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "a2c1bcd27cf47f5a21b49a8ed0168bccaf33160c",
     "auto": true
@@ -624,7 +1236,7 @@
     "type": "improvement",
     "title": "remove pinned widgets (My Dashboard) section",
     "desc": "• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "3e7670f1b4ed1c90ef536caf44ea39546fe23de2",
     "auto": true
@@ -636,7 +1248,7 @@
     "type": "improvement",
     "title": "2 updates (2026-08-25)",
     "desc": "• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "cc77bffd949b831884514e32671802f774422a40",
     "auto": true
@@ -648,7 +1260,7 @@
     "type": "improvement",
     "title": "3 updates (2026-08-25)",
     "desc": "• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "9d8d8c2b11e3403197e71e0f82b73ae61df8c7ad",
     "auto": true
@@ -660,7 +1272,7 @@
     "type": "improvement",
     "title": "4 updates (2026-08-25)",
     "desc": "• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "76a247f04cc053b04cf6fd1d3bd3241b35ddfbc5",
     "auto": true
@@ -672,7 +1284,7 @@
     "type": "improvement",
     "title": "5 updates (2026-08-25)",
     "desc": "• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "0e13d3d4e75bf8275e7f2341d494d7907ebacd6d",
     "auto": true
@@ -684,7 +1296,7 @@
     "type": "improvement",
     "title": "6 updates (2026-08-25)",
     "desc": "• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "c074ad88b7bfa776b90fd4d5a4c70046389623a4",
     "auto": true
@@ -696,7 +1308,7 @@
     "type": "improvement",
     "title": "7 updates (2026-08-25)",
     "desc": "• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "2c4552d983138c198cf890f8e27363ffac0f513b",
     "auto": true
@@ -708,7 +1320,7 @@
     "type": "improvement",
     "title": "8 updates (2026-08-25)",
     "desc": "• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "80e6d7faab5fcdecea0c932e42d506b1d5e6a8e0",
     "auto": true
@@ -720,7 +1332,7 @@
     "type": "improvement",
     "title": "9 updates (2026-08-25)",
     "desc": "• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "77b6768cf687f3ba57a44dea33b048ede2bd88aa",
     "auto": true
@@ -732,7 +1344,7 @@
     "type": "improvement",
     "title": "10 updates (2026-08-25)",
     "desc": "• fix: Sparky pivot â€” parquet cache instead of live Oracle per-request\n• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "ba792c3372016e848907a0cb7fafec4601bae98d",
     "auto": true
@@ -744,7 +1356,7 @@
     "type": "improvement",
     "title": "11 updates (2026-08-25)",
     "desc": "• feat: add State Split card to Dashboard store network section\n• fix: Sparky pivot â€” parquet cache instead of live Oracle per-request\n• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "4822f48ddc075b34ad91242ef0a507e3286f20b1",
     "auto": true
@@ -756,7 +1368,7 @@
     "type": "improvement",
     "title": "12 updates (2026-08-25)",
     "desc": "• feat: year-wise store opening card, remove Active NSO card\n• feat: add State Split card to Dashboard store network section\n• fix: Sparky pivot â€” parquet cache instead of live Oracle per-request\n• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "cd1c21a83bea4c8c9a2840afc4e1a6f9a9b5c376",
     "auto": true
@@ -768,7 +1380,7 @@
     "type": "improvement",
     "title": "13 updates (2026-08-25)",
     "desc": "• feat: Size Req pivot tab (V_SZ_REQ_APPS + V_WH_STOCK + T_ALLOCATION)\n• feat: year-wise store opening card, remove Active NSO card\n• feat: add State Split card to Dashboard store network section\n• fix: Sparky pivot â€” parquet cache instead of live Oracle per-request\n• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "52d941e8cc3f3a0119e9f11346f13041007fed0f",
     "auto": true
@@ -780,7 +1392,7 @@
     "type": "improvement",
     "title": "14 updates (2026-08-25)",
     "desc": "• feat: add Store Count column to Sparky Req pivot\n• feat: Size Req pivot tab (V_SZ_REQ_APPS + V_WH_STOCK + T_ALLOCATION)\n• feat: year-wise store opening card, remove Active NSO card\n• feat: add State Split card to Dashboard store network section\n• fix: Sparky pivot â€” parquet cache instead of live Oracle per-request\n• feat: Sparky Req pivot tab + V_WH_STOCK in master data + Master Data planner-only\n• Redesign Requirements Dashboard â€” grid layout, summary strip, color-coded cards\n• Fix ReqDashboard using wrong localStorage token key causing logout\n• Remove hardcoded descriptions; use only view name as label\n• Use actual view name as label; show desc as subtitle in Req Dashboard\n• Add Requirements Dashboard with 12 Oracle views and daily 6AM auto-refresh\n• Sale Dashboard Daily Trend: Year > Month > Date grouped hierarchy\n• Dashboard: All tab = full detail view with icode multi-select + pagination\n• Dashboard: remove pinned widgets (My Dashboard) section",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "5e63f3d29d9464df786b3616b83e02c8e8401467",
     "auto": true
@@ -792,7 +1404,7 @@
     "type": "improvement",
     "title": "15 updates — 2026-08-24",
     "desc": "• Sale Dashboard: replace multi-select pills with dropdown+checkbox filter\n• Sale Dashboard: add 3 tabs â€” Store Summary, Daily Trend, TY vs LY Comparison\n• Fix Sale Dashboard desktop table: restore TY Target to TY group, fix column count\n• feat: Sale Dashboard - division/campaign multi-filter, opert_days, sale qty\n• NSO Dashboard: separate mobile & desktop layouts\n• NSO Dashboard: NSO/All Chain toggle on Article Detail tab\n• NSO Article Detail: add opert_days column pinned near front\n• NSO Article view: multi-select Campaigns/Divisions + sortable columns\n• Sale Dashboard: show LY store count in LY Sale KPI card\n• NSO: multi-select all filters + sortable Store View columns\n• Sale Dashboard: independent TY/LY date ranges for festival comparison\n• Sale Dashboard: date filter shows TY Period + LY explanation\n• Sale Dashboard: clarify date filter with From/To labels\n• NSO: multi-select Division/Campaign filters, NSO/All Chain toggle, perf fixes\n• Add V_ALL_WITH_NSO toggle to NSO Store View",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "5e5302c3529034521351af441da8dca43e70d267",
     "auto": true
@@ -804,7 +1416,7 @@
     "type": "improvement",
     "title": "8 updates — 2026-08-23",
     "desc": "• Switch backend proxy to port 8002 to bypass ghost process on 8000\n• Add STR(days) column to NSO store view table\n• Fix STR: per-store MTD days = min(opert_days, month_days_elapsed)\n• Fix STR: use MTD days (day-of-month) not store opert_days\n• Fix STR formula: use per-store daily rates summed as portfolio rate\n• Add STR (days of stock cover) KPI card to NSO Store Summary\n• fix: remove ROWNUM <= 5000 limit from Oracle table download\n• fix: NSO store-summary unit normalisation and ACH% formula",
-    "released": true,
+    "released": false,
     "added_by": "laxmi.narayan@citykart.org",
     "git_hash": "dd746239d0d16f4db890a022ac21b70a2bd5c66b",
     "auto": true

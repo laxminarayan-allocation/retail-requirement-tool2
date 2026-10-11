@@ -2181,6 +2181,53 @@ function onSearch(v){
             display: 'flex', alignItems: 'center', gap: 5 }}>
           {mapFullscreen ? '✕ Exit' : '⛶ Fullscreen'}
         </button>
+        {/* Fullscreen floating toolbar */}
+        {mapFullscreen && (
+          <div style={{
+            position: 'absolute', top: 8, left: 8, zIndex: 9910,
+            display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+            background: '#0f172aee', border: '1px solid #334155',
+            borderRadius: 8, padding: '6px 10px', maxWidth: 'calc(100vw - 120px)',
+          }}>
+            {/* Color by Zone/Cluster */}
+            {(['zone','cluster'] as const).map(m => (
+              <button key={m} onClick={() => setColorBy(m)} style={{
+                fontSize: 10, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                background: colorBy === m ? '#818cf822' : 'transparent',
+                border: `1px solid ${colorBy === m ? '#818cf8' : '#334155'}`,
+                color: colorBy === m ? '#818cf8' : '#475569',
+              }}>{m === 'zone' ? 'Zone' : 'Cluster'}</button>
+            ))}
+            <div style={{ width: 1, height: 16, background: '#334155' }} />
+            {/* Status filter */}
+            {([['all','All'],['ACTIVE','Active'],['UPCOMING_STORE','Upcoming']] as const).map(([v,l]) => (
+              <button key={v} onClick={() => setFilterStatus(v as any)} style={{
+                fontSize: 10, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                background: filterStatus === v ? '#06b6d422' : 'transparent',
+                border: `1px solid ${filterStatus === v ? '#06b6d4' : '#334155'}`,
+                color: filterStatus === v ? '#06b6d4' : '#475569',
+              }}>{l}</button>
+            ))}
+            <div style={{ width: 1, height: 16, background: '#334155' }} />
+            {/* Zone dropdown */}
+            <ZoneDropdown allKeys={allZones} selected={selectedZones} onToggle={toggleZone} colorMap={ZONE_COLORS} label="Zone" />
+            <ZoneDropdown allKeys={allClusters} selected={selectedClusters} onToggle={toggleCluster} colorMap={CLUSTER_COLORS} label="Cluster" />
+            <ZoneDropdown allKeys={allStates} selected={selectedStates} onToggle={toggleState} colorFn={hashColor} label="State" />
+            <div style={{ width: 1, height: 16, background: '#334155' }} />
+            {/* Store count */}
+            <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>
+              {filteredStores.length} stores
+            </span>
+            {/* Clear filters */}
+            {(selectedZones.size > 0 || selectedClusters.size > 0 || selectedStates.size > 0) && (
+              <button onClick={() => { setSelectedZones(new Set()); setSelectedClusters(new Set()); setSelectedStates(new Set()) }}
+                style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                  background: '#ef444422', border: '1px solid #ef4444', color: '#ef4444' }}>
+                ✕ Clear
+              </button>
+            )}
+          </div>
+        )}
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#64748b' }}>Loading map…</div>}
         {!loading && mapErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#f87171', flexDirection: 'column', gap: 8 }}>⚠ {mapErr}</div>}
         <div ref={mapRef} style={mapFullscreen ? { flex: 1, minHeight: 0 } : { height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />

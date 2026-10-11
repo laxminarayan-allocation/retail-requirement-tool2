@@ -765,7 +765,8 @@ export default function AppLayout() {
                         badge={
                           (item.to === '/option-listing' && pipelineRunning) ||
                           (item.to === '/allocation-pipeline' && allocationRunning) ||
-                          (item.to === '/data-store' && dataStoreRunning)
+                          (item.to === '/data-store' && dataStoreRunning) ||
+                          (item.to === '/oracle-refresh' && oracleRunning)
                         }
                         reorderMode={reorderMode}
                         dragOver={dragOverIdx === idx}

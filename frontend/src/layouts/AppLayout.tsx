@@ -414,7 +414,7 @@ export default function AppLayout() {
       // Data Store downloads
       fetch('/api/data-store/status', { headers: { Authorization: `Bearer ${t}` } })
         .then(r => r.json()).then(d => {
-          const sources = Array.isArray(d?.data) ? d.data : []
+          const sources = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : []
           setDataStoreRunning(sources.some((s: any) => s.download_status === 'running'))
         }).catch(() => {})
       // Allocation pipeline — check sessionStorage for active jobs

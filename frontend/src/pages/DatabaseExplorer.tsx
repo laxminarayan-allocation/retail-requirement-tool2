@@ -950,7 +950,7 @@ const PAGE_CHIP_COLOR: Record<string, string> = {
   'Option Listing':'#f97316',
 }
 
-function DownloadedFilesPanel() {
+function DownloadedFilesPanel({ onRunningChange }: { onRunningChange?: (running: boolean) => void }) {
   const isMobile = useIsMobile()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
@@ -982,6 +982,15 @@ function DownloadedFilesPanel() {
   const [autoTime, setAutoTime] = useState<string>('06:00')
   const [autoRunLog, setAutoRunLog] = useState<string | null>(null)
   const [autoRunning, setAutoRunning] = useState(false)
+
+  // Notify parent when any refresh is active (for green dot on tab)
+  useEffect(() => {
+    const anyRunning =
+      refreshAllState === 'running' ||
+      Object.values(refreshStatus).some(s => s === 'refreshing') ||
+      autoRunning
+    onRunningChange?.(anyRunning)
+  }, [refreshAllState, refreshStatus, autoRunning, onRunningChange])
 
   // Load freq map + schedule time from backend on mount
   useEffect(() => {
@@ -1908,6 +1917,7 @@ export default function DatabaseExplorer() {
   const [selectedType, setSelectedType] = useState<ObjType>('TABLE')
   const [mobilePanelTab, setMobilePanelTab] = useState(0)
   const [mainTab, setMainTab] = useState<'explorer' | 'downloads' | 'masterdata'>('explorer')
+  const [downloadsRunning, setDownloadsRunning] = useState(false)
 
   const handleObjectSelect = (name: string, type: ObjType) => {
     setSelectedName(name)
@@ -1935,6 +1945,7 @@ export default function DatabaseExplorer() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 110px)', gap: 10 }}>
+      <style>{`@keyframes pulse-dot { 0%,100%{opacity:1;box-shadow:0 0 6px #22c55e}50%{opacity:0.4;box-shadow:0 0 2px #22c55e} }`}</style>
 
       {/* Title + search + SQL export */}
       <div style={{ flexShrink: 0 }}>
@@ -1958,6 +1969,14 @@ export default function DatabaseExplorer() {
         </button>
         <button style={TAB_STYLE(mainTab === 'downloads')} onClick={() => setMainTab('downloads')}>
           📁 Downloaded Files
+          {downloadsRunning && (
+            <span style={{
+              display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
+              background: '#22c55e', marginLeft: 6, verticalAlign: 'middle',
+              boxShadow: '0 0 0 2px rgba(34,197,94,0.3)',
+              animation: 'pulse-dot 1.2s ease-in-out infinite',
+            }} />
+          )}
         </button>
         <button style={TAB_STYLE(mainTab === 'masterdata')} onClick={() => setMainTab('masterdata')}>
           📂 Master Data
@@ -1966,7 +1985,7 @@ export default function DatabaseExplorer() {
 
       {/* Downloaded Files — always mounted so it loads once, hidden when not active */}
       <div style={{ flex: '1 1 0', minHeight: 0, display: mainTab === 'downloads' ? 'flex' : 'none', flexDirection: 'column' }}>
-        <DownloadedFilesPanel />
+        <DownloadedFilesPanel onRunningChange={setDownloadsRunning} />
       </div>
 
       {/* Master Data — always mounted, hidden when not active */}

@@ -1431,8 +1431,8 @@ function onSearch(v){
   const allCities = Array.from(new Set(stores.map(s => s.city).filter(v => v && v !== '-'))).sort()
 
   // Toggle helpers
-  const toggleZone = (k: string) => setSelectedZones(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
-  const toggleCluster = (k: string) => setSelectedClusters(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const toggleZone = useCallback((k: string) => setSelectedZones(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n }), [])
+  const toggleCluster = useCallback((k: string) => setSelectedClusters(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n }), [])
   const toggleState = (k: string) => {
     setSelectedStates(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
     // Auto-enable state boundary when any state is selected
@@ -1671,13 +1671,36 @@ function onSearch(v){
         const lbl = L.marker([cx, cy], { icon: L.divIcon({ className: '', iconAnchor: [30, 9], html: `<div style="background:#0f172acc;color:${col};font-size:8px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;border:1px solid ${col}66">${key}</div>` }), interactive: false }).addTo(leafletMap.current)
         boundsLayersRef.current.push(outer, inner, lbl)
       } else {
-        const poly = L.polygon(hull, { color: col, weight: 2.5, opacity: 0.85, fillColor: col, fillOpacity: 0.1, dashArray: '7 5' })
-        poly.bindTooltip(`<b style="font-size:12px">${key}</b>`, { permanent: true, direction: 'center', className: 'zone-label-tip' })
+        const isSelected = boundaryBy === 'zone' ? selectedZones.has(key) : selectedClusters.has(key)
+        const toggleFn = boundaryBy === 'zone' ? toggleZone : toggleCluster
+        const poly = L.polygon(hull, {
+          color: col, weight: isSelected ? 3.5 : 2.5, opacity: 0.85,
+          fillColor: col, fillOpacity: isSelected ? 0.18 : 0.08,
+          dashArray: isSelected ? undefined : '7 5',
+        })
+        poly.bindTooltip(
+          `<b style="font-size:12px">${key}</b><div style="font-size:10px;color:#94a3b8">Click to ${isSelected ? 'deselect' : 'filter'}</div>`,
+          { permanent: false, sticky: true, direction: 'top', className: 'zone-label-tip' }
+        )
+        poly.on('click', () => toggleFn(key))
+        poly.on('mouseover', () => poly.setStyle({ fillOpacity: isSelected ? 0.28 : 0.18, weight: 4 }))
+        poly.on('mouseout',  () => poly.setStyle({ fillOpacity: isSelected ? 0.18 : 0.08, weight: isSelected ? 3.5 : 2.5 }))
+        // Permanent label in centre
+        const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
+        const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
+        const lbl = L.marker([cx, cy], {
+          icon: L.divIcon({
+            className: '', iconAnchor: [40, 11],
+            html: `<div style="background:#0f172acc;color:${col};font-size:11px;font-weight:800;padding:3px 8px;border-radius:4px;white-space:nowrap;border:1.5px solid ${col}${isSelected ? '' : '88'};cursor:pointer${isSelected ? ';box-shadow:0 0 0 2px '+col+'44' : ''}">${key}${isSelected ? ' ✓' : ''}</div>`,
+          }),
+        })
+        lbl.on('click', () => toggleFn(key))
+        lbl.addTo(leafletMap.current)
         poly.addTo(leafletMap.current)
-        boundsLayersRef.current.push(poly)
+        boundsLayersRef.current.push(poly, lbl)
       }
     })
-  }, [showAllBounds, boundaryBy, stores, colorBy, loading, selectedZones, selectedClusters])
+  }, [showAllBounds, boundaryBy, stores, colorBy, loading, selectedZones, selectedClusters, toggleZone, toggleCluster])
 
   // Distance line — multi-segment
   useEffect(() => {

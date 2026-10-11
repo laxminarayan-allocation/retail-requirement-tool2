@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { api } from '@/api/client'
 import http from '@/api/http'
 import { useAuth } from '@/context/AuthContext'
+import { useDbRefresh } from '@/context/DbRefreshContext'
 import { DataGrid } from '@/components/DataGrid'
 import { Card } from '@/components/Card'
 import MasterData from '@/pages/MasterData'
@@ -950,9 +951,10 @@ const PAGE_CHIP_COLOR: Record<string, string> = {
   'Option Listing':'#f97316',
 }
 
-function DownloadedFilesPanel({ onRunningChange }: { onRunningChange?: (running: boolean) => void }) {
+function DownloadedFilesPanel() {
   const isMobile = useIsMobile()
   const { user } = useAuth()
+  const { setDownloadsRunning } = useDbRefresh()
   const isAdmin = user?.role === 'admin'
   const [refreshAllState, setRefreshAllState] = useState<'idle' | 'running' | 'done'>('idle')
   const [files, setFiles] = useState<OutputFile[]>([])
@@ -983,14 +985,14 @@ function DownloadedFilesPanel({ onRunningChange }: { onRunningChange?: (running:
   const [autoRunLog, setAutoRunLog] = useState<string | null>(null)
   const [autoRunning, setAutoRunning] = useState(false)
 
-  // Notify parent when any refresh is active (for green dot on tab)
+  // Notify context when any refresh is active (for green dot on tab + sidebar)
   useEffect(() => {
     const anyRunning =
       refreshAllState === 'running' ||
       Object.values(refreshStatus).some(s => s === 'refreshing') ||
       autoRunning
-    onRunningChange?.(anyRunning)
-  }, [refreshAllState, refreshStatus, autoRunning, onRunningChange])
+    setDownloadsRunning(anyRunning)
+  }, [refreshAllState, refreshStatus, autoRunning, setDownloadsRunning])
 
   // Load freq map + schedule time from backend on mount
   useEffect(() => {
@@ -1917,7 +1919,7 @@ export default function DatabaseExplorer() {
   const [selectedType, setSelectedType] = useState<ObjType>('TABLE')
   const [mobilePanelTab, setMobilePanelTab] = useState(0)
   const [mainTab, setMainTab] = useState<'explorer' | 'downloads' | 'masterdata'>('explorer')
-  const [downloadsRunning, setDownloadsRunning] = useState(false)
+  const { downloadsRunning } = useDbRefresh()
 
   const handleObjectSelect = (name: string, type: ObjType) => {
     setSelectedName(name)
@@ -1985,7 +1987,7 @@ export default function DatabaseExplorer() {
 
       {/* Downloaded Files — always mounted so it loads once, hidden when not active */}
       <div style={{ flex: '1 1 0', minHeight: 0, display: mainTab === 'downloads' ? 'flex' : 'none', flexDirection: 'column' }}>
-        <DownloadedFilesPanel onRunningChange={setDownloadsRunning} />
+        <DownloadedFilesPanel />
       </div>
 
       {/* Master Data — always mounted, hidden when not active */}

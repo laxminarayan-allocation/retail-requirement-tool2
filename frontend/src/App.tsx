@@ -30,6 +30,7 @@ import ResultsJourney from '@/pages/ResultsJourney'
 import RunLogs from '@/pages/RunLogs'
 import DeployAgent from '@/pages/DeployAgent'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
+import { DbRefreshProvider } from '@/context/DbRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
     <DisplayProvider>
     <ThemeProvider>
     <AuthProvider>
+    <DbRefreshProvider>
     <OracleRefreshProvider>
       <BrowserRouter>
         <Routes>
@@ -76,6 +78,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </OracleRefreshProvider>
+    </DbRefreshProvider>
     </AuthProvider>
     </ThemeProvider>
     </DisplayProvider>

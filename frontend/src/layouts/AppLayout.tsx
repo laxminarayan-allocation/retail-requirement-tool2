@@ -8,6 +8,7 @@ import PendingPage from '@/pages/PendingPage'
 import AssistantWidget from '@/components/AssistantWidget'
 import NotificationBell from '@/components/NotificationBell'
 import { useOracleRefresh } from '@/context/OracleRefreshContext'
+import { useDbRefresh } from '@/context/DbRefreshContext'
 import { useZoom, ZOOM_STEPS } from '@/context/ZoomContext'
 
 function useIsMobile() {
@@ -401,6 +402,7 @@ export default function AppLayout() {
   const { user, token, loading, signout, pageAccess, previewRole, setPreviewRole } = useAuth()
   const { tokens, theme } = useTheme()
   const { isRunning: oracleRunning } = useOracleRefresh()
+  const { downloadsRunning } = useDbRefresh()
   const [pipelineRunning, setPipelineRunning] = useState(false)
   const [allocationRunning, setAllocationRunning] = useState(false)
   const [dataStoreRunning, setDataStoreRunning] = useState(false)
@@ -766,7 +768,8 @@ export default function AppLayout() {
                           (item.to === '/option-listing' && pipelineRunning) ||
                           (item.to === '/allocation-pipeline' && allocationRunning) ||
                           (item.to === '/data-store' && dataStoreRunning) ||
-                          (item.to === '/oracle-refresh' && oracleRunning)
+                          (item.to === '/oracle-refresh' && oracleRunning) ||
+                          (item.to === '/database' && downloadsRunning)
                         }
                         reorderMode={reorderMode}
                         dragOver={dragOverIdx === idx}

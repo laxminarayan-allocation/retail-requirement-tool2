@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '@/context/ThemeContext'
+import { useDbRefresh } from '@/context/DbRefreshContext'
 
 interface Source {
   key: string
@@ -37,6 +38,7 @@ function fmtAgo(iso: string | null) {
 
 export default function DataStore() {
   const { tokens: T } = useTheme()
+  const { setDataStoreRunning } = useDbRefresh()
   const [sources, setSources] = useState<Source[]>([])
   const [loading, setLoading] = useState(true)
   const [allRunning, setAllRunning] = useState(false)
@@ -73,6 +75,8 @@ export default function DataStore() {
   const staleCount  = sources.filter(s => s.file_status === 'stale').length
   const missingCount = sources.filter(s => s.file_status === 'missing').length
   const runningCount = sources.filter(s => s.download_status === 'running').length
+
+  useEffect(() => { setDataStoreRunning(runningCount > 0) }, [runningCount, setDataStoreRunning])
 
   const statusIcon  = (s: Source) => {
     if (s.download_status === 'running') return { icon: '⟳', color: '#f59e0b' }

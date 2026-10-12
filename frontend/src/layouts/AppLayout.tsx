@@ -402,10 +402,9 @@ export default function AppLayout() {
   const { user, token, loading, signout, pageAccess, previewRole, setPreviewRole } = useAuth()
   const { tokens, theme } = useTheme()
   const { isRunning: oracleRunning } = useOracleRefresh()
-  const { downloadsRunning } = useDbRefresh()
+  const { downloadsRunning, dataStoreRunning } = useDbRefresh()
   const [pipelineRunning, setPipelineRunning] = useState(false)
   const [allocationRunning, setAllocationRunning] = useState(false)
-  const [dataStoreRunning, setDataStoreRunning] = useState(false)
   useEffect(() => {
     const poll = () => {
       const t = localStorage.getItem('ck_ss27_token') ?? ''
@@ -413,12 +412,6 @@ export default function AppLayout() {
       // Option Listing pipeline
       fetch('/api/option-listing/pipeline/status', { headers: { Authorization: `Bearer ${t}` } })
         .then(r => r.json()).then(d => setPipelineRunning(d?.status === 'running')).catch(() => {})
-      // Data Store downloads
-      fetch('/api/data-store/status', { headers: { Authorization: `Bearer ${t}` } })
-        .then(r => r.json()).then(d => {
-          const sources = Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : []
-          setDataStoreRunning(sources.some((s: any) => s.download_status === 'running'))
-        }).catch(() => {})
       // Allocation pipeline — check sessionStorage for active jobs
       try {
         const jobs = JSON.parse(sessionStorage.getItem('ss27_active_jobs') ?? '[]')

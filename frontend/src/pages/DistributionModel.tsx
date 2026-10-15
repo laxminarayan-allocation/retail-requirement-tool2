@@ -1,7 +1,7 @@
 ﻿/**
  * Distribution Model — replenishment distribution engine.
  */
-import { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import http from '@/api/http'
 import StaleBanner from '@/components/StaleBanner'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -94,7 +94,7 @@ function MultiSelect({
         onClick={() => setOpen(o => !o)}
         style={{
           width, padding: '5px 10px', fontSize: 12, borderRadius: 6, textAlign: 'left',
-          border: `1px solid ${selected.length > 0 ? '#6366f1' : tokens.border}`,
+          border: `1px solid ${selected.length > 0 ? '#6366f1' : tokens.cardBorder}`,
           background: selected.length > 0 ? '#6366f110' : tokens.cardBg,
           color: selected.length > 0 ? '#818cf8' : tokens.textMuted,
           cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -106,7 +106,7 @@ function MultiSelect({
       {open && (
         <div style={{
           position: 'absolute', top: '110%', left: 0, zIndex: 999, width: Math.max(width, 220),
-          background: tokens.cardBg, border: `1px solid ${tokens.border}`, borderRadius: 8,
+          background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8,
           boxShadow: '0 6px 24px rgba(0,0,0,0.4)', padding: 8,
         }}>
           <input
@@ -116,19 +116,19 @@ function MultiSelect({
             onChange={e => setSearch(e.target.value)}
             style={{
               width: '100%', padding: '5px 8px', fontSize: 12, borderRadius: 5, marginBottom: 6,
-              border: `1px solid ${tokens.border}`, background: tokens.shellBg, color: tokens.text, boxSizing: 'border-box',
+              border: `1px solid ${tokens.cardBorder}`, background: tokens.shellBg, color: tokens.textPrimary, boxSizing: 'border-box',
             }}
           />
           <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-            <button onClick={() => onChange([])} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: `1px solid ${tokens.border}`, background: allSelected ? '#6366f1' : 'transparent', color: allSelected ? '#fff' : tokens.textMuted, cursor: 'pointer' }}>All</button>
-            <button onClick={() => onChange([...options])} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>Select All</button>
+            <button onClick={() => onChange([])} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: `1px solid ${tokens.cardBorder}`, background: allSelected ? '#6366f1' : 'transparent', color: allSelected ? '#fff' : tokens.textMuted, cursor: 'pointer' }}>All</button>
+            <button onClick={() => onChange([...options])} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: `1px solid ${tokens.cardBorder}`, background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>Select All</button>
           </div>
           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {filtered.length === 0 && <div style={{ fontSize: 11, color: tokens.textMuted, padding: '4px 6px' }}>No results</div>}
             {filtered.map(opt => (
               <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 6px', borderRadius: 4, cursor: 'pointer', background: selected.includes(opt) ? '#6366f115' : 'transparent' }}>
                 <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} style={{ accentColor: '#6366f1', width: 13, height: 13 }} />
-                <span style={{ fontSize: 12, color: tokens.text }}>{opt}</span>
+                <span style={{ fontSize: 12, color: tokens.textPrimary }}>{opt}</span>
               </label>
             ))}
           </div>
@@ -147,6 +147,79 @@ function StatusBadge({ ready }: { ready: boolean }) {
     }}>{ready ? '✓ Cached' : '⚠ Not Downloaded'}</span>
   )
 }
+
+// ── Collapsible section ────────────────────────────────────────────────────────
+function DkCollapse({ title, badge, defaultOpen = true, children }: {
+  title: string; badge?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode
+}) {
+  const { tokens } = useTheme()
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div style={{ border: `1px solid ${tokens.cardBorder}`, borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+          background: tokens.contentBg ?? tokens.cardBg, userSelect: 'none' as const }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, color: tokens.textPrimary, flex: 1 }}>{title}</span>
+        {badge}
+        <span style={{ fontSize: 11, color: tokens.textMuted, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ padding: '12px 14px', borderTop: `1px solid ${tokens.cardBorder}` }}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Upload zone ────────────────────────────────────────────────────────────────
+function DkUploadZone({ label, hint, active, filename, rows, uploading, onUpload, onClear, inputRef }: {
+  label: string; hint: string; active?: boolean; filename?: string; rows?: number
+  uploading?: boolean; onUpload: (f: File) => void; onClear?: () => void
+  inputRef?: { current: HTMLInputElement | null }
+}) {
+  const { tokens } = useTheme()
+  const localRef = useRef<HTMLInputElement>(null)
+  const ref: { current: HTMLInputElement | null } = inputRef ?? localRef
+  return (
+    <div
+      onClick={() => !active && ref.current?.click()}
+      style={{
+        border: active ? `1px solid #22c55e` : `1px dashed ${tokens.cardBorder ?? '#3a3a3c'}`,
+        borderRadius: 8, padding: '10px 14px',
+        display: 'flex', alignItems: 'center', gap: 12, cursor: active ? 'default' : 'pointer',
+        background: active ? '#1c3a2a22' : 'transparent',
+        transition: 'border-color 0.15s',
+      }}
+    >
+      <span style={{ fontSize: 16, flexShrink: 0 }}>{active ? '✅' : '📂'}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: tokens.textPrimary }}>{label}</div>
+        {active && filename
+          ? <div style={{ fontSize: 11, color: '#4ade80', marginTop: 2 }}>{filename} · {rows?.toLocaleString('en-IN')} rows</div>
+          : <div style={{ fontSize: 10, color: tokens.textMuted, fontFamily: 'monospace', marginTop: 2 }}>{hint}</div>}
+      </div>
+      {active && onClear && (
+        <button onClick={e => { e.stopPropagation(); onClear() }}
+          style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440',
+            background: 'transparent', color: '#f87171', cursor: 'pointer', flexShrink: 0 }}>
+          Clear
+        </button>
+      )}
+      {!active && (
+        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: tokens.cardBg, color: tokens.textMuted,
+          border: `1px solid ${tokens.cardBorder}`, flexShrink: 0 }}>
+          {uploading ? 'Uploading…' : '+ Upload'}
+        </span>
+      )}
+      <input ref={ref} type="file" accept=".csv" hidden
+        onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = '' }} />
+    </div>
+  )
+}
+
 
 // ── localStorage helpers (survives hard refresh) ───────────────────────────────
 const SS_KEY = 'ck_dist_state'
@@ -436,12 +509,12 @@ export default function DistributionModel() {
   }
 
   const S = {
-    page: { padding: isMobile ? '16px 12px' : '24px 32px', minHeight: '100vh', background: tokens.pageBg, color: tokens.text } as React.CSSProperties,
-    card: { background: tokens.cardBg, border: `1px solid ${tokens.border}`, borderRadius: 10, padding: '18px 20px' } as React.CSSProperties,
+    page: { padding: isMobile ? '16px 12px' : '24px 32px', minHeight: '100vh', background: tokens.shellBg, color: tokens.textPrimary } as React.CSSProperties,
+    card: { background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '18px 20px' } as React.CSSProperties,
     cardTitle: { fontSize: 12, fontWeight: 600, color: tokens.textMuted, marginBottom: 14, textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
     btn: (color: string, disabled?: boolean) => ({
       padding: '7px 18px', fontSize: 13, fontWeight: 600, borderRadius: 6, border: 'none',
-      cursor: disabled ? 'not-allowed' : 'pointer', background: disabled ? tokens.border : color,
+      cursor: disabled ? 'not-allowed' : 'pointer', background: disabled ? tokens.cardBorder : color,
       color: '#fff', opacity: disabled ? 0.6 : 1,
     } as React.CSSProperties),
     msg: (ok: boolean) => ({ marginTop: 10, fontSize: 12, color: ok ? '#34d399' : '#f87171' } as React.CSSProperties),
@@ -657,56 +730,79 @@ export default function DistributionModel() {
         </p>
       </div>
 
+      {/* ── Pipeline bar ─────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 20,
+        background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '14px 18px' }}>
+        {[
+          { n: 1, title: 'Configure', sub: 'Source · filters', state: 'done' },
+          { n: 2, title: 'Build base', sub: 'REQ · stock · priority', state: baseCacheReady ? 'done' : 'active' },
+          { n: 3, title: 'Run loop', sub: 'Allocate · export', state: distResult ? 'done' : (baseCacheReady ? 'active' : 'idle') },
+        ].map((step, idx) => (
+          <React.Fragment key={step.n}>
+            {idx > 0 && (
+              <div style={{ width: 28, height: 2, background: step.state === 'done' ? '#22c55e' : tokens.cardBorder, flexShrink: 0, margin: '0 6px' }} />
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, flexShrink: 0, border: '2px solid transparent',
+                background: step.state === 'done' ? '#1c3a2a' : step.state === 'active' ? '#1e3a5f' : '#2a2a2c',
+                borderColor: step.state === 'done' ? '#22c55e' : step.state === 'active' ? '#3b82f6' : '#4a4a4c',
+                color: step.state === 'done' ? '#4ade80' : step.state === 'active' ? '#60a5fa' : '#6b6b6e',
+              }}>
+                {step.state === 'done' ? '✓' : step.n}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: tokens.textPrimary }}>{step.title}</div>
+                <div style={{ fontSize: 11, color: tokens.textMuted, marginTop: 1 }}>{step.sub}</div>
+              </div>
+            </div>
+          </React.Fragment>
+        ))}
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
 
         {/* Step 1 — Selections */}
         <div style={S.card}>
-          <div style={S.cardTitle}>Step 1 — Select Sources</div>
+          {/* Step 1 header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#1e3a5f', color: '#60a5fa',
+              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.textPrimary }}>Configure</div>
+              <div style={{ fontSize: 11, color: tokens.textMuted }}>Source · filters · stock override</div>
+            </div>
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+              background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>Ready</span>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <PillToggle label="Req Source"    options={[{val:'GRC',text:'GRC'},{val:'WMS',text:'WMS'},{val:'BOTH',text:'GRC + WMS'}]}  value={reqSource}  onChange={v => { setReqSource(v); clearCsvUpload() }}  accent="#6366f1" />
             <PillToggle label="Biz Segment"   options={[{val:'APPS',text:'APPS'},{val:'GM',text:'GM'},{val:'BOTH',text:'Both'}]}         value={bizSegment} onChange={setBizSegment} accent="#0ea5e9" />
             <PillToggle label="Sort Priority" options={[{val:'fill_rate',text:'MC Fill Rate ↑'},{val:'combined_req',text:'Combined Req ↓'},{val:'festive_req',text:'Festive + Req ↓'}]} value={sortMode} onChange={setSortMode} accent="#f59e0b" />
 
             {/* CSV Stock Upload */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 90, paddingTop: 4 }}>Stock CSV</span>
-              <div style={{ flex: 1 }}>
-                {csvUploadActive && csvUploadMeta ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ background: '#16423c', border: '1px solid #22c55e40', borderRadius: 8, padding: '6px 12px', fontSize: 12 }}>
-                      <span style={{ color: '#4ade80', fontWeight: 700 }}>✓ {csvUploadMeta.filename}</span>
-                      <span style={{ color: tokens.textMuted, marginLeft: 8 }}>{csvUploadMeta.rows.toLocaleString('en-IN')} rows · {csvUploadMeta.qty_col}</span>
-                    </div>
-                    <button onClick={clearCsvUpload} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>
-                      × Clear
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button
-                      onClick={() => csvInputRef.current?.click()}
-                      disabled={csvUploading}
-                      style={{ fontSize: 12, padding: '5px 14px', borderRadius: 8, border: '1px dashed #6366f180', background: '#6366f110', color: '#818cf8', cursor: 'pointer', fontWeight: 600 }}
-                    >
-                      {csvUploading ? '⏳ Uploading…' : '⬆ Upload Barcode QTY CSV'}
-                    </button>
-                    <span style={{ fontSize: 11, color: tokens.textMuted }}>BARCODE + GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY</span>
-                    <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvUpload(f); e.target.value = '' }} />
-                  </div>
-                )}
-                {csvUploadMsg && (
-                  <div style={{ marginTop: 4, fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{csvUploadMsg}</div>
-                )}
-              </div>
-            </div>
+            <DkUploadZone
+              label="Stock QTY override"
+              hint="BARCODE, GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY"
+              active={csvUploadActive}
+              filename={csvUploadMeta?.filename}
+              rows={csvUploadMeta?.rows}
+              uploading={csvUploading}
+              onUpload={handleCsvUpload}
+              onClear={clearCsvUpload}
+              inputRef={csvInputRef}
+            />
+            {csvUploadMsg && (
+              <div style={{ marginTop: 4, fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{csvUploadMsg}</div>
+            )}
 
             {/* Scope Builder: Row-based Division × Attr1 (OR between rows, multi-select within row) */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 90 }}>Scope Filter</span>
                 <button onClick={addScope} style={{
-                  padding: '3px 12px', fontSize: 11, borderRadius: 12, border: `1px solid ${tokens.border}`,
+                  padding: '3px 12px', fontSize: 11, borderRadius: 12, border: `1px solid ${tokens.cardBorder}`,
                   cursor: 'pointer', background: 'transparent', color: tokens.textMuted,
                 }}>+ Add Row</button>
                 {scopes.some(s => s.divisions.length > 0 || s.attribute1s.length > 0) && (
@@ -739,7 +835,25 @@ export default function DistributionModel() {
 
         {/* Step 2 — Build Base */}
         <div style={S.card}>
-          <div style={S.cardTitle}>Step 2 — Build Distribution Base</div>
+          {/* Step 2 header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%',
+              background: baseCacheReady ? '#1c3a2a' : '#1e3a5f',
+              color: baseCacheReady ? '#4ade80' : '#60a5fa',
+              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {baseCacheReady ? '✓' : '2'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.textPrimary }}>Build base</div>
+              <div style={{ fontSize: 11, color: tokens.textMuted }}>Item master · stores · REQ overrides · priority</div>
+            </div>
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+              background: baseCacheReady ? '#1c3a2a' : '#2a2a2c',
+              color: baseCacheReady ? '#4ade80' : '#6b6b6e',
+              border: baseCacheReady ? '1px solid #22c55e40' : '1px solid #3a3a3c' }}>
+              {baseCacheReady ? 'Built' : 'Not built'}
+            </span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 12, color: tokens.textMuted }}>
             <span>Item Master:</span>
             <StatusBadge ready={imStatus?.ready ?? false} />
@@ -789,12 +903,12 @@ export default function DistributionModel() {
           <div ref={fieldPickerRef} style={{ position: 'relative', display: 'inline-block', marginBottom: 14 }}>
             <button onClick={() => setFieldPickerOpen(o => !o)} style={{
               fontSize: 11, padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
-              border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted,
+              border: `1px solid ${tokens.cardBorder}`, background: 'transparent', color: tokens.textMuted,
             }}>+ Add Field Filter</button>
             {fieldPickerOpen && (
               <div style={{
                 position: 'absolute', top: '110%', left: 0, zIndex: 999, minWidth: 180,
-                background: tokens.cardBg, border: `1px solid ${tokens.border}`, borderRadius: 8,
+                background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8,
                 boxShadow: '0 6px 24px rgba(0,0,0,0.4)', padding: 6,
               }}>
                 {Object.entries(storeFieldMeta).length === 0 && (
@@ -808,7 +922,7 @@ export default function DistributionModel() {
                     display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
                     fontSize: 12, border: 'none', borderRadius: 5, cursor: 'pointer',
                     background: addedFilterFields.includes(col) ? '#6366f115' : 'transparent',
-                    color: addedFilterFields.includes(col) ? '#818cf8' : tokens.text,
+                    color: addedFilterFields.includes(col) ? '#818cf8' : tokens.textPrimary,
                   }}>
                     {meta.label} {addedFilterFields.includes(col) ? '✓' : ''}
                   </button>
@@ -817,94 +931,98 @@ export default function DistributionModel() {
             )}
           </div>
           {/* Store Priority CSVs */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
-              Store Priority (optional)
+          <DkCollapse
+            title="Store priority"
+            defaultOpen={Object.keys(priorityMeta).length > 0}
+            badge={Object.keys(priorityMeta).length > 0
+              ? <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>{Object.keys(priorityMeta).length} active</span>
+              : <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#2a2a2c', color: '#6b6b6e', border: '1px solid #3a3a3c' }}>optional</span>}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: Object.keys(priorityMeta).length > 0 ? 10 : 0 }}>
+              {PRIORITY_CSV_SPECS.map(spec => {
+                const meta = priorityMeta[spec.key]
+                const uploading = priorityUploading[spec.key]
+                const msg = priorityMsg[spec.key]
+                return (
+                  <div key={spec.key}>
+                    <DkUploadZone
+                      label={spec.label}
+                      hint={spec.hint}
+                      active={!!meta}
+                      filename={meta?.filename}
+                      rows={meta?.rows}
+                      uploading={uploading}
+                      onUpload={f => handlePriorityUpload(spec.key, f)}
+                      onClear={() => clearPriority(spec.key)}
+                      inputRef={{ current: priorityRefs.current[spec.key] ?? null }}
+                    />
+                    {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
+                  </div>
+                )
+              })}
             </div>
-            <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
-              Upload to enable fill-rate + override priority sorting in the allocation loop.
-              Without these, all stores are treated equally within each barcode.
-            </div>
-            {PRIORITY_CSV_SPECS.map(spec => {
-              const meta = priorityMeta[spec.key]
-              const uploading = priorityUploading[spec.key]
-              const msg = priorityMsg[spec.key]
-              return (
-                <div key={spec.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 180 }}>{spec.label}</span>
-                  {meta ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 11, background: '#6366f118', color: '#818cf8', border: '1px solid #6366f140', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
-                        ✓ {meta.filename} · {meta.rows.toLocaleString('en-IN')} rows
-                      </span>
-                      <button onClick={() => clearPriority(spec.key)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✕ Clear</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => priorityRefs.current[spec.key]?.click()} disabled={uploading}
-                      style={{ fontSize: 11, padding: '4px 12px', borderRadius: 5, border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>
-                      {uploading ? 'Uploading…' : '+ Upload CSV'}
-                    </button>
-                  )}
-                  <span style={{ fontSize: 10, color: tokens.textMuted, fontFamily: 'monospace' }}>{spec.hint}</span>
-                  {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#818cf8' : '#f87171' }}>{msg}</span>}
-                  <input ref={el => { priorityRefs.current[spec.key] = el }} type="file" accept=".csv" hidden
-                    onChange={e => { const fl = e.target.files?.[0]; if (fl) handlePriorityUpload(spec.key, fl); e.target.value = '' }} />
-                </div>
-              )
-            })}
             {Object.keys(priorityMeta).length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 11, color: '#818cf8', padding: '5px 10px', background: '#6366f110', borderRadius: 6, border: '1px solid #6366f130' }}>
-                ★ Priority active: override stores first → fill-rate rank → concept-listed stores → highest REQ
-              </div>
-            )}
-          </div>
-
-          {/* REQ CSV Overrides */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
-              REQ CSV Overrides (optional)
-            </div>
-            {REQ_CSV_SPECS.map(spec => {
-              const meta = reqCsvMeta[spec.key]
-              const uploading = reqCsvUploading[spec.key]
-              const msg = reqCsvMsg[spec.key]
-              return (
-                <div key={spec.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 160 }}>{spec.label}</span>
-                  {meta ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 11, background: '#22c55e18', color: '#4ade80', border: '1px solid #22c55e40', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
-                        ✓ {meta.filename} · {meta.rows.toLocaleString('en-IN')} rows
-                      </span>
-                      <button onClick={() => clearReqCsv(spec.key)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✕ Clear</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => reqCsvRefs.current[spec.key]?.click()} disabled={uploading}
-                      style={{ fontSize: 11, padding: '4px 12px', borderRadius: 5, border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>
-                      {uploading ? 'Uploading…' : '+ Upload CSV'}
-                    </button>
-                  )}
-                  <span style={{ fontSize: 10, color: tokens.textMuted, fontFamily: 'monospace' }}>{spec.hint}</span>
-                  {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</span>}
-                  <input ref={el => { reqCsvRefs.current[spec.key] = el }} type="file" accept=".csv" hidden
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleReqCsvUpload(spec.key, f); e.target.value = '' }} />
-                </div>
-              )
-            })}
-            {/* Fallback option -- shown only when any REQ CSV is active */}
-            {Object.keys(reqCsvMeta).length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '8px 12px', background: tokens.cardBg, borderRadius: 7, border: `1px solid ${tokens.border}` }}>
-                <span style={{ fontSize: 12, color: tokens.textMuted }}>Items not in CSV:</span>
-                {(['parquet', 'zero'] as const).map(opt => (
-                  <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: reqFallback === opt ? tokens.text : tokens.textMuted }}>
-                    <input type="radio" name="reqFallback" value={opt} checked={reqFallback === opt}
-                      onChange={() => { setReqFallback(opt); ssSave({ reqFallback: opt }) }} />
-                    {opt === 'parquet' ? 'Use parquet data (default)' : 'Use 0 (ignore)'}
-                  </label>
+              <div style={{ padding: '8px 12px', background: '#1a1a3e', border: '1px solid #2d1f5e', borderRadius: 6,
+                display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: '#6b6b9e', marginRight: 2 }}>Sort:</span>
+                {['Override stores first', 'Fill-rate rank', 'Concept listed', 'Highest REQ'].map((item, i, arr) => (
+                  <React.Fragment key={item}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#a78bfa' }}>{item}</span>
+                    {i < arr.length - 1 && <span style={{ fontSize: 10, color: '#4a4a6e' }}>›</span>}
+                  </React.Fragment>
                 ))}
               </div>
             )}
-          </div>
+          </DkCollapse>
+
+          {/* REQ CSV Overrides */}
+          <DkCollapse
+            title="REQ CSV overrides"
+            defaultOpen={false}
+            badge={Object.keys(reqCsvMeta).length > 0
+              ? <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>{Object.keys(reqCsvMeta).length} active</span>
+              : <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#2a2a2c', color: '#6b6b6e', border: '1px solid #3a3a3c' }}>optional</span>}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {REQ_CSV_SPECS.map(spec => {
+                const meta = reqCsvMeta[spec.key]
+                const uploading = reqCsvUploading[spec.key]
+                const msg = reqCsvMsg[spec.key]
+                return (
+                  <div key={spec.key}>
+                    <DkUploadZone
+                      label={spec.label}
+                      hint={spec.hint}
+                      active={!!meta}
+                      filename={meta?.filename}
+                      rows={meta?.rows}
+                      uploading={uploading}
+                      onUpload={f => handleReqCsvUpload(spec.key, f)}
+                      onClear={() => clearReqCsv(spec.key)}
+                      inputRef={{ current: reqCsvRefs.current[spec.key] ?? null }}
+                    />
+                    {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
+                  </div>
+                )
+              })}
+            </div>
+            {Object.keys(reqCsvMeta).length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, padding: '8px 12px',
+                background: '#2a2000', borderRadius: 7, border: '1px solid #f59e0b40' }}>
+                <span style={{ fontSize: 12, color: '#f59e0b' }}>Unmatched rows:</span>
+                {(['parquet', 'zero'] as const).map(opt => (
+                  <button key={opt}
+                    onClick={() => { setReqFallback(opt); ssSave({ reqFallback: opt }) }}
+                    style={{ fontSize: 12, padding: '3px 11px', borderRadius: 5, fontWeight: 600, cursor: 'pointer',
+                      border: '1px solid #f59e0b40',
+                      background: reqFallback === opt ? '#f59e0b' : 'transparent',
+                      color: reqFallback === opt ? '#000' : '#f59e0b' }}>
+                    {opt === 'parquet' ? 'Use parquet' : 'Use 0'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </DkCollapse>
 
           <button onClick={buildBase} disabled={!baseReady} style={S.btn('#10b981', !baseReady)}>
             {baseLoading ? 'â³ Building…' : '▶ Build Base'}
@@ -934,7 +1052,23 @@ export default function DistributionModel() {
 
         {/* Step 3 — Distribution Loop */}
         <div style={S.card}>
-          <div style={S.cardTitle}>Step 3 — Distribution Loop (min → max grid)</div>
+          {/* Step 3 header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%',
+              background: distResult ? '#1c3a2a' : '#2a2a2c',
+              color: distResult ? '#4ade80' : '#6b6b6e',
+              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {distResult ? '✓' : '3'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.textPrimary }}>Run distribution</div>
+              <div style={{ fontSize: 11, color: tokens.textMuted }}>Allocation loop · results · export</div>
+            </div>
+            {distResult && (
+              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+                background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>Done</span>
+            )}
+          </div>
           <div style={{ fontSize: 13, color: tokens.textMuted, marginBottom: 14 }}>
             Per-barcode: Round 1 = art_grid · Round 2+ = +1 per store until max_grid or GRC stock exhausted
           </div>
@@ -944,14 +1078,14 @@ export default function DistributionModel() {
               type="number" min={1} max={20} value={maxRound}
               onChange={e => setMaxRound(Math.max(1, Math.min(20, Number(e.target.value))))}
               style={{ width: 60, padding: '4px 8px', fontSize: 13, borderRadius: 6,
-                border: `1px solid ${tokens.border}`, background: tokens.cardBg, color: tokens.text }}
+                border: `1px solid ${tokens.cardBorder}`, background: tokens.cardBg, color: tokens.textPrimary }}
             />
             <span style={{ fontSize: 11, color: tokens.textMuted }}>
               (1–20 rounds; Round 1 = art_grid, Round 2+ = +1/store)
             </span>
           </div>
           {/* ── Option Listing Rule ────────────────────────────────────────── */}
-          <div style={{ background: tokens.cardBg, border: `1px solid ${applyOL ? '#8b5cf6' : tokens.border}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
+          <div style={{ background: tokens.cardBg, border: `1px solid ${applyOL ? '#8b5cf6' : tokens.cardBorder}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: applyOL ? 10 : 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1 }}>
                 <input type="checkbox" checked={applyOL} onChange={e => setApplyOL(e.target.checked)}
@@ -988,7 +1122,7 @@ export default function DistributionModel() {
           </div>
 
           {/* ── Hold Rules UI ─────────────────────────────────────────────── */}
-          <div style={{ background: tokens.cardBg, border: `1px solid ${tokens.border}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
+          <div style={{ background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Hold Rules {holdRules.length > 0 && <span style={{ color: '#f59e0b', marginLeft: 6 }}>({holdRules.length} active)</span>}
             </div>
@@ -1062,7 +1196,7 @@ export default function DistributionModel() {
                       <tr>
                         {distResult.columns.map(h => (
                           <th key={h} style={{ padding: '4px 10px', textAlign: 'left', color: tokens.textMuted,
-                            borderBottom: `1px solid ${tokens.border}`, whiteSpace: 'nowrap',
+                            borderBottom: `1px solid ${tokens.cardBorder}`, whiteSpace: 'nowrap',
                             background: h === 'final_allocate' ? '#8b5cf620' : h === 'reason_not_allocated' ? '#f59e0b20' : 'transparent' }}>
                             {h}
                           </th>

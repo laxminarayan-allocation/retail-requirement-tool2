@@ -792,16 +792,6 @@ export default function DistributionModel() {
             <button onClick={runDistribution} disabled={(!baseResult && !baseCacheReady) || distLoading} style={S.btn('#8b5cf6', (!baseResult && !baseCacheReady) || distLoading)}>
               {distLoading ? 'â³ Running…' : '▶ Run Distribution'}
             </button>
-            {distResult && (
-              <>
-                <button onClick={exportCsv} disabled={csvLoading} style={S.btn('#0284c7', csvLoading)}>
-                  {csvLoading ? 'â³ CSV…' : '⬇ Download CSV'}
-                </button>
-                <button onClick={exportDistribution} disabled={exportLoading} style={S.btn('#059669', exportLoading)}>
-                  {exportLoading ? 'â³ Excel…' : '⬇ Download Excel'}
-                </button>
-              </>
-            )}
           </div>
           {!baseResult && !baseCacheReady && (
             <span style={{ marginLeft: 12, fontSize: 12, color: '#f59e0b' }}>
@@ -816,53 +806,144 @@ export default function DistributionModel() {
           {distMsg && <div style={S.msg(distMsg.startsWith('✓'))}>{distMsg}</div>}
 
           {distResult && (
-            <>
-              <div style={{ marginTop: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                {[
-                  { label: 'Units Allocated',     val: distResult.total_allocated.toLocaleString('en-IN') },
-                  { label: 'Stores Covered',      val: distResult.stores_covered.toLocaleString('en-IN') },
-                  { label: 'Barcodes Total',      val: distResult.icodes_total },
-                  { label: 'Fully Covered',       val: distResult.icodes_fully_covered },
-                  ...(distResult.ol_held_count ? [{ label: 'OL Hold',  val: distResult.ol_held_count.toLocaleString('en-IN') }] : []),
-                  { label: 'Time',                val: `${Math.round(distResult.elapsed_ms / 1000)}s` },
-                ].map(stat => (
-                  <div key={stat.label}>
-                    <div style={{ fontSize: 11, color: tokens.textMuted }}>{stat.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa' }}>{stat.val}</div>
-                  </div>
-                ))}
-              </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              {/* Left — KPIs + sample table */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14 }}>
+                  {[
+                    { label: 'Units Allocated',     val: distResult.total_allocated.toLocaleString('en-IN') },
+                    { label: 'Stores Covered',      val: distResult.stores_covered.toLocaleString('en-IN') },
+                    { label: 'Barcodes Total',      val: distResult.icodes_total },
+                    { label: 'Fully Covered',       val: distResult.icodes_fully_covered },
+                    ...(distResult.ol_held_count ? [{ label: 'OL Hold',  val: distResult.ol_held_count.toLocaleString('en-IN') }] : []),
+                    { label: 'Time',                val: `${Math.round(distResult.elapsed_ms / 1000)}s` },
+                  ].map(stat => (
+                    <div key={stat.label}>
+                      <div style={{ fontSize: 11, color: tokens.textMuted }}>{stat.label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa' }}>{stat.val}</div>
+                    </div>
+                  ))}
+                </div>
 
-              {/* Sample rows — dynamic columns */}
-              <div style={{ marginTop: 16, overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
-                  <thead>
-                    <tr>
-                      {distResult.columns.map(h => (
-                        <th key={h} style={{ padding: '4px 10px', textAlign: 'left', color: tokens.textMuted,
-                          borderBottom: `1px solid ${tokens.border}`, whiteSpace: 'nowrap',
-                          background: h === 'final_allocate' ? '#8b5cf620' : h === 'reason_not_allocated' ? '#f59e0b20' : 'transparent' }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {distResult.sample.map((row, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : tokens.cardBg + '40' }}>
-                        {distResult.columns.map(col => (
-                          <td key={col} style={{ padding: '3px 10px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-                            color: col === 'reason_not_allocated' && row[col] ? '#f87171'
-                                 : col === 'final_allocate' && Number(row[col]) > 0 ? '#a78bfa' : 'inherit' }}>
-                            {String(row[col] ?? '')}
-                          </td>
+                {/* Sample rows — dynamic columns */}
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
+                    <thead>
+                      <tr>
+                        {distResult.columns.map(h => (
+                          <th key={h} style={{ padding: '4px 10px', textAlign: 'left', color: tokens.textMuted,
+                            borderBottom: `1px solid ${tokens.border}`, whiteSpace: 'nowrap',
+                            background: h === 'final_allocate' ? '#8b5cf620' : h === 'reason_not_allocated' ? '#f59e0b20' : 'transparent' }}>
+                            {h}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {distResult.sample.map((row, i) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : tokens.cardBg + '40' }}>
+                          {distResult.columns.map(col => (
+                            <td key={col} style={{ padding: '3px 10px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+                              color: col === 'reason_not_allocated' && row[col] ? '#f87171'
+                                   : col === 'final_allocate' && Number(row[col]) > 0 ? '#a78bfa' : 'inherit' }}>
+                              {String(row[col] ?? '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </>
+
+              {/* Right — Division Summary panel */}
+              <div style={{
+                width: 300, flexShrink: 0,
+                background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`,
+                borderRadius: 10, padding: '14px 16px',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary, marginBottom: 10 }}>
+                  🎨 Division Summary
+                </div>
+                {divSummaryLoading && (
+                  <div style={{ fontSize: 12, color: tokens.textMuted }}>Loading…</div>
+                )}
+                {!divSummaryLoading && divSummary.length > 0 && (
+                  <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                    <thead>
+                      <tr>
+                        {(['Division', 'Total', 'Alloc>0', 'Zero'] as const).map(h => (
+                          <th key={h} style={{
+                            padding: '4px 6px', textAlign: h === 'Division' ? 'left' : 'right',
+                            color: tokens.textMuted, fontWeight: 600, fontSize: 11,
+                            borderBottom: `1px solid ${tokens.cardBorder}`,
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {divSummary.map(row => {
+                        const zero = row.rows_total - row.rows_nonzero
+                        return (
+                          <tr key={row.division}>
+                            <td style={{ padding: '5px 6px', color: tokens.textPrimary, fontWeight: 600 }}>{row.division}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary }}>{row.rows_total.toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{row.rows_nonzero.toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted }}>{zero.toLocaleString('en-IN')}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `1px solid ${tokens.cardBorder}` }}>
+                        <td style={{ padding: '5px 6px', color: tokens.textMuted, fontSize: 11 }}>Total</td>
+                        <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary, fontWeight: 700 }}>
+                          {divSummary.reduce((s, r) => s + r.rows_total, 0).toLocaleString('en-IN')}
+                        </td>
+                        <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>
+                          {divSummary.reduce((s, r) => s + r.rows_nonzero, 0).toLocaleString('en-IN')}
+                        </td>
+                        <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted, fontWeight: 700 }}>
+                          {divSummary.reduce((s, r) => s + (r.rows_total - r.rows_nonzero), 0).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+                {!divSummaryLoading && divSummary.length === 0 && (
+                  <div style={{ fontSize: 12, color: tokens.textMuted }}>No division data</div>
+                )}
+
+                {/* Coverage bar */}
+                {distResult.rows > 0 && (() => {
+                  const totalNonzero = divSummary.reduce((s, r) => s + r.rows_nonzero, 0)
+                  const pct = divSummary.length > 0
+                    ? Math.round(totalNonzero / divSummary.reduce((s, r) => s + r.rows_total, 0) * 100)
+                    : Math.round(distResult.stores_covered / distResult.rows * 100)
+                  return (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: tokens.textMuted, marginBottom: 4 }}>
+                        <span>Alloc Coverage</span>
+                        <span style={{ color: pct >= 60 ? '#4ade80' : '#f87171', fontWeight: 700 }}>{pct}%</span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 3, background: tokens.cardBorder }}>
+                        <div style={{ height: '100%', borderRadius: 3, width: `${pct}%`, background: pct >= 60 ? '#4ade80' : '#f87171', transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Download buttons */}
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button onClick={exportCsv} disabled={csvLoading} style={{ ...S.btn('#0284c7', csvLoading), fontSize: 12, padding: '6px 12px' }}>
+                    {csvLoading ? '⏳ CSV…' : '⬇ Download CSV'}
+                  </button>
+                  <button onClick={exportDistribution} disabled={exportLoading} style={{ ...S.btn('#059669', exportLoading), fontSize: 12, padding: '6px 12px' }}>
+                    {exportLoading ? '⏳ Excel…' : '⬇ Download Excel'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 

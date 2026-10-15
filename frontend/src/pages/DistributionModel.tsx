@@ -508,9 +508,17 @@ export default function DistributionModel() {
     } finally { setBaseLoading(false) }
   }
 
+  // CityKart-style green skin — overrides theme tokens for this page
+  const DK = {
+    pageBg:     '#061006',
+    cardBg:     '#0a1a0a',
+    cardBorder: '#1e4d1e',
+    cardBorder2: '#22c55e30',
+  }
+
   const S = {
-    page: { padding: isMobile ? '16px 12px' : '24px 32px', minHeight: '100vh', background: tokens.shellBg, color: tokens.textPrimary } as React.CSSProperties,
-    card: { background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '18px 20px' } as React.CSSProperties,
+    page: { padding: isMobile ? '16px 12px' : '24px 32px', minHeight: '100vh', background: DK.pageBg, color: tokens.textPrimary } as React.CSSProperties,
+    card: { background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 12, padding: '20px 22px' } as React.CSSProperties,
     cardTitle: { fontSize: 12, fontWeight: 600, color: tokens.textMuted, marginBottom: 14, textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
     btn: (color: string, disabled?: boolean) => ({
       padding: '7px 18px', fontSize: 13, fontWeight: 600, borderRadius: 6, border: 'none',
@@ -755,7 +763,7 @@ export default function DistributionModel() {
               <React.Fragment key={step.n}>
                 {idx > 0 && (
                   <div style={{ flex: 1, height: 2, maxWidth: 80,
-                    background: pSteps[idx - 1].state === 'done' ? '#22c55e' : tokens.cardBorder }} />
+                    background: pSteps[idx - 1].state === 'done' ? '#22c55e' : DK.cardBorder }} />
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                   <div style={{
@@ -763,7 +771,7 @@ export default function DistributionModel() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 14, fontWeight: 700, flexShrink: 0,
                     border: `2px solid ${step.state === 'done' ? '#22c55e' : step.state === 'running' ? '#d97706' : '#d97706'}`,
-                    background: step.state === 'done' ? '#14532d' : step.state === 'running' ? '#451a00' : tokens.cardBg,
+                    background: step.state === 'done' ? '#14532d' : step.state === 'running' ? '#451a00' : DK.cardBg,
                     color: step.state === 'done' ? '#4ade80' : step.state === 'running' ? '#fbbf24' : '#fbbf24',
                   }}>
                     {step.state === 'done' ? '✓' : step.n}
@@ -784,7 +792,7 @@ export default function DistributionModel() {
 
         {/* Step 1 — Selections */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${tokens.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #22c55e',
               background: '#14532d', color: '#4ade80', fontSize: 14, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
@@ -854,10 +862,10 @@ export default function DistributionModel() {
 
         {/* Step 2 — Build Base */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${tokens.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
               border: `2px solid ${baseCacheReady ? '#22c55e' : '#d97706'}`,
-              background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : 'transparent',
+              background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : DK.cardBg,
               color: baseCacheReady ? '#4ade80' : '#fbbf24',
               fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {baseCacheReady ? '✓' : '2'}
@@ -870,13 +878,13 @@ export default function DistributionModel() {
               <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
                 background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : 'transparent',
                 color: baseCacheReady ? '#4ade80' : baseLoading ? '#fbbf24' : tokens.textMuted,
-                border: `1px solid ${baseCacheReady ? '#22c55e50' : baseLoading ? '#d9780650' : tokens.cardBorder}` }}>
+                border: `1px solid ${baseCacheReady ? '#22c55e50' : baseLoading ? '#d9780650' : DK.cardBorder}` }}>
                 {baseCacheReady ? 'Built' : baseLoading ? 'Building...' : 'Not built'}
               </span>
               <button onClick={buildBase} disabled={!baseReady}
                 style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none',
                   cursor: baseReady ? 'pointer' : 'not-allowed',
-                  background: baseReady ? '#16a34a' : tokens.cardBorder, color: '#fff', opacity: baseReady ? 1 : 0.5 }}>
+                  background: baseReady ? '#16a34a' : DK.cardBorder, color: '#fff', opacity: baseReady ? 1 : 0.5 }}>
                 {baseLoading ? 'Building…' : 'Build base'}
               </button>
             </div>
@@ -1077,10 +1085,10 @@ export default function DistributionModel() {
 
         {/* Step 3 — Distribution Loop */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${tokens.cardBorder}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
               border: `2px solid ${distResult ? '#22c55e' : '#d97706'}`,
-              background: distResult ? '#14532d' : distLoading ? '#451a00' : 'transparent',
+              background: distResult ? '#14532d' : distLoading ? '#451a00' : DK.cardBg,
               color: distResult ? '#4ade80' : '#fbbf24',
               fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {distResult ? '✓' : '3'}
@@ -1101,7 +1109,7 @@ export default function DistributionModel() {
               <button onClick={runDistribution} disabled={(!baseResult && !baseCacheReady) || distLoading}
                 style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none',
                   cursor: ((!baseResult && !baseCacheReady) || distLoading) ? 'not-allowed' : 'pointer',
-                  background: ((!baseResult && !baseCacheReady) || distLoading) ? tokens.cardBorder : '#16a34a',
+                  background: ((!baseResult && !baseCacheReady) || distLoading) ? DK.cardBorder : '#16a34a',
                   color: '#fff', opacity: ((!baseResult && !baseCacheReady) || distLoading) ? 0.5 : 1 }}>
                 {distLoading ? 'Running…' : 'Run distribution'}
               </button>

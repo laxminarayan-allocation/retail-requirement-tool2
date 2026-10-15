@@ -406,6 +406,9 @@ export default function DistributionModel() {
   }
 
   const [imStatus,    setImStatus]    = useState<ItemMasterStatus | null>(null)
+  const [barcodePreview, setBarcodePreview] = useState<{total: number; breakdown: {wh_source: string; count: number}[]} | null>(null)
+  const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
+  const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
   const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
   const [olDownloading, setOlDownloading] = useState(false)
   const [applyOL,     setApplyOL]     = useState(() => ssLoad('applyOL', false))
@@ -479,6 +482,17 @@ export default function DistributionModel() {
       setFetchError(e?.response?.data?.message || 'Option listing status fetch failed')
     }
   }, [])
+
+  const fetchBarcodePreview = useCallback(async () => {
+    setBarcodePreviewLoading(true); setBarcodePreviewMsg(null)
+    try {
+      const d = await apiFetch<{total: number; breakdown: {wh_source: string; count: number}[]}>('GET', '/distribution/barcode-preview', { stock_source: reqSource, biz_segment: bizSegment })
+      setBarcodePreview(d)
+      setBarcodePreviewMsg(`✓ ${d.total.toLocaleString('en-IN')} unique barcodes`)
+    } catch (e: unknown) {
+      setBarcodePreviewMsg(`✗ ${e instanceof Error ? e.message : 'Error'}`)
+    } finally { setBarcodePreviewLoading(false) }
+  }, [reqSource, bizSegment])
 
   useEffect(() => {
     fetchImStatus()
@@ -733,54 +747,55 @@ export default function DistributionModel() {
           <button onClick={() => setFetchError(null)} style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
         </div>
       )}
-      <div style={{ marginBottom: 24 }}>
+
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: '-0.5px' }}>🔀 Distribution Model</h1>
-          <button
-            onClick={handleInvalidate}
-            disabled={invalidating}
-            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 6, background: '#7f1d1d', border: 'none', color: '#fff', cursor: invalidating ? 'not-allowed' : 'pointer', opacity: invalidating ? 0.7 : 1 }}
-          >{invalidating ? 'Clearing…' : '🗑 Clear Cache'}</button>
+          <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0, letterSpacing: '-0.5px' }}>🔀 Distribution Model</h1>
+          <button onClick={handleInvalidate} disabled={invalidating}
+            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: '#7f1d1d', border: 'none', color: '#fff', cursor: invalidating ? 'not-allowed' : 'pointer', opacity: invalidating ? 0.7 : 1 }}>
+            {invalidating ? 'Clearing…' : '🗑 Clear Cache'}
+          </button>
           {invalidateMsg && <span style={{ fontSize: 12, color: '#4ade80' }}>{invalidateMsg}</span>}
         </div>
-        <p style={{ fontSize: 13, color: tokens.textMuted, marginTop: 4 }}>
-          Warehouse stock distribution — barcode × store replenishment engine
-        </p>
+        <p style={{ fontSize: 13, color: tokens.textMuted, marginTop: 4 }}>Warehouse stock distribution — barcode × store replenishment engine</p>
       </div>
 
-      {/* ── Pipeline bar — CityKart style ──────────────────────────────────── */}
+      {/* ── Pipeline bar — 8 steps ── */}
       {(() => {
         const pSteps: Array<{ n: number; label: string; state: 'done' | 'running' | 'idle' }> = [
-          { n: 1, label: 'Configure', state: 'done' },
-          { n: 2, label: 'Build base', state: baseCacheReady ? 'done' : baseLoading ? 'running' : 'idle' },
-          { n: 3, label: 'Run loop', state: distResult ? 'done' : distLoading ? 'running' : 'idle' },
+          { n: 1, label: 'Source',    state: 'done' },
+          { n: 2, label: 'IM Join',   state: (imStatus?.ready ?? false) ? 'done' : 'idle' },
+          { n: 3, label: 'Barcodes',  state: barcodePreview ? 'done' : 'idle' },
+          { n: 4, label: 'Stores',    state: 'done' },
+          { n: 5, label: 'REQ',       state: 'done' },
+          { n: 6, label: 'Priority',  state: 'done' },
+          { n: 7, label: 'Hold',      state: holdRules.length > 0 ? 'done' : 'idle' },
+          { n: 8, label: 'Run',       state: distResult ? 'done' : (distLoading || baseLoading) ? 'running' : 'idle' },
         ]
         return (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
-            marginBottom: 20, background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`,
-            borderRadius: 12, padding: '18px 24px' }}>
+            marginBottom: 20, background: DK.cardBg, border: `1px solid ${DK.cardBorder}`,
+            borderRadius: 12, padding: '16px 20px', overflowX: 'auto' }}>
             {pSteps.map((step, idx) => (
               <React.Fragment key={step.n}>
                 {idx > 0 && (
-                  <div style={{ flex: 1, height: 2, maxWidth: 80,
+                  <div style={{ flex: 1, height: 2, minWidth: 8, maxWidth: 40,
                     background: pSteps[idx - 1].state === 'done' ? '#22c55e' : DK.cardBorder }} />
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                   <div style={{
-                    width: 38, height: 38, borderRadius: '50%',
+                    width: 32, height: 32, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 700, flexShrink: 0,
-                    border: `2px solid ${step.state === 'done' ? '#22c55e' : step.state === 'running' ? '#d97706' : '#d97706'}`,
+                    fontSize: 13, fontWeight: 700, flexShrink: 0,
+                    border: `2px solid ${step.state === 'done' ? '#22c55e' : '#d97706'}`,
                     background: step.state === 'done' ? '#14532d' : step.state === 'running' ? '#451a00' : DK.cardBg,
-                    color: step.state === 'done' ? '#4ade80' : step.state === 'running' ? '#fbbf24' : '#fbbf24',
-                  }}>
-                    {step.state === 'done' ? '✓' : step.n}
+                    color: step.state === 'done' ? '#4ade80' : '#fbbf24',
+                  }}>{step.state === 'done' ? '✓' : step.n}</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap',
+                    color: step.state === 'done' ? '#4ade80' : step.state === 'running' ? '#fbbf24' : tokens.textMuted }}>
+                    {step.label}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600,
-                    color: step.state === 'done' ? '#4ade80' : step.state === 'running' ? '#fbbf24' : tokens.textMuted,
-                    textAlign: 'center' }}>{step.label}</div>
-                  {step.state === 'running' && <div style={{ fontSize: 10, color: '#fbbf24' }}>Running...</div>}
-                  {step.state === 'done' && <div style={{ fontSize: 10, color: '#4ade8080' }}>Done</div>}
                 </div>
               </React.Fragment>
             ))}
@@ -788,138 +803,156 @@ export default function DistributionModel() {
         )
       })()}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 860 }}>
 
-        {/* Step 1 — Selections */}
+        {/* ── Step 1: Source Configure ─────────────────────────────────────── */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #22c55e',
-              background: '#14532d', color: '#4ade80', fontSize: 14, fontWeight: 700,
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', border: '2px solid #22c55e',
+              background: '#14532d', color: '#4ade80', fontSize: 13, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Configure</div>
-              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>REQ source · business segment · scope filters · stock CSV</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Source Configure</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Oracle stock source (GRC / WMS / Both) · CSV upload override</div>
             </div>
             <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
-              background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Done</span>
+              background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Configured</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <PillToggle label="Req Source"    options={[{val:'GRC',text:'GRC'},{val:'WMS',text:'WMS'},{val:'BOTH',text:'GRC + WMS'}]}  value={reqSource}  onChange={v => { setReqSource(v); clearCsvUpload() }}  accent="#6366f1" />
-            <PillToggle label="Biz Segment"   options={[{val:'APPS',text:'APPS'},{val:'GM',text:'GM'},{val:'BOTH',text:'Both'}]}         value={bizSegment} onChange={setBizSegment} accent="#0ea5e9" />
-            <PillToggle label="Sort Priority" options={[{val:'fill_rate',text:'MC Fill Rate ↑'},{val:'combined_req',text:'Combined Req ↓'},{val:'festive_req',text:'Festive + Req ↓'}]} value={sortMode} onChange={setSortMode} accent="#f59e0b" />
-
-            {/* CSV Stock Upload */}
+            <PillToggle label="Stock Source"
+              options={[{val:'GRC',text:'Oracle GRC'},{val:'WMS',text:'Oracle WMS'},{val:'BOTH',text:'GRC + WMS'}]}
+              value={reqSource} onChange={v => { setReqSource(v); setBarcodePreview(null); clearCsvUpload() }} accent="#16a34a" />
             <DkUploadZone
-              label="Stock QTY override"
+              label="CSV Stock Override"
               hint="BARCODE, GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY"
-              active={csvUploadActive}
-              filename={csvUploadMeta?.filename}
-              rows={csvUploadMeta?.rows}
-              uploading={csvUploading}
-              onUpload={handleCsvUpload}
-              onClear={clearCsvUpload}
-              inputRef={csvInputRef}
+              active={csvUploadActive} filename={csvUploadMeta?.filename} rows={csvUploadMeta?.rows}
+              uploading={csvUploading} onUpload={handleCsvUpload} onClear={clearCsvUpload} inputRef={csvInputRef}
             />
-            {csvUploadMsg && (
-              <div style={{ marginTop: 4, fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{csvUploadMsg}</div>
-            )}
-
-            {/* Scope Builder: Row-based Division × Attr1 (OR between rows, multi-select within row) */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 90 }}>Scope Filter</span>
-                <button onClick={addScope} style={{
-                  padding: '3px 12px', fontSize: 11, borderRadius: 12, border: `1px solid ${tokens.cardBorder}`,
-                  cursor: 'pointer', background: 'transparent', color: tokens.textMuted,
-                }}>+ Add Row</button>
-                {scopes.some(s => s.divisions.length > 0 || s.attribute1s.length > 0) && (
-                  <button onClick={() => setScopes([{ divisions: [], attribute1s: [] }])} style={{
-                    padding: '3px 12px', fontSize: 11, borderRadius: 12, border: '1px solid #ef444440',
-                    cursor: 'pointer', background: 'transparent', color: '#f87171',
-                  }}>Clear All</button>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {scopes.map((sc, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: tokens.textMuted, minWidth: 90 }}>
-                      {i === 0 ? 'Division × Attr1' : <span style={{ color: '#f59e0b', fontWeight: 600 }}>OR row {i + 1}</span>}
-                    </span>
-                    <MultiSelect label="Division" options={divisionOptions} selected={sc.divisions} onChange={v => updateScope(i, 'divisions', v)} width={180} />
-                    <MultiSelect label="Attribute1" options={attribute1Options} selected={sc.attribute1s} onChange={v => updateScope(i, 'attribute1s', v)} width={180} />
-                    {scopes.length > 1 && (
-                      <button onClick={() => removeScope(i)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 5, fontSize: 11, color: tokens.textMuted, marginLeft: 98 }}>
-                Blank = include all. Within a row = AND. Rows = OR combined.
-              </div>
-            </div>
+            {csvUploadMsg && <div style={{ fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{csvUploadMsg}</div>}
           </div>
         </div>
 
-        {/* Step 2 — Build Base */}
+        {/* ── Step 2: Item Master Join ─────────────────────────────────────── */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-              border: `2px solid ${baseCacheReady ? '#22c55e' : '#d97706'}`,
-              background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : DK.cardBg,
-              color: baseCacheReady ? '#4ade80' : '#fbbf24',
-              fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {baseCacheReady ? '✓' : '2'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${imStatus?.ready ? '#22c55e' : '#d97706'}`,
+              background: imStatus?.ready ? '#14532d' : DK.cardBg,
+              color: imStatus?.ready ? '#4ade80' : '#fbbf24',
+              fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {imStatus?.ready ? '✓' : '2'}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Build base</div>
-              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Item master · stores · REQ overrides · store priority</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Item Master Join</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Desc · brand · MC · size · MRP metadata for each barcode</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
-                background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : 'transparent',
-                color: baseCacheReady ? '#4ade80' : baseLoading ? '#fbbf24' : tokens.textMuted,
-                border: `1px solid ${baseCacheReady ? '#22c55e50' : baseLoading ? '#d9780650' : DK.cardBorder}` }}>
-                {baseCacheReady ? 'Built' : baseLoading ? 'Building...' : 'Not built'}
-              </span>
-              <button onClick={buildBase} disabled={!baseReady}
-                style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none',
-                  cursor: baseReady ? 'pointer' : 'not-allowed',
-                  background: baseReady ? '#16a34a' : DK.cardBorder, color: '#fff', opacity: baseReady ? 1 : 0.5 }}>
-                {baseLoading ? 'Building…' : 'Build base'}
+              <StatusBadge ready={imStatus?.ready ?? false} />
+              {imStatus?.ready && imStatus.rows > 0 && (
+                <span style={{ fontSize: 11, color: tokens.textMuted }}>{imStatus.rows.toLocaleString('en-IN')} rows</span>
+              )}
+            </div>
+          </div>
+          {!imStatus?.ready ? (
+            <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
+              borderRadius: 7, fontSize: 12, color: '#fbbf24' }}>
+              ⚠ Download Item Master from <strong>Master Data</strong> page first
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: '#4ade80' }}>
+              ✓ {imStatus.rows.toLocaleString('en-IN')} rows ready · cached {imStatus.cached_at ?? '—'}
+            </div>
+          )}
+        </div>
+
+        {/* ── Step 3: Unique Barcode Preview ──────────────────────────────── */}
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${barcodePreview ? '#22c55e' : '#d97706'}`,
+              background: barcodePreview ? '#14532d' : DK.cardBg,
+              color: barcodePreview ? '#4ade80' : '#fbbf24',
+              fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {barcodePreview ? '✓' : '3'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Unique Barcode</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Preview distinct barcodes per segment (GRC / WMS / GRC|WMS)</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {barcodePreview && (
+                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+                  background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>
+                  {barcodePreview.total.toLocaleString('en-IN')} barcodes
+                </span>
+              )}
+              <button onClick={fetchBarcodePreview} disabled={barcodePreviewLoading}
+                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none',
+                  cursor: barcodePreviewLoading ? 'not-allowed' : 'pointer',
+                  background: barcodePreviewLoading ? DK.cardBorder : '#0369a1', color: '#fff',
+                  opacity: barcodePreviewLoading ? 0.6 : 1 }}>
+                {barcodePreviewLoading ? 'Loading…' : barcodePreview ? '↺ Refresh' : 'Load Preview'}
               </button>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 12, color: tokens.textMuted }}>
-            <span>Item Master:</span>
-            <StatusBadge ready={imStatus?.ready ?? false} />
-            {imStatus?.ready && imStatus.rows > 0 && (
-              <span style={{ fontSize: 11, color: tokens.textMuted }}>{imStatus.rows.toLocaleString('en-IN')} rows</span>
-            )}
-            {!imStatus?.ready && (
-              <span style={{ fontSize: 11, color: '#f59e0b' }}>— download from <strong>Master Data</strong> page first</span>
-            )}
+          {barcodePreviewMsg && (
+            <div style={{ fontSize: 12, color: barcodePreviewMsg.startsWith('✓') ? '#4ade80' : '#f87171', marginBottom: 10 }}>
+              {barcodePreviewMsg}
+            </div>
+          )}
+          {barcodePreview && (
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              {barcodePreview.breakdown.map(b => (
+                <div key={b.wh_source} style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90,
+                  background: b.wh_source === 'GRC' ? '#14532d40' : b.wh_source === 'WMS' ? '#17255440' : '#2a1a5e40',
+                  border: `1px solid ${b.wh_source === 'GRC' ? '#22c55e40' : b.wh_source === 'WMS' ? '#3b82f640' : '#8b5cf640'}` }}>
+                  <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{b.wh_source}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700,
+                    color: b.wh_source === 'GRC' ? '#4ade80' : b.wh_source === 'WMS' ? '#60a5fa' : '#a78bfa' }}>
+                    {b.count.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              ))}
+              <div style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90, background: '#1a1a1a', border: `1px solid ${DK.cardBorder}` }}>
+                <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>Total Unique</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: tokens.textPrimary }}>{barcodePreview.total.toLocaleString('en-IN')}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Step 4: Store Selection ──────────────────────────────────────── */}
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', border: '2px solid #22c55e',
+              background: '#14532d', color: '#4ade80', fontSize: 13, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Store Selection</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Choose stores to cross-join · division × attribute1 scope</div>
+            </div>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+              background: selStores.length > 0 ? '#14532d' : 'transparent',
+              color: selStores.length > 0 ? '#4ade80' : tokens.textMuted,
+              border: `1px solid ${selStores.length > 0 ? '#22c55e50' : DK.cardBorder}` }}>
+              {selStores.length > 0 ? `${selStores.length} stores` : 'All stores'}
+            </span>
           </div>
-          <div style={{ fontSize: 13, color: tokens.textMuted, marginBottom: 10 }}>
-            Joins all REQ views (MC · ART · MRP · SIZE · SPARKY · OPTION) on Barcode × Store base
-          </div>
-          {/* Store filter — by name */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 72 }}>Store Filter</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 80 }}>Store Filter</span>
             <MultiSelect label="Store" options={storeOptions} selected={selStores} onChange={setSelStores} width={220} />
             {selStores.length > 0 && (
               <button onClick={() => setSelStores([])} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>Clear</button>
             )}
             <span style={{ fontSize: 11, color: tokens.textMuted }}>(blank = all stores)</span>
           </div>
-
-          {/* Store master field filters */}
           {addedFilterFields.map(col => {
             const meta = storeFieldMeta[col]
             if (!meta) return null
             const sel = activeFieldFilters[col] ?? []
             return (
               <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 72 }}>{meta.label}</span>
+                <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 80 }}>{meta.label}</span>
                 <MultiSelect label={meta.label} options={meta.values} selected={sel}
                   onChange={v => setActiveFieldFilters(f => ({ ...f, [col]: v }))} width={220} />
                 {sel.length > 0 && (
@@ -933,19 +966,16 @@ export default function DistributionModel() {
               </div>
             )
           })}
-
-          {/* Add field filter button */}
-          <div ref={fieldPickerRef} style={{ position: 'relative', display: 'inline-block', marginBottom: 14 }}>
+          <div ref={fieldPickerRef} style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
             <button onClick={() => setFieldPickerOpen(o => !o)} style={{
               fontSize: 11, padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
-              border: `1px solid ${tokens.cardBorder}`, background: 'transparent', color: tokens.textMuted,
-            }}>+ Add Field Filter</button>
+              border: `1px solid ${tokens.cardBorder}`, background: 'transparent', color: tokens.textMuted }}>
+              + Add Field Filter
+            </button>
             {fieldPickerOpen && (
-              <div style={{
-                position: 'absolute', top: '110%', left: 0, zIndex: 999, minWidth: 180,
+              <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 999, minWidth: 180,
                 background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8,
-                boxShadow: '0 6px 24px rgba(0,0,0,0.4)', padding: 6,
-              }}>
+                boxShadow: '0 6px 24px rgba(0,0,0,0.4)', padding: 6 }}>
                 {Object.entries(storeFieldMeta).length === 0 && (
                   <div style={{ fontSize: 12, color: tokens.textMuted, padding: '6px 8px' }}>Loading fields…</div>
                 )}
@@ -953,277 +983,310 @@ export default function DistributionModel() {
                   <button key={col} onClick={() => {
                     if (!addedFilterFields.includes(col)) setAddedFilterFields(f => [...f, col])
                     setFieldPickerOpen(false)
-                  }} style={{
-                    display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
+                  }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
                     fontSize: 12, border: 'none', borderRadius: 5, cursor: 'pointer',
                     background: addedFilterFields.includes(col) ? '#6366f115' : 'transparent',
-                    color: addedFilterFields.includes(col) ? '#818cf8' : tokens.textPrimary,
-                  }}>
+                    color: addedFilterFields.includes(col) ? '#818cf8' : tokens.textPrimary }}>
                     {meta.label} {addedFilterFields.includes(col) ? '✓' : ''}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          {/* Store Priority CSVs */}
-          <DkCollapse
-            title="Store priority"
-            defaultOpen={Object.keys(priorityMeta).length > 0}
-            badge={Object.keys(priorityMeta).length > 0
-              ? <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>{Object.keys(priorityMeta).length} active</span>
-              : <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#2a2a2c', color: '#6b6b6e', border: '1px solid #3a3a3c' }}>optional</span>}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: Object.keys(priorityMeta).length > 0 ? 10 : 0 }}>
-              {PRIORITY_CSV_SPECS.map(spec => {
-                const meta = priorityMeta[spec.key]
-                const uploading = priorityUploading[spec.key]
-                const msg = priorityMsg[spec.key]
-                return (
-                  <div key={spec.key}>
-                    <DkUploadZone
-                      label={spec.label}
-                      hint={spec.hint}
-                      active={!!meta}
-                      filename={meta?.filename}
-                      rows={meta?.rows}
-                      uploading={uploading}
-                      onUpload={f => handlePriorityUpload(spec.key, f)}
-                      onClear={() => clearPriority(spec.key)}
-                      inputRef={{ current: priorityRefs.current[spec.key] ?? null }}
-                    />
-                    {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
-                  </div>
-                )
-              })}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 80 }}>Scope Filter</span>
+              <button onClick={addScope} style={{ padding: '3px 12px', fontSize: 11, borderRadius: 12,
+                border: `1px solid ${tokens.cardBorder}`, cursor: 'pointer', background: 'transparent', color: tokens.textMuted }}>
+                + Add Row
+              </button>
+              {scopes.some(s => s.divisions.length > 0 || s.attribute1s.length > 0) && (
+                <button onClick={() => setScopes([{ divisions: [], attribute1s: [] }])} style={{
+                  padding: '3px 12px', fontSize: 11, borderRadius: 12, border: '1px solid #ef444440',
+                  cursor: 'pointer', background: 'transparent', color: '#f87171' }}>Clear All</button>
+              )}
             </div>
-            {Object.keys(priorityMeta).length > 0 && (
-              <div style={{ padding: '8px 12px', background: '#1a1a3e', border: '1px solid #2d1f5e', borderRadius: 6,
-                display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: '#6b6b9e', marginRight: 2 }}>Sort:</span>
-                {['Override stores first', 'Fill-rate rank', 'Concept listed', 'Highest REQ'].map((item, i, arr) => (
-                  <React.Fragment key={item}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#a78bfa' }}>{item}</span>
-                    {i < arr.length - 1 && <span style={{ fontSize: 10, color: '#4a4a6e' }}>›</span>}
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </DkCollapse>
-
-          {/* REQ CSV Overrides */}
-          <DkCollapse
-            title="REQ CSV overrides"
-            defaultOpen={false}
-            badge={Object.keys(reqCsvMeta).length > 0
-              ? <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>{Object.keys(reqCsvMeta).length} active</span>
-              : <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#2a2a2c', color: '#6b6b6e', border: '1px solid #3a3a3c' }}>optional</span>}
-          >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {REQ_CSV_SPECS.map(spec => {
-                const meta = reqCsvMeta[spec.key]
-                const uploading = reqCsvUploading[spec.key]
-                const msg = reqCsvMsg[spec.key]
-                return (
-                  <div key={spec.key}>
-                    <DkUploadZone
-                      label={spec.label}
-                      hint={spec.hint}
-                      active={!!meta}
-                      filename={meta?.filename}
-                      rows={meta?.rows}
-                      uploading={uploading}
-                      onUpload={f => handleReqCsvUpload(spec.key, f)}
-                      onClear={() => clearReqCsv(spec.key)}
-                      inputRef={{ current: reqCsvRefs.current[spec.key] ?? null }}
-                    />
-                    {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
-                  </div>
-                )
-              })}
-            </div>
-            {Object.keys(reqCsvMeta).length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, padding: '8px 12px',
-                background: '#2a2000', borderRadius: 7, border: '1px solid #f59e0b40' }}>
-                <span style={{ fontSize: 12, color: '#f59e0b' }}>Unmatched rows:</span>
-                {(['parquet', 'zero'] as const).map(opt => (
-                  <button key={opt}
-                    onClick={() => { setReqFallback(opt); ssSave({ reqFallback: opt }) }}
-                    style={{ fontSize: 12, padding: '3px 11px', borderRadius: 5, fontWeight: 600, cursor: 'pointer',
-                      border: '1px solid #f59e0b40',
-                      background: reqFallback === opt ? '#f59e0b' : 'transparent',
-                      color: reqFallback === opt ? '#000' : '#f59e0b' }}>
-                    {opt === 'parquet' ? 'Use parquet' : 'Use 0'}
-                  </button>
-                ))}
-              </div>
-            )}
-          </DkCollapse>
-
-          {!imStatus?.ready && (
-            <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
-              borderRadius: 7, fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>
-              ⚠ Download Item Master from Master Data page first
-            </div>
-          )}
-          {baseMsg && <div style={S.msg(baseMsg.startsWith('✓'))}>{baseMsg}</div>}
-
-          {baseResult && (
-            <div style={{ marginTop: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              {[
-                { label: 'Total Rows',  val: baseResult.rows.toLocaleString('en-IN') },
-                { label: 'Columns',     val: baseResult.columns.length },
-                { label: 'Time',        val: `${Math.round(baseResult.elapsed_ms / 1000)}s` },
-              ].map(stat => (
-                <div key={stat.label}>
-                  <div style={{ fontSize: 11, color: tokens.textMuted }}>{stat.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#34d399' }}>{stat.val}</div>
+              {scopes.map((sc, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: tokens.textMuted, minWidth: 80 }}>
+                    {i === 0 ? 'Div × Attr1' : <span style={{ color: '#f59e0b', fontWeight: 600 }}>OR row {i + 1}</span>}
+                  </span>
+                  <MultiSelect label="Division" options={divisionOptions} selected={sc.divisions} onChange={v => updateScope(i, 'divisions', v)} width={160} />
+                  <MultiSelect label="Attribute1" options={attribute1Options} selected={sc.attribute1s} onChange={v => updateScope(i, 'attribute1s', v)} width={160} />
+                  {scopes.length > 1 && (
+                    <button onClick={() => removeScope(i)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 16, cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
+                  )}
                 </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 5, fontSize: 11, color: tokens.textMuted, marginLeft: 88 }}>
+              Blank = include all. Within row = AND. Rows = OR combined.
+            </div>
+          </div>
+        </div>
+
+        {/* ── Step 5: Requirements ─────────────────────────────────────────── */}
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', border: '2px solid #22c55e',
+              background: '#14532d', color: '#4ade80', fontSize: 13, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Requirements</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Business segment · sort mode · CSV REQ overrides (upload-first, Oracle fallback)</div>
+            </div>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+              background: Object.keys(reqCsvMeta).length > 0 ? '#14532d' : 'transparent',
+              color: Object.keys(reqCsvMeta).length > 0 ? '#4ade80' : tokens.textMuted,
+              border: `1px solid ${Object.keys(reqCsvMeta).length > 0 ? '#22c55e50' : DK.cardBorder}` }}>
+              {Object.keys(reqCsvMeta).length > 0 ? `${Object.keys(reqCsvMeta).length} CSV active` : 'Oracle REQ'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <PillToggle label="Biz Segment"
+              options={[{val:'APPS',text:'APPS'},{val:'GM',text:'GM'},{val:'BOTH',text:'Both'}]}
+              value={bizSegment} onChange={setBizSegment} accent="#0ea5e9" />
+            <PillToggle label="Sort Priority"
+              options={[{val:'fill_rate',text:'MC Fill Rate \u2191'},{val:'combined_req',text:'Combined Req \u2193'},{val:'festive_req',text:'Festive + Req \u2193'}]}
+              value={sortMode} onChange={setSortMode} accent="#f59e0b" />
+            <DkCollapse title="REQ CSV Overrides"
+              defaultOpen={Object.keys(reqCsvMeta).length > 0}
+              badge={Object.keys(reqCsvMeta).length > 0
+                ? <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>{Object.keys(reqCsvMeta).length} active</span>
+                : <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600, background: '#2a2a2c', color: '#6b6b6e', border: '1px solid #3a3a3c' }}>optional</span>}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {REQ_CSV_SPECS.map(spec => {
+                  const meta = reqCsvMeta[spec.key]
+                  const uploading = reqCsvUploading[spec.key]
+                  const msg = reqCsvMsg[spec.key]
+                  return (
+                    <div key={spec.key}>
+                      <DkUploadZone label={spec.label} hint={spec.hint} active={!!meta}
+                        filename={meta?.filename} rows={meta?.rows} uploading={uploading}
+                        onUpload={f => handleReqCsvUpload(spec.key, f)} onClear={() => clearReqCsv(spec.key)}
+                        inputRef={{ current: reqCsvRefs.current[spec.key] ?? null }} />
+                      {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+              {Object.keys(reqCsvMeta).length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, padding: '8px 12px',
+                  background: '#2a2000', borderRadius: 7, border: '1px solid #f59e0b40' }}>
+                  <span style={{ fontSize: 12, color: '#f59e0b' }}>Unmatched rows:</span>
+                  {(['parquet', 'zero'] as const).map(opt => (
+                    <button key={opt} onClick={() => { setReqFallback(opt); ssSave({ reqFallback: opt }) }}
+                      style={{ fontSize: 12, padding: '3px 11px', borderRadius: 5, fontWeight: 600, cursor: 'pointer',
+                        border: '1px solid #f59e0b40',
+                        background: reqFallback === opt ? '#f59e0b' : 'transparent',
+                        color: reqFallback === opt ? '#000' : '#f59e0b' }}>
+                      {opt === 'parquet' ? 'Oracle fallback' : 'Use 0'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </DkCollapse>
+          </div>
+        </div>
+
+        {/* ── Step 6: Store Priority ───────────────────────────────────────── */}
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', border: '2px solid #22c55e',
+              background: '#14532d', color: '#4ade80', fontSize: 13, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Store Priority</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Fill-rate priority CSV · store override CSV · Oracle sort mode</div>
+            </div>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+              background: Object.keys(priorityMeta).length > 0 ? '#14532d' : 'transparent',
+              color: Object.keys(priorityMeta).length > 0 ? '#4ade80' : tokens.textMuted,
+              border: `1px solid ${Object.keys(priorityMeta).length > 0 ? '#22c55e50' : DK.cardBorder}` }}>
+              {Object.keys(priorityMeta).length > 0 ? `${Object.keys(priorityMeta).length} CSV` : sortMode}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            {PRIORITY_CSV_SPECS.map(spec => {
+              const meta = priorityMeta[spec.key]
+              const uploading = priorityUploading[spec.key]
+              const msg = priorityMsg[spec.key]
+              return (
+                <div key={spec.key}>
+                  <DkUploadZone label={spec.label} hint={spec.hint} active={!!meta}
+                    filename={meta?.filename} rows={meta?.rows} uploading={uploading}
+                    onUpload={f => handlePriorityUpload(spec.key, f)} onClear={() => clearPriority(spec.key)}
+                    inputRef={{ current: priorityRefs.current[spec.key] ?? null }} />
+                  {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
+                </div>
+              )
+            })}
+          </div>
+          {Object.keys(priorityMeta).length > 0 && (
+            <div style={{ padding: '8px 12px', background: '#1a1a3e', border: '1px solid #2d1f5e', borderRadius: 6,
+              display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: '#6b6b9e', marginRight: 2 }}>Sort:</span>
+              {['Override stores first', 'Fill-rate rank', 'Concept listed', 'Highest REQ'].map((item, i, arr) => (
+                <React.Fragment key={item}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#a78bfa' }}>{item}</span>
+                  {i < arr.length - 1 && <span style={{ fontSize: 10, color: '#4a4a6e' }}>›</span>}
+                </React.Fragment>
               ))}
             </div>
           )}
         </div>
 
-        {/* Step 3 — Distribution Loop */}
+        {/* ── Step 7: Hold Choosing ────────────────────────────────────────── */}
         <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-              border: `2px solid ${distResult ? '#22c55e' : '#d97706'}`,
-              background: distResult ? '#14532d' : distLoading ? '#451a00' : DK.cardBg,
-              color: distResult ? '#4ade80' : '#fbbf24',
-              fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {distResult ? '✓' : '3'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${holdRules.length > 0 ? '#22c55e' : '#d97706'}`,
+              background: holdRules.length > 0 ? '#14532d' : DK.cardBg,
+              color: holdRules.length > 0 ? '#4ade80' : '#fbbf24',
+              fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {holdRules.length > 0 ? '✓' : '7'}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Run distribution</div>
-              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Allocation loop · min→max grid · export results</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Hold Choosing</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Store-level holds · Attr1 holds · Y = distribute · N = hold</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {distResult && (
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+              background: holdRules.length > 0 ? '#7f1d1d60' : 'transparent',
+              color: holdRules.length > 0 ? '#fca5a5' : tokens.textMuted,
+              border: `1px solid ${holdRules.length > 0 ? '#dc262640' : DK.cardBorder}` }}>
+              {holdRules.length > 0 ? `${holdRules.length} hold${holdRules.length > 1 ? 's' : ''}` : 'No holds'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Store Hold</span>
+            <MultiSelect label="Stores" options={storeOptions} selected={holdStoreSelected} onChange={setHoldStoreSelected} width={260} />
+            <button onClick={addStoreHold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Attr1 Hold</span>
+            <MultiSelect label="Attr1" options={attribute1Options} selected={holdAttr1Selected} onChange={setHoldAttr1Selected} width={160} />
+            <span style={{ fontSize: 11, color: tokens.textMuted }}>except</span>
+            <MultiSelect label="Stores" options={storeOptions} selected={holdExceptSelected} onChange={setHoldExceptSelected} width={240} />
+            <button onClick={addAttr1Hold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
+          </div>
+          {holdRules.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {holdRules.map((r, i) => (
+                <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
+                  padding: '2px 8px', fontSize: 11, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {r.type === 'store'
+                    ? `Store Hold: ${r.stores.join(', ')}`
+                    : `Attr1 "${r.attr1}"${r.except_stores.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
+                  <span onClick={() => removeHold(i)} style={{ cursor: 'pointer', color: '#f87171', fontWeight: 700 }}>x</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Step 8: Run Distribution ─────────────────────────────────────── */}
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${distResult ? '#22c55e' : '#d97706'}`,
+              background: distResult ? '#14532d' : (distLoading || baseLoading) ? '#451a00' : DK.cardBg,
+              color: distResult ? '#4ade80' : '#fbbf24',
+              fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {distResult ? '✓' : '8'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Run Distribution</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Build base → allocation loop → export results</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {distResult && !distLoading && (
                 <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
                   background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Done</span>
               )}
-              {distLoading && (
+              {(distLoading || baseLoading) && (
                 <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
-                  background: '#451a00', color: '#fbbf24', border: '1px solid #d9780650' }}>Running...</span>
+                  background: '#451a00', color: '#fbbf24', border: '1px solid #d9780650' }}>
+                  {baseLoading ? 'Building…' : 'Running…'}
+                </span>
               )}
-              <button onClick={runDistribution} disabled={(!baseResult && !baseCacheReady) || distLoading}
+              {baseCacheReady && !baseLoading && !distLoading && (
+                <button onClick={runDistribution}
+                  style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: `1px solid ${DK.cardBorder}`,
+                    cursor: 'pointer', background: 'transparent', color: tokens.textMuted }}>
+                  Run only
+                </button>
+              )}
+              <button
+                onClick={async () => { await buildBase(); await runDistribution() }}
+                disabled={!imStatus?.ready || distLoading || baseLoading}
                 style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none',
-                  cursor: ((!baseResult && !baseCacheReady) || distLoading) ? 'not-allowed' : 'pointer',
-                  background: ((!baseResult && !baseCacheReady) || distLoading) ? DK.cardBorder : '#16a34a',
-                  color: '#fff', opacity: ((!baseResult && !baseCacheReady) || distLoading) ? 0.5 : 1 }}>
-                {distLoading ? 'Running…' : 'Run distribution'}
+                  cursor: (!imStatus?.ready || distLoading || baseLoading) ? 'not-allowed' : 'pointer',
+                  background: (!imStatus?.ready || distLoading || baseLoading) ? DK.cardBorder : '#16a34a',
+                  color: '#fff', opacity: (!imStatus?.ready || distLoading || baseLoading) ? 0.5 : 1 }}>
+                {baseLoading ? 'Building base…' : distLoading ? 'Distributing…' : baseCacheReady ? 'Rebuild + Run' : 'Build + Run'}
               </button>
             </div>
           </div>
-          <div style={{ fontSize: 13, color: tokens.textMuted, marginBottom: 14 }}>
-            Per-barcode: Round 1 = art_grid · Round 2+ = +1 per store until max_grid or GRC stock exhausted
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
             <label style={{ fontSize: 12, color: tokens.textMuted }}>Max Rounds</label>
-            <input
-              type="number" min={1} max={20} value={maxRound}
+            <input type="number" min={1} max={20} value={maxRound}
               onChange={e => setMaxRound(Math.max(1, Math.min(20, Number(e.target.value))))}
-              style={{ width: 60, padding: '4px 8px', fontSize: 13, borderRadius: 6,
-                border: `1px solid ${tokens.cardBorder}`, background: tokens.cardBg, color: tokens.textPrimary }}
-            />
-            <span style={{ fontSize: 11, color: tokens.textMuted }}>
-              (1–20 rounds; Round 1 = art_grid, Round 2+ = +1/store)
-            </span>
+              style={{ width: 56, padding: '4px 8px', fontSize: 13, borderRadius: 6,
+                border: `1px solid ${tokens.cardBorder}`, background: tokens.cardBg, color: tokens.textPrimary }} />
+            <span style={{ fontSize: 11, color: tokens.textMuted }}>Round 1 = art_grid · Round 2+ = +1/store</span>
           </div>
-          {/* ── Option Listing Rule ────────────────────────────────────────── */}
-          <div style={{ background: tokens.cardBg, border: `1px solid ${applyOL ? '#8b5cf6' : tokens.cardBorder}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: applyOL ? 10 : 0 }}>
+          <div style={{ background: tokens.cardBg, border: `1px solid ${applyOL ? '#8b5cf6' : DK.cardBorder}`, borderRadius: 8, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1 }}>
                 <input type="checkbox" checked={applyOL} onChange={e => setApplyOL(e.target.checked)}
                   style={{ width: 15, height: 15, accentColor: '#8b5cf6', cursor: 'pointer' }} />
                 <span style={{ fontSize: 12, fontWeight: 700, color: applyOL ? '#a78bfa' : tokens.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Option Listing Filter
                 </span>
-                <span style={{ fontSize: 10, color: tokens.textMuted }}>PREWINTER · LT WINTER — T_CLR_CONCEPT_AW26_V1</span>
+                <span style={{ fontSize: 10, color: tokens.textMuted }}>PREWINTER · LT WINTER</span>
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {olStatus?.ready
                   ? <span style={{ fontSize: 10, color: '#4ade80' }}>✓ {olStatus.rows.toLocaleString('en-IN')} rows</span>
                   : <span style={{ fontSize: 10, color: '#f87171' }}>✗ Not cached</span>}
-                <button
-                  onClick={async () => {
-                    setOlDownloading(true)
-                    try {
-                      await apiFetch('POST', '/distribution/option-listing/download')
-                      await fetchOlStatus()
-                    } catch { /* silent */ } finally { setOlDownloading(false) }
-                  }}
-                  disabled={olDownloading}
-                  style={{ ...S.btn('#7c3aed'), padding: '3px 10px', fontSize: 11 }}
-                >
+                <button onClick={async () => { setOlDownloading(true); try { await apiFetch('POST', '/distribution/option-listing/download'); await fetchOlStatus() } catch { /* silent */ } finally { setOlDownloading(false) } }}
+                  disabled={olDownloading} style={{ ...S.btn('#7c3aed'), padding: '3px 10px', fontSize: 11 }}>
                   {olDownloading ? '…' : '↓ Refresh'}
                 </button>
               </div>
             </div>
             {applyOL && (
-              <div style={{ fontSize: 11, color: tokens.textMuted, paddingLeft: 23 }}>
+              <div style={{ fontSize: 11, color: tokens.textMuted, paddingLeft: 23, marginTop: 8 }}>
                 Stores × concept_new not in YES list → <span style={{ color: '#f87171' }}>Final Alloc = 0</span> · Remark: <em>HOLD FOR OPTION_LISTING NO</em>
               </div>
             )}
           </div>
-
-          {/* ── Hold Rules UI ─────────────────────────────────────────────── */}
-          <div style={{ background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8, padding: 12, marginBottom: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Hold Rules {holdRules.length > 0 && <span style={{ color: '#f59e0b', marginLeft: 6 }}>({holdRules.length} active)</span>}
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: tokens.textSecondary, width: 70, flexShrink: 0 }}>Store Hold</span>
-              <MultiSelect label="Stores" options={storeOptions} selected={holdStoreSelected} onChange={setHoldStoreSelected} width={260} />
-              <button onClick={addStoreHold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: tokens.textSecondary, width: 70, flexShrink: 0 }}>Attr1 Hold</span>
-              <MultiSelect label="Attr1" options={attribute1Options} selected={holdAttr1Selected} onChange={setHoldAttr1Selected} width={160} />
-              <span style={{ fontSize: 11, color: tokens.textMuted }}>except</span>
-              <MultiSelect label="Stores" options={storeOptions} selected={holdExceptSelected} onChange={setHoldExceptSelected} width={240} />
-              <button onClick={addAttr1Hold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
-            </div>
-            {holdRules.length > 0 && (
-              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {holdRules.map((r, i) => (
-                  <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
-                    padding: '2px 8px', fontSize: 11, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {r.type === 'store'
-                      ? `Store Hold: ${r.stores.join(', ')}`
-                      : `Attr1 "${r.attr1}"${r.except_stores.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
-                    <span onClick={() => removeHold(i)} style={{ cursor: 'pointer', color: '#f87171', fontWeight: 700 }}>x</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          {!baseResult && !baseCacheReady && (
+          {!imStatus?.ready && (
             <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
               borderRadius: 7, fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>
-              ⚠ Build base first (Step 2)
+              ⚠ Download Item Master from Master Data page first (Step 2)
             </div>
           )}
-          {!baseResult && baseCacheReady && (
+          {baseCacheReady && !baseLoading && !distResult && (
             <div style={{ padding: '8px 12px', background: '#14532d', border: '1px solid #22c55e40',
               borderRadius: 7, fontSize: 12, color: '#4ade80', marginBottom: 8 }}>
-              ✓ Cached base ready — click Run distribution above
+              ✓ Cached base ready — click "Rebuild + Run" or "Run only"
             </div>
           )}
+          {baseMsg && <div style={S.msg(baseMsg.startsWith('✓'))}>{baseMsg}</div>}
           {distMsg && <div style={S.msg(distMsg.startsWith('✓'))}>{distMsg}</div>}
-
           {distResult && (
-            <div style={{ display: 'flex', gap: 16, marginTop: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              {/* Left — KPIs + sample table */}
+            <div style={{ display: 'flex', gap: 16, marginTop: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
-                    { label: 'Units Allocated',     val: distResult.total_allocated.toLocaleString('en-IN') },
-                    { label: 'Stores Covered',      val: distResult.stores_covered.toLocaleString('en-IN') },
-                    { label: 'Barcodes Total',      val: distResult.icodes_total },
-                    { label: 'Fully Covered',       val: distResult.icodes_fully_covered },
-                    ...(distResult.ol_held_count ? [{ label: 'OL Hold',  val: distResult.ol_held_count.toLocaleString('en-IN') }] : []),
-                    { label: 'Time',                val: `${Math.round(distResult.elapsed_ms / 1000)}s` },
+                    { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN') },
+                    { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN') },
+                    { label: 'Barcodes Total',  val: distResult.icodes_total },
+                    { label: 'Fully Covered',   val: distResult.icodes_fully_covered },
+                    ...(distResult.ol_held_count ? [{ label: 'OL Hold', val: distResult.ol_held_count.toLocaleString('en-IN') }] : []),
+                    { label: 'Time',             val: `${Math.round(distResult.elapsed_ms / 1000)}s` },
                   ].map(stat => (
                     <div key={stat.label}>
                       <div style={{ fontSize: 11, color: tokens.textMuted }}>{stat.label}</div>
@@ -1231,8 +1294,6 @@ export default function DistributionModel() {
                     </div>
                   ))}
                 </div>
-
-                {/* Sample rows — dynamic columns */}
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
                     <thead>
@@ -1248,7 +1309,7 @@ export default function DistributionModel() {
                     </thead>
                     <tbody>
                       {distResult.sample.map((row, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : tokens.cardBg + '40' }}>
+                        <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : DK.cardBg + '40' }}>
                           {distResult.columns.map(col => (
                             <td key={col} style={{ padding: '3px 10px', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
                               color: col === 'reason_not_allocated' && row[col] ? '#f87171'
@@ -1262,29 +1323,18 @@ export default function DistributionModel() {
                   </table>
                 </div>
               </div>
-
-              {/* Right — Division Summary panel */}
-              <div style={{
-                width: 300, flexShrink: 0,
-                background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`,
-                borderRadius: 10, padding: '14px 16px',
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary, marginBottom: 10 }}>
-                  🎨 Division Summary
-                </div>
-                {divSummaryLoading && (
-                  <div style={{ fontSize: 12, color: tokens.textMuted }}>Loading…</div>
-                )}
+              <div style={{ width: 300, flexShrink: 0, background: tokens.cardBg,
+                border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary, marginBottom: 10 }}>🎨 Division Summary</div>
+                {divSummaryLoading && <div style={{ fontSize: 12, color: tokens.textMuted }}>Loading…</div>}
                 {!divSummaryLoading && (divSummary ?? []).length > 0 && (
                   <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
                     <thead>
                       <tr>
                         {(['Division', 'Total', 'Alloc>0', 'Zero'] as const).map(h => (
-                          <th key={h} style={{
-                            padding: '4px 6px', textAlign: h === 'Division' ? 'left' : 'right',
+                          <th key={h} style={{ padding: '4px 6px', textAlign: h === 'Division' ? 'left' : 'right',
                             color: tokens.textMuted, fontWeight: 600, fontSize: 11,
-                            borderBottom: `1px solid ${tokens.cardBorder}`,
-                          }}>{h}</th>
+                            borderBottom: `1px solid ${tokens.cardBorder}` }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1304,15 +1354,9 @@ export default function DistributionModel() {
                     <tfoot>
                       <tr style={{ borderTop: `1px solid ${tokens.cardBorder}` }}>
                         <td style={{ padding: '5px 6px', color: tokens.textMuted, fontSize: 11 }}>Total</td>
-                        <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary, fontWeight: 700 }}>
-                          {(divSummary ?? []).reduce((s, r) => s + r.rows_total, 0).toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>
-                          {(divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0).toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted, fontWeight: 700 }}>
-                          {(divSummary ?? []).reduce((s, r) => s + (r.rows_total - r.rows_nonzero), 0).toLocaleString('en-IN')}
-                        </td>
+                        <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary, fontWeight: 700 }}>{(divSummary ?? []).reduce((s, r) => s + r.rows_total, 0).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>{(divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted, fontWeight: 700 }}>{(divSummary ?? []).reduce((s, r) => s + (r.rows_total - r.rows_nonzero), 0).toLocaleString('en-IN')}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1320,8 +1364,6 @@ export default function DistributionModel() {
                 {!divSummaryLoading && (divSummary ?? []).length === 0 && (
                   <div style={{ fontSize: 12, color: tokens.textMuted }}>No division data</div>
                 )}
-
-                {/* Coverage bar */}
                 {distResult.rows > 0 && (() => {
                   const totalNonzero = (divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0)
                   const pct = (divSummary ?? []).length > 0
@@ -1339,14 +1381,12 @@ export default function DistributionModel() {
                     </div>
                   )
                 })()}
-
-                {/* Download buttons */}
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <button onClick={exportCsv} disabled={csvLoading} style={{ ...S.btn('#0284c7', csvLoading), fontSize: 12, padding: '6px 12px' }}>
-                    {csvLoading ? '⏳ CSV…' : '⬇ Download CSV'}
+                    {csvLoading ? '\u23f3 CSV\u2026' : '\u2b07 Download CSV'}
                   </button>
                   <button onClick={exportDistribution} disabled={exportLoading} style={{ ...S.btn('#059669', exportLoading), fontSize: 12, padding: '6px 12px' }}>
-                    {exportLoading ? '⏳ Excel…' : '⬇ Download Excel'}
+                    {exportLoading ? '\u23f3 Excel\u2026' : '\u2b07 Download Excel'}
                   </button>
                 </div>
               </div>
@@ -1358,4 +1398,3 @@ export default function DistributionModel() {
     </div>
   )
 }
-

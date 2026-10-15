@@ -1115,6 +1115,55 @@ async def base_status():
     return APIResponse.ok(data={"ready": ready, "rows": meta.get("rows", 0), "cached_at": meta.get("cached_at")})
 
 
+@router.get("/barcode-preview", response_model=APIResponse)
+async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
+    """
+    Lightweight preview: unique barcode count + wh_source breakdown from parquet.
+    Does not build the full base — just reads existing parquets.
+    """
+    _require_oracle()
+    try:
+        src = stock_source.upper()
+        seg = biz_segment.upper()
+        grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
+        wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
+
+        frames = []
+        if src in ("GRC", "BOTH") and grc is not None:
+            g = grc[["icode"]].copy() if "icode" in grc.columns else grc[[grc.columns[0]]].rename(columns={grc.columns[0]: "icode"})
+            g.columns = ["icode"]
+            g["wh_source"] = "GRC"
+            frames.append(g)
+        if src in ("WMS", "BOTH") and wms is not None:
+            w = wms[["icode"]].copy() if "icode" in wms.columns else wms[[wms.columns[0]]].rename(columns={wms.columns[0]: "icode"})
+            w.columns = ["icode"]
+            w["wh_source"] = "WMS"
+            frames.append(w)
+
+        if not frames:
+            return APIResponse.fail(message="No parquets found for selected source.")
+
+        df = pd.concat(frames, ignore_index=True)
+        # If BOTH: barcodes in both → "GRC|WMS"
+        if src == "BOTH":
+            counts = df.groupby("icode")["wh_source"].nunique()
+            both_icodes = counts[counts > 1].index
+            df.loc[df["icode"].isin(both_icodes), "wh_source"] = "GRC|WMS"
+        df = df.drop_duplicates("icode")
+
+        breakdown = df.groupby("wh_source").size().reset_index(name="count").to_dict(orient="records")
+        sample = df.head(10).to_dict(orient="records")
+
+        return APIResponse.ok(data={
+            "total": len(df),
+            "breakdown": breakdown,
+            "sample": sample,
+        })
+    except Exception as exc:
+        logger.exception("barcode_preview error")
+        return APIResponse.fail(message=str(exc))
+
+
 @router.post("/distribute", response_model=APIResponse)
 async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q", max_round: int = 10):
     """

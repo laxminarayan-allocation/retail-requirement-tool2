@@ -56,14 +56,32 @@ async def upload_stock_csv(file: UploadFile = File(...)):
             return APIResponse.fail(message="CSV must have a qty column (e.g. GRC_QTY, WMS_QTY, MSA_QTY, ASN_QTY).")
         qty_col = qty_candidates[0]
 
+        # Derive source label from column name
+        qty_upper = qty_col.upper()
+        if "ASN" in qty_upper:
+            src_label = "ASN"
+        elif "MSA" in qty_upper:
+            src_label = "MSA"
+        elif "WMS" in qty_upper:
+            src_label = "WMS"
+        elif "GRC" in qty_upper:
+            src_label = "GRC"
+        elif "IST" in qty_upper:
+            src_label = "IST"
+        elif "NOTEPAD" in qty_upper:
+            src_label = "NOTEPAD"
+        else:
+            src_label = "OTHER"
+
         out = df[[bc_col, qty_col]].copy()
         out.columns = ["icode", "wh_q"]
-        out["icode"] = out["icode"].astype(str).str.strip()
-        out["wh_q"]  = pd.to_numeric(out["wh_q"], errors="coerce").fillna(0).astype(int)
+        out["icode"]     = out["icode"].astype(str).str.strip()
+        out["wh_q"]      = pd.to_numeric(out["wh_q"], errors="coerce").fillna(0).astype(int)
+        out["wh_source"] = src_label
         out = out[out["icode"].str.len() > 0]
 
         _uploaded_stock_df = out
-        _uploaded_stock_meta = {"filename": file.filename, "rows": len(out), "qty_col": qty_col}
+        _uploaded_stock_meta = {"filename": file.filename, "rows": len(out), "qty_col": qty_col, "wh_source": src_label}
         return APIResponse.ok(data=_uploaded_stock_meta, message=f"Uploaded {len(out):,} barcode rows from '{qty_col}'")
     except Exception as exc:
         logger.error("upload_stock_csv: %s", exc)
@@ -512,9 +530,12 @@ async def build_distribution_base(
             base["dist_req"] = base.get("req", 0)
             # Merge uploaded qty — any barcode not in upload gets wh_q = 0
             upload = _uploaded_stock_df.copy()
-            base = base.merge(upload.rename(columns={"wh_q": "_csv_wh_q"}), on="icode", how="left")
+            merge_cols = {"wh_q": "_csv_wh_q", "wh_source": "_csv_wh_source"} if "wh_source" in upload.columns else {"wh_q": "_csv_wh_q"}
+            base = base.merge(upload.rename(columns=merge_cols), on="icode", how="left")
             base["wh_q"] = base["_csv_wh_q"].fillna(0).astype(int)
-            base.drop(columns=["_csv_wh_q"], inplace=True)
+            base["wh_source"] = base.get("_csv_wh_source", "OTHER").fillna("OTHER")
+            drop_cols = [c for c in ["_csv_wh_q", "_csv_wh_source"] if c in base.columns]
+            base.drop(columns=drop_cols, inplace=True)
             req_source = "CSV"
         else:
             grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
@@ -531,6 +552,7 @@ async def build_distribution_base(
                 base.columns = [c.lower() for c in base.columns]
                 base["dist_req"] = base.get("req", 0)
                 base["wh_q"] = base.get("grc_q", 0)
+                base["wh_source"] = "GRC"
             elif req_source == "WMS":
                 if wms is None:
                     return APIResponse.fail(message="WMS parquet not found.")
@@ -538,6 +560,7 @@ async def build_distribution_base(
                 base.columns = [c.lower() for c in base.columns]
                 base["dist_req"] = base.get("req", 0)
                 base["wh_q"] = base.get("wms_q", 0)
+                base["wh_source"] = "WMS"
             else:  # BOTH
                 if grc is None or wms is None:
                     return APIResponse.fail(message="Both GRC and WMS parquets required.")
@@ -550,7 +573,13 @@ async def build_distribution_base(
                 base["wms_req"]   = base["wms_req"].fillna(0)
                 base["wms_stock"] = base["wms_stock"].fillna(0)
                 base["dist_req"]  = base.get("req", 0) + base["wms_req"]
-                base["wh_q"] = base.get("grc_q", 0) + base["wms_stock"]
+                grc_q = base.get("grc_q", 0).fillna(0)
+                wms_q = base["wms_stock"]
+                base["wh_q"] = grc_q + wms_q
+                # Per barcode: if both sources have qty → "GRC|WMS", else whichever has qty
+                base["wh_source"] = "GRC|WMS"
+                base.loc[(grc_q > 0) & (wms_q == 0), "wh_source"] = "GRC"
+                base.loc[(grc_q == 0) & (wms_q > 0), "wh_source"] = "WMS"
 
         # normalise col names
         base.columns = [c.lower() for c in base.columns]
@@ -1203,7 +1232,7 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
         # ── Sample: key display columns ────────────────────────────────────────
         display_cols = [
             # identity
-            "store_name", "store_grade", "icode", "wh_q", "desc4",
+            "store_name", "store_grade", "icode", "wh_q", "wh_source", "desc4",
             # product
             "department", "display_type", "article_name", "mrp", "cat4", "cat2",
             # item master extras

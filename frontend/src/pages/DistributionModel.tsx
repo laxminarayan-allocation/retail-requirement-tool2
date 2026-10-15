@@ -730,51 +730,60 @@ export default function DistributionModel() {
         </p>
       </div>
 
-      {/* ── Pipeline bar ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 20,
-        background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '14px 18px' }}>
-        {[
-          { n: 1, title: 'Configure', sub: 'Source · filters', state: 'done' },
-          { n: 2, title: 'Build base', sub: 'REQ · stock · priority', state: baseCacheReady ? 'done' : 'active' },
-          { n: 3, title: 'Run loop', sub: 'Allocate · export', state: distResult ? 'done' : (baseCacheReady ? 'active' : 'idle') },
-        ].map((step, idx) => (
-          <React.Fragment key={step.n}>
-            {idx > 0 && (
-              <div style={{ width: 28, height: 2, background: step.state === 'done' ? '#22c55e' : tokens.cardBorder, flexShrink: 0, margin: '0 6px' }} />
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-              <div style={{
-                width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, flexShrink: 0, border: '2px solid transparent',
-                background: step.state === 'done' ? '#1c3a2a' : step.state === 'active' ? '#1e3a5f' : '#2a2a2c',
-                borderColor: step.state === 'done' ? '#22c55e' : step.state === 'active' ? '#3b82f6' : '#4a4a4c',
-                color: step.state === 'done' ? '#4ade80' : step.state === 'active' ? '#60a5fa' : '#6b6b6e',
-              }}>
-                {step.state === 'done' ? '✓' : step.n}
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: tokens.textPrimary }}>{step.title}</div>
-                <div style={{ fontSize: 11, color: tokens.textMuted, marginTop: 1 }}>{step.sub}</div>
-              </div>
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
+      {/* ── Pipeline bar — CityKart style ──────────────────────────────────── */}
+      {(() => {
+        const pSteps: Array<{ n: number; label: string; state: 'done' | 'running' | 'idle' }> = [
+          { n: 1, label: 'Configure', state: 'done' },
+          { n: 2, label: 'Build base', state: baseCacheReady ? 'done' : baseLoading ? 'running' : 'idle' },
+          { n: 3, label: 'Run loop', state: distResult ? 'done' : distLoading ? 'running' : 'idle' },
+        ]
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
+            marginBottom: 20, background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`,
+            borderRadius: 12, padding: '18px 24px' }}>
+            {pSteps.map((step, idx) => (
+              <React.Fragment key={step.n}>
+                {idx > 0 && (
+                  <div style={{ flex: 1, height: 2, maxWidth: 80,
+                    background: pSteps[idx - 1].state === 'done' ? '#22c55e' : tokens.cardBorder }} />
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 700, flexShrink: 0,
+                    border: `2px solid ${step.state === 'done' ? '#22c55e' : step.state === 'running' ? '#d97706' : '#d97706'}`,
+                    background: step.state === 'done' ? '#14532d' : step.state === 'running' ? '#451a00' : tokens.cardBg,
+                    color: step.state === 'done' ? '#4ade80' : step.state === 'running' ? '#fbbf24' : '#fbbf24',
+                  }}>
+                    {step.state === 'done' ? '✓' : step.n}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600,
+                    color: step.state === 'done' ? '#4ade80' : step.state === 'running' ? '#fbbf24' : tokens.textMuted,
+                    textAlign: 'center' }}>{step.label}</div>
+                  {step.state === 'running' && <div style={{ fontSize: 10, color: '#fbbf24' }}>Running...</div>}
+                  {step.state === 'done' && <div style={{ fontSize: 10, color: '#4ade8080' }}>Done</div>}
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        )
+      })()}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
 
         {/* Step 1 — Selections */}
         <div style={S.card}>
-          {/* Step 1 header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#1e3a5f', color: '#60a5fa',
-              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${tokens.cardBorder}` }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid #22c55e',
+              background: '#14532d', color: '#4ade80', fontSize: 14, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.textPrimary }}>Configure</div>
-              <div style={{ fontSize: 11, color: tokens.textMuted }}>Source · filters · stock override</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Configure</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>REQ source · business segment · scope filters · stock CSV</div>
             </div>
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-              background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>Ready</span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+              background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Done</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <PillToggle label="Req Source"    options={[{val:'GRC',text:'GRC'},{val:'WMS',text:'WMS'},{val:'BOTH',text:'GRC + WMS'}]}  value={reqSource}  onChange={v => { setReqSource(v); clearCsvUpload() }}  accent="#6366f1" />
@@ -835,24 +844,32 @@ export default function DistributionModel() {
 
         {/* Step 2 — Build Base */}
         <div style={S.card}>
-          {/* Step 2 header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{ width: 24, height: 24, borderRadius: '50%',
-              background: baseCacheReady ? '#1c3a2a' : '#1e3a5f',
-              color: baseCacheReady ? '#4ade80' : '#60a5fa',
-              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${tokens.cardBorder}` }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${baseCacheReady ? '#22c55e' : '#d97706'}`,
+              background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : 'transparent',
+              color: baseCacheReady ? '#4ade80' : '#fbbf24',
+              fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {baseCacheReady ? '✓' : '2'}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.textPrimary }}>Build base</div>
-              <div style={{ fontSize: 11, color: tokens.textMuted }}>Item master · stores · REQ overrides · priority</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Build base</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Item master · stores · REQ overrides · store priority</div>
             </div>
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-              background: baseCacheReady ? '#1c3a2a' : '#2a2a2c',
-              color: baseCacheReady ? '#4ade80' : '#6b6b6e',
-              border: baseCacheReady ? '1px solid #22c55e40' : '1px solid #3a3a3c' }}>
-              {baseCacheReady ? 'Built' : 'Not built'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+                background: baseCacheReady ? '#14532d' : baseLoading ? '#451a00' : 'transparent',
+                color: baseCacheReady ? '#4ade80' : baseLoading ? '#fbbf24' : tokens.textMuted,
+                border: `1px solid ${baseCacheReady ? '#22c55e50' : baseLoading ? '#d9780650' : tokens.cardBorder}` }}>
+                {baseCacheReady ? 'Built' : baseLoading ? 'Building...' : 'Not built'}
+              </span>
+              <button onClick={buildBase} disabled={!baseReady}
+                style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none',
+                  cursor: baseReady ? 'pointer' : 'not-allowed',
+                  background: baseReady ? '#16a34a' : tokens.cardBorder, color: '#fff', opacity: baseReady ? 1 : 0.5 }}>
+                {baseLoading ? 'Building…' : 'Build base'}
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 12, color: tokens.textMuted }}>
             <span>Item Master:</span>
@@ -1024,13 +1041,11 @@ export default function DistributionModel() {
             )}
           </DkCollapse>
 
-          <button onClick={buildBase} disabled={!baseReady} style={S.btn('#10b981', !baseReady)}>
-            {baseLoading ? 'â³ Building…' : '▶ Build Base'}
-          </button>
           {!imStatus?.ready && (
-            <span style={{ marginLeft: 12, fontSize: 12, color: '#f59e0b' }}>
+            <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
+              borderRadius: 7, fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>
               ⚠ Download Item Master from Master Data page first
-            </span>
+            </div>
           )}
           {baseMsg && <div style={S.msg(baseMsg.startsWith('✓'))}>{baseMsg}</div>}
 
@@ -1052,22 +1067,35 @@ export default function DistributionModel() {
 
         {/* Step 3 — Distribution Loop */}
         <div style={S.card}>
-          {/* Step 3 header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{ width: 24, height: 24, borderRadius: '50%',
-              background: distResult ? '#1c3a2a' : '#2a2a2c',
-              color: distResult ? '#4ade80' : '#6b6b6e',
-              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18, paddingBottom: 14, borderBottom: `1px solid ${tokens.cardBorder}` }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${distResult ? '#22c55e' : '#d97706'}`,
+              background: distResult ? '#14532d' : distLoading ? '#451a00' : 'transparent',
+              color: distResult ? '#4ade80' : '#fbbf24',
+              fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {distResult ? '✓' : '3'}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: tokens.textPrimary }}>Run distribution</div>
-              <div style={{ fontSize: 11, color: tokens.textMuted }}>Allocation loop · results · export</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Run distribution</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Allocation loop · min→max grid · export results</div>
             </div>
-            {distResult && (
-              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-                background: '#1c3a2a', color: '#4ade80', border: '1px solid #22c55e40' }}>Done</span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {distResult && (
+                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+                  background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Done</span>
+              )}
+              {distLoading && (
+                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+                  background: '#451a00', color: '#fbbf24', border: '1px solid #d9780650' }}>Running...</span>
+              )}
+              <button onClick={runDistribution} disabled={(!baseResult && !baseCacheReady) || distLoading}
+                style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700, borderRadius: 7, border: 'none',
+                  cursor: ((!baseResult && !baseCacheReady) || distLoading) ? 'not-allowed' : 'pointer',
+                  background: ((!baseResult && !baseCacheReady) || distLoading) ? tokens.cardBorder : '#16a34a',
+                  color: '#fff', opacity: ((!baseResult && !baseCacheReady) || distLoading) ? 0.5 : 1 }}>
+                {distLoading ? 'Running…' : 'Run distribution'}
+              </button>
+            </div>
           </div>
           <div style={{ fontSize: 13, color: tokens.textMuted, marginBottom: 14 }}>
             Per-barcode: Round 1 = art_grid · Round 2+ = +1 per store until max_grid or GRC stock exhausted
@@ -1152,20 +1180,17 @@ export default function DistributionModel() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button onClick={runDistribution} disabled={(!baseResult && !baseCacheReady) || distLoading} style={S.btn('#8b5cf6', (!baseResult && !baseCacheReady) || distLoading)}>
-              {distLoading ? 'â³ Running…' : '▶ Run Distribution'}
-            </button>
-          </div>
           {!baseResult && !baseCacheReady && (
-            <span style={{ marginLeft: 12, fontSize: 12, color: '#f59e0b' }}>
-              ⚠ Build Base first (Step 2)
-            </span>
+            <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
+              borderRadius: 7, fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>
+              ⚠ Build base first (Step 2)
+            </div>
           )}
           {!baseResult && baseCacheReady && (
-            <span style={{ marginLeft: 12, fontSize: 12, color: '#34d399' }}>
-              ✓ Cached base ready
-            </span>
+            <div style={{ padding: '8px 12px', background: '#14532d', border: '1px solid #22c55e40',
+              borderRadius: 7, fontSize: 12, color: '#4ade80', marginBottom: 8 }}>
+              ✓ Cached base ready — click Run distribution above
+            </div>
           )}
           {distMsg && <div style={S.msg(distMsg.startsWith('✓'))}>{distMsg}</div>}
 

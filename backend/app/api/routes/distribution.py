@@ -85,6 +85,65 @@ async def stock_csv_status():
     return APIResponse.ok(data={"active": _uploaded_stock_df is not None, **_uploaded_stock_meta})
 
 
+# ── Uploaded Store Priority CSVs ─────────────────────────────────────────────
+# fill_rate: DEPARTMENT, STORE_NAME, FILL_RATE_RANK  (lower rank = higher priority)
+# override:  STORE_NAME, OVERRIDE_RANK               (156 override stores — always served first)
+_uploaded_store_priority: dict = {}   # key: "fill_rate" | "override"
+
+_STORE_PRIORITY_SPECS = {
+    "fill_rate": {
+        "label": "Fill-Rate Priority",
+        "required_cols": ["DEPARTMENT", "STORE_NAME", "FILL_RATE_RANK"],
+        "key_cols":  ["department", "store_name"],
+        "rank_col":  "fill_rate_rank",
+    },
+    "override": {
+        "label": "Store Override Priority",
+        "required_cols": ["STORE_NAME", "OVERRIDE_RANK"],
+        "key_cols":  ["store_name"],
+        "rank_col":  "override_rank",
+    },
+}
+
+
+@router.post("/upload-store-priority/{priority_type}", response_model=APIResponse)
+async def upload_store_priority(priority_type: str, file: UploadFile = File(...)):
+    """Upload store priority CSV. priority_type: fill_rate | override"""
+    global _uploaded_store_priority
+    spec = _STORE_PRIORITY_SPECS.get(priority_type)
+    if spec is None:
+        return APIResponse.fail(message=f"Unknown priority_type '{priority_type}'. Use: fill_rate | override")
+    try:
+        content = await file.read()
+        df = pd.read_csv(io.BytesIO(content))
+        df.columns = [c.strip().upper() for c in df.columns]
+        missing = [c for c in spec["required_cols"] if c not in df.columns]
+        if missing:
+            return APIResponse.fail(message=f"Missing columns: {missing}. Required: {spec['required_cols']}")
+        df = df[spec["required_cols"]].copy()
+        df.columns = [c.lower() for c in df.columns]
+        df[spec["rank_col"]] = pd.to_numeric(df[spec["rank_col"]], errors="coerce").fillna(9999)
+        df = df.drop_duplicates(subset=spec["key_cols"])
+        meta = {"filename": file.filename, "rows": len(df), "label": spec["label"]}
+        _uploaded_store_priority[priority_type] = {"df": df, "meta": meta}
+        return APIResponse.ok(data=meta, message=f"Uploaded {len(df):,} rows for {spec['label']}")
+    except Exception as exc:
+        logger.error("upload_store_priority[%s]: %s", priority_type, exc)
+        return APIResponse.fail(message=str(exc))
+
+
+@router.delete("/upload-store-priority/{priority_type}", response_model=APIResponse)
+async def clear_store_priority(priority_type: str):
+    global _uploaded_store_priority
+    _uploaded_store_priority.pop(priority_type, None)
+    return APIResponse.ok(message=f"Cleared {priority_type} store priority CSV.")
+
+
+@router.get("/upload-store-priority/status", response_model=APIResponse)
+async def store_priority_status():
+    return APIResponse.ok(data={k: v["meta"] for k, v in _uploaded_store_priority.items()})
+
+
 # ── Uploaded REQ CSVs (barcode-store req + MC/ART/MRP/SIZE req overrides) ────
 # Each entry: key → {df, meta}
 _uploaded_req: dict = {}   # key: "barcode" | "mc" | "art" | "mrp" | "size"
@@ -767,6 +826,33 @@ async def build_distribution_base(
         else:  # combined_req (default) — high req stores get stock first
             base = base.sort_values(["icode", "total_req"], ascending=[True, False])
 
+        # ── 12b. Join store priority (fill_rate + override) ───────────────────
+        if "fill_rate" in _uploaded_store_priority:
+            _fp = _uploaded_store_priority["fill_rate"]["df"].copy()
+            _join_keys = [k for k in ["department", "store_name"] if k in _fp.columns and k in base.columns]
+            if _join_keys and "fill_rate_rank" in _fp.columns:
+                base = base.merge(_fp[_join_keys + ["fill_rate_rank"]], on=_join_keys, how="left")
+                base["fill_rate_rank"] = pd.to_numeric(base["fill_rate_rank"], errors="coerce").fillna(9999)
+        else:
+            base["fill_rate_rank"] = 9999.0
+
+        if "override" in _uploaded_store_priority:
+            _ov = _uploaded_store_priority["override"]["df"].copy()
+            if "store_name" in _ov.columns and "override_rank" in _ov.columns and "store_name" in base.columns:
+                base = base.merge(_ov[["store_name", "override_rank"]], on="store_name", how="left")
+                base["override_rank"]  = pd.to_numeric(base["override_rank"], errors="coerce").fillna(9999)
+                base["override_group"] = (base["override_rank"] >= 9999).astype(int)   # 0 = override, 1 = normal
+            else:
+                base["override_rank"] = 9999.0; base["override_group"] = 1
+        else:
+            base["override_rank"] = 9999.0; base["override_group"] = 1
+
+        # concept_rank: 1 if list_tag==YES (store has concept listed), else 2
+        if "list_tag" in base.columns:
+            base["concept_rank"] = base["list_tag"].str.upper().map({"YES": 1}).fillna(2).astype(int)
+        else:
+            base["concept_rank"] = 1
+
         # ── 13. Cache base for distribution loop ──────────────────────────────
         write_cache("DIST", "BASE", base)
 
@@ -802,13 +888,12 @@ def _mround(value: float, multiple: int) -> int:
 def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
                                max_round: int = 9) -> pd.DataFrame:
     """
-    Distribution loop v3:
+    Distribution loop v4 (priority-aware):
     - MROUND: allocation in grid multiples (Excel MROUND)
-    - Shared mc_req pool per (department, store) — cross-barcode deduction
-    - Shared art_req pool per (article_name, store) — cross-barcode deduction
+    - Shared mc_req/art_req/bar_req/wh pools (cross-barcode deduction)
     - Phase: rounds 1-3 = grid×3 (bulk), rounds 4+ = grid×1 (drip)
-    - eligible_req = min(barcode_req, mc_req, [mrp_req if MRP in option_level])
-    - Outer loop: round → all rows in sort order (preserves cross-barcode shared pool)
+    - Store priority order per round: override_group → fill_rate_rank → concept_rank → -eligible
+      (mirrors notebook lexsort: override stores first, then fill-rate, then concept-listed stores)
     """
     base = base.reset_index(drop=True)
     n    = len(base)
@@ -830,15 +915,37 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
     store_v = base["store_name"].fillna("").values   if "store_name"    in base.columns else np.array([""] * n)
     icode_v = base["icode"].fillna("").values        if "icode"         in base.columns else np.array([""] * n)
 
-    # Sorting rank within each icode group (base already sorted by sort_mode)
+    # ── Priority columns (from build-base joins) ───────────────────────────────
+    override_group_v = gcol("override_group").astype(int)   # 0=override store, 1=normal
+    override_rank_v  = gcol("override_rank")                # lower = higher priority within override
+    fill_rate_rank_v = gcol("fill_rate_rank")               # lower = higher priority (dept×store)
+    concept_rank_v   = gcol("concept_rank").astype(int)     # 1=listed, 2=not listed
+    elig_alloc_v     = gcol("dist_req")                     # proxy for min_eli (descending)
+
+    # Pre-compute sort order: process high-priority stores first in every round.
+    # np.lexsort keys are applied right-to-left: last key = primary sort.
+    sort_order = np.lexsort((
+        -elig_alloc_v,       # 5th tiebreak: higher eligible first (descending)
+        concept_rank_v,      # 4th: concept_rank=1 before 2
+        fill_rate_rank_v,    # 3rd: lower fill_rate_rank = higher priority
+        override_rank_v,     # 2nd: lower override_rank = higher priority within override stores
+        override_group_v,    # 1st (primary): override stores (0) before normal (1)
+    ))
+
+    # Store priority labels for output (rank of each row in priority order)
+    priority_pos = np.empty(n, dtype=int)
+    priority_pos[sort_order] = np.arange(n)
+    base["priority_order"] = priority_pos + 1   # 1-based, lower = served earlier
+
+    # MRP flag per row
+    mrp_flag = np.array(["MRP" in str(o).upper() for o in opt_lvl])
+
+    # Sorting rank within each icode group (for output compatibility)
     ranks, rank_ctr = np.zeros(n, dtype=int), {}
     for i in range(n):
         rank_ctr[icode_v[i]] = rank_ctr.get(icode_v[i], 0) + 1
         ranks[i] = rank_ctr[icode_v[i]]
     base["sorting_rank"] = ranks
-
-    # MRP flag per row
-    mrp_flag = np.array(["MRP" in str(o).upper() for o in opt_lvl])
 
     # ── Initialize shared pools ────────────────────────────────────────────────
     mc_pool  = {}   # (department, store) → remaining mc_req
@@ -866,7 +973,7 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
     for rnd in range(max_round):
         multi = 3 if rnd < 3 else 1          # bulk rounds 1-3, drip rounds 4+
 
-        for i in range(n):
+        for i in sort_order:   # priority-ordered: override → fill_rate_rank → concept_rank
             if not eligible0[i]:
                 continue
 
@@ -1177,7 +1284,8 @@ def _build_export_cols(max_round: int) -> list:
         "attribute1", "concept_new", "list_tag",
         "option_level", "allocation_option",
         "dist_req", "mc_req", "art_req", "mrp_req", "sz_req", "sparky_req", "option_req",
-        "mc_fill_rate", "sorting_rank", "art_grid", "max_grid",
+        "mc_fill_rate", "sorting_rank", "priority_order", "art_grid", "max_grid",
+        "fill_rate_rank", "override_group", "override_rank", "concept_rank",
         "eligible_req", "mc_cap",
     ]
     for rnd in range(max_round):

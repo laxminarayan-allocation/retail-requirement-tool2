@@ -259,6 +259,41 @@ export default function DistributionModel() {
     setCsvUploadActive(false); setCsvUploadMeta(null); setCsvUploadMsg(null)
   }
 
+  // ── Store Priority CSVs (Fill-Rate + Override) ────────────────────────────
+  type PriorityCsvKey = 'fill_rate' | 'override'
+  const PRIORITY_CSV_SPECS: { key: PriorityCsvKey; label: string; hint: string }[] = [
+    { key: 'fill_rate', label: 'Fill-Rate Priority', hint: 'DEPARTMENT, STORE_NAME, FILL_RATE_RANK' },
+    { key: 'override',  label: 'Store Override Priority', hint: 'STORE_NAME, OVERRIDE_RANK' },
+  ]
+  const [priorityMeta,      setPriorityMeta]      = useState<Partial<Record<PriorityCsvKey, {filename: string; rows: number}>>>({})
+  const [priorityUploading, setPriorityUploading] = useState<Partial<Record<PriorityCsvKey, boolean>>>({})
+  const [priorityMsg,       setPriorityMsg]       = useState<Partial<Record<PriorityCsvKey, string>>>({})
+  const priorityRefs = useRef<Partial<Record<PriorityCsvKey, HTMLInputElement | null>>>({})
+
+  useEffect(() => {
+    http.get('/distribution/upload-store-priority/status').then(r => {
+      setPriorityMeta(r.data?.data ?? {})
+    }).catch(() => {})
+  }, [])
+
+  const handlePriorityUpload = async (key: PriorityCsvKey, file: File) => {
+    setPriorityUploading(p => ({ ...p, [key]: true })); setPriorityMsg(p => ({ ...p, [key]: undefined }))
+    try {
+      const form = new FormData(); form.append('file', file)
+      const res = await http.post<{ success: boolean; data: { filename: string; rows: number }; message: string }>(`/distribution/upload-store-priority/${key}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      if (res.data.success) { setPriorityMeta(p => ({ ...p, [key]: res.data.data })); setPriorityMsg(p => ({ ...p, [key]: `✓ ${res.data.message}` })) }
+      else { setPriorityMsg(p => ({ ...p, [key]: `✗ ${res.data.message}` })) }
+    } catch (e: any) { setPriorityMsg(p => ({ ...p, [key]: `✗ ${(e as any)?.response?.data?.message ?? (e as any)?.message ?? 'Upload failed'}` })) }
+    finally { setPriorityUploading(p => ({ ...p, [key]: false })) }
+  }
+
+  const clearPriority = async (key: PriorityCsvKey) => {
+    await http.delete(`/distribution/upload-store-priority/${key}`).catch(() => {})
+    setPriorityMeta(p => { const n = { ...p }; delete n[key]; return n })
+    setPriorityMsg(p => { const n = { ...p }; delete n[key]; return n })
+  }
+
+
   // ── REQ CSV Uploads (Step 2) ───────────────────────────────────────────────
   type ReqCsvKey = 'barcode' | 'mc' | 'art' | 'mrp' | 'size'
   const REQ_CSV_SPECS: { key: ReqCsvKey; label: string; hint: string }[] = [
@@ -781,6 +816,49 @@ export default function DistributionModel() {
               </div>
             )}
           </div>
+          {/* Store Priority CSVs */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
+              Store Priority (optional)
+            </div>
+            <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 8, lineHeight: 1.5 }}>
+              Upload to enable fill-rate + override priority sorting in the allocation loop.
+              Without these, all stores are treated equally within each barcode.
+            </div>
+            {PRIORITY_CSV_SPECS.map(spec => {
+              const meta = priorityMeta[spec.key]
+              const uploading = priorityUploading[spec.key]
+              const msg = priorityMsg[spec.key]
+              return (
+                <div key={spec.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 180 }}>{spec.label}</span>
+                  {meta ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, background: '#6366f118', color: '#818cf8', border: '1px solid #6366f140', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
+                        ✓ {meta.filename} · {meta.rows.toLocaleString('en-IN')} rows
+                      </span>
+                      <button onClick={() => clearPriority(spec.key)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✕ Clear</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => priorityRefs.current[spec.key]?.click()} disabled={uploading}
+                      style={{ fontSize: 11, padding: '4px 12px', borderRadius: 5, border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>
+                      {uploading ? 'Uploading…' : '+ Upload CSV'}
+                    </button>
+                  )}
+                  <span style={{ fontSize: 10, color: tokens.textMuted, fontFamily: 'monospace' }}>{spec.hint}</span>
+                  {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#818cf8' : '#f87171' }}>{msg}</span>}
+                  <input ref={el => { priorityRefs.current[spec.key] = el }} type="file" accept=".csv" hidden
+                    onChange={e => { const fl = e.target.files?.[0]; if (fl) handlePriorityUpload(spec.key, fl); e.target.value = '' }} />
+                </div>
+              )
+            })}
+            {Object.keys(priorityMeta).length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: '#818cf8', padding: '5px 10px', background: '#6366f110', borderRadius: 6, border: '1px solid #6366f130' }}>
+                ★ Priority active: override stores first → fill-rate rank → concept-listed stores → highest REQ
+              </div>
+            )}
+          </div>
+
           {/* REQ CSV Overrides */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>

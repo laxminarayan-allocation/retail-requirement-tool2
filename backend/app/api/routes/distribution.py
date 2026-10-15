@@ -6,6 +6,7 @@ Steps:
   2. Build joined base dataset (Barcode × Store × all REQ views)
   3. Sorting + distribution loop (min_grid → max_grid)
 """
+import io
 import logging
 import math
 import time
@@ -13,7 +14,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.models.calculation_models import DistributeRequest, HoldRule
 from app.models.response_models import APIResponse
@@ -26,6 +27,62 @@ router = APIRouter(prefix="/distribution", tags=["Distribution Model"])
 # In-memory cache for last distribution result (avoids re-running loop on export)
 _last_dist_result: Optional[pd.DataFrame] = None
 _last_dist_params: dict = {}
+
+# ── Uploaded stock CSV (barcode-level qty override) ───────────────────────────
+_uploaded_stock_df: Optional[pd.DataFrame] = None
+_uploaded_stock_meta: dict = {}   # {filename, rows, qty_col}
+
+
+@router.post("/upload-stock-csv", response_model=APIResponse)
+async def upload_stock_csv(file: UploadFile = File(...)):
+    """
+    Accept a CSV with BARCODE + one qty column (GRC_QTY / MSA_QTY / WMS_QTY / ASN_QTY).
+    Stores it in memory; subsequent /build-base calls use it as the stock source.
+    """
+    global _uploaded_stock_df, _uploaded_stock_meta
+    try:
+        content = await file.read()
+        df = pd.read_csv(io.BytesIO(content))
+        df.columns = [c.strip().upper() for c in df.columns]
+
+        # Find BARCODE / ICODE column
+        bc_col = next((c for c in df.columns if c in ("BARCODE", "ICODE", "BAR_CODE")), None)
+        if bc_col is None:
+            return APIResponse.fail(message="CSV must have a BARCODE (or ICODE) column.")
+
+        # Find qty column
+        qty_candidates = [c for c in df.columns if any(k in c for k in ("GRC_QTY", "MSA_QTY", "WMS_QTY", "ASN_QTY", "QTY", "STOCK", "GRC_Q", "WMS_Q"))]
+        if not qty_candidates:
+            return APIResponse.fail(message="CSV must have a qty column (e.g. GRC_QTY, WMS_QTY, MSA_QTY, ASN_QTY).")
+        qty_col = qty_candidates[0]
+
+        out = df[[bc_col, qty_col]].copy()
+        out.columns = ["icode", "wh_q"]
+        out["icode"] = out["icode"].astype(str).str.strip()
+        out["wh_q"]  = pd.to_numeric(out["wh_q"], errors="coerce").fillna(0).astype(int)
+        out = out[out["icode"].str.len() > 0]
+
+        _uploaded_stock_df = out
+        _uploaded_stock_meta = {"filename": file.filename, "rows": len(out), "qty_col": qty_col}
+        return APIResponse.ok(data=_uploaded_stock_meta, message=f"Uploaded {len(out):,} barcode rows from '{qty_col}'")
+    except Exception as exc:
+        logger.error("upload_stock_csv: %s", exc)
+        return APIResponse.fail(message=str(exc))
+
+
+@router.delete("/upload-stock-csv", response_model=APIResponse)
+async def clear_stock_csv():
+    """Clear the uploaded stock CSV override."""
+    global _uploaded_stock_df, _uploaded_stock_meta
+    _uploaded_stock_df = None
+    _uploaded_stock_meta = {}
+    return APIResponse.ok(message="Uploaded stock CSV cleared.")
+
+
+@router.get("/upload-stock-csv/status", response_model=APIResponse)
+async def stock_csv_status():
+    """Return whether an uploaded stock CSV is active."""
+    return APIResponse.ok(data={"active": _uploaded_stock_df is not None, **_uploaded_stock_meta})
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 _IM_OWNER = "REPORT"
@@ -293,44 +350,59 @@ async def build_distribution_base(
     try:
         t0 = time.perf_counter()
 
-        # ── 1. Load base (BARCODE GRC / WMS / BOTH) ───────────────────────────
-        grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
-        wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
-
-        if grc is None and wms is None:
-            return APIResponse.fail(message="Barcode parquets not found. Download from Master Data page first.")
-
-        req_source = req_source.upper()
-        if req_source == "GRC":
-            if grc is None:
-                return APIResponse.fail(message="GRC parquet not found.")
-            base = grc.copy()
+        # ── 1. Load base (BARCODE GRC / WMS / BOTH, or uploaded CSV override) ─
+        if _uploaded_stock_df is not None:
+            # Use uploaded CSV as stock source — pick GRC parquet for REQ columns,
+            # fallback to WMS, then override wh_q from the uploaded barcode qty map.
+            grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
+            wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
+            base_raw = grc if grc is not None else wms
+            if base_raw is None:
+                return APIResponse.fail(message="Barcode parquets not found. Download from Master Data page first.")
+            base = base_raw.copy()
             base.columns = [c.lower() for c in base.columns]
             base["dist_req"] = base.get("req", 0)
-            # wh_q = GRC warehouse stock
-            base["wh_q"] = base.get("grc_q", 0)
-        elif req_source == "WMS":
-            if wms is None:
-                return APIResponse.fail(message="WMS parquet not found.")
-            base = wms.copy()
-            base.columns = [c.lower() for c in base.columns]
-            base["dist_req"] = base.get("req", 0)
-            # wh_q = WMS warehouse stock
-            base["wh_q"] = base.get("wms_q", 0)
-        else:  # BOTH
-            if grc is None or wms is None:
-                return APIResponse.fail(message="Both GRC and WMS parquets required.")
-            grc.columns = [c.lower() for c in grc.columns]
-            wms.columns = [c.lower() for c in wms.columns]
-            base = grc.merge(
-                wms[["icode", "store_name", "req", "wms_q"]].rename(columns={"req": "wms_req", "wms_q": "wms_stock"}),
-                on=["icode", "store_name"], how="left"
-            )
-            base["wms_req"]   = base["wms_req"].fillna(0)
-            base["wms_stock"] = base["wms_stock"].fillna(0)
-            base["dist_req"]  = base.get("req", 0) + base["wms_req"]
-            # wh_q = GRC + WMS warehouse stock combined
-            base["wh_q"] = base.get("grc_q", 0) + base["wms_stock"]
+            # Merge uploaded qty — any barcode not in upload gets wh_q = 0
+            upload = _uploaded_stock_df.copy()
+            base = base.merge(upload.rename(columns={"wh_q": "_csv_wh_q"}), on="icode", how="left")
+            base["wh_q"] = base["_csv_wh_q"].fillna(0).astype(int)
+            base.drop(columns=["_csv_wh_q"], inplace=True)
+            req_source = "CSV"
+        else:
+            grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
+            wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
+
+            if grc is None and wms is None:
+                return APIResponse.fail(message="Barcode parquets not found. Download from Master Data page first.")
+
+            req_source = req_source.upper()
+            if req_source == "GRC":
+                if grc is None:
+                    return APIResponse.fail(message="GRC parquet not found.")
+                base = grc.copy()
+                base.columns = [c.lower() for c in base.columns]
+                base["dist_req"] = base.get("req", 0)
+                base["wh_q"] = base.get("grc_q", 0)
+            elif req_source == "WMS":
+                if wms is None:
+                    return APIResponse.fail(message="WMS parquet not found.")
+                base = wms.copy()
+                base.columns = [c.lower() for c in base.columns]
+                base["dist_req"] = base.get("req", 0)
+                base["wh_q"] = base.get("wms_q", 0)
+            else:  # BOTH
+                if grc is None or wms is None:
+                    return APIResponse.fail(message="Both GRC and WMS parquets required.")
+                grc.columns = [c.lower() for c in grc.columns]
+                wms.columns = [c.lower() for c in wms.columns]
+                base = grc.merge(
+                    wms[["icode", "store_name", "req", "wms_q"]].rename(columns={"req": "wms_req", "wms_q": "wms_stock"}),
+                    on=["icode", "store_name"], how="left"
+                )
+                base["wms_req"]   = base["wms_req"].fillna(0)
+                base["wms_stock"] = base["wms_stock"].fillna(0)
+                base["dist_req"]  = base.get("req", 0) + base["wms_req"]
+                base["wh_q"] = base.get("grc_q", 0) + base["wms_stock"]
 
         # normalise col names
         base.columns = [c.lower() for c in base.columns]

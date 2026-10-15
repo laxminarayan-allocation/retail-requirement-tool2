@@ -226,6 +226,38 @@ export default function DistributionModel() {
     }).catch(() => {})
   }, [])
 
+  // ── CSV Stock Upload ────────────────────────────────────────────────────────
+  const [csvUploadActive, setCsvUploadActive] = useState(false)
+  const [csvUploadMeta,   setCsvUploadMeta]   = useState<{filename: string; rows: number; qty_col: string} | null>(null)
+  const [csvUploading,    setCsvUploading]    = useState(false)
+  const [csvUploadMsg,    setCsvUploadMsg]    = useState<string | null>(null)
+  const csvInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    http.get('/distribution/upload-stock-csv/status').then(r => {
+      const d = r.data?.data
+      if (d?.active) { setCsvUploadActive(true); setCsvUploadMeta({ filename: d.filename, rows: d.rows, qty_col: d.qty_col }) }
+    }).catch(() => {})
+  }, [])
+
+  const handleCsvUpload = async (file: File) => {
+    setCsvUploading(true); setCsvUploadMsg(null)
+    try {
+      const form = new FormData(); form.append('file', file)
+      const res = await http.post<{ success: boolean; data: { filename: string; rows: number; qty_col: string }; message: string }>('/distribution/upload-stock-csv', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      if (res.data.success) {
+        setCsvUploadActive(true); setCsvUploadMeta(res.data.data)
+        setCsvUploadMsg(`✓ ${res.data.message}`)
+      } else { setCsvUploadMsg(`✗ ${res.data.message}`) }
+    } catch (e: any) { setCsvUploadMsg(`✗ ${e?.response?.data?.message ?? e?.message ?? 'Upload failed'}`) }
+    finally { setCsvUploading(false) }
+  }
+
+  const clearCsvUpload = async () => {
+    await http.delete('/distribution/upload-stock-csv').catch(() => {})
+    setCsvUploadActive(false); setCsvUploadMeta(null); setCsvUploadMsg(null)
+  }
+
   const [imStatus,    setImStatus]    = useState<ItemMasterStatus | null>(null)
   const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
   const [olDownloading, setOlDownloading] = useState(false)
@@ -557,9 +589,43 @@ export default function DistributionModel() {
         <div style={S.card}>
           <div style={S.cardTitle}>Step 1 — Select Sources</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <PillToggle label="Req Source"    options={[{val:'GRC',text:'GRC'},{val:'WMS',text:'WMS'},{val:'BOTH',text:'GRC + WMS'}]}  value={reqSource}  onChange={setReqSource}  accent="#6366f1" />
+            <PillToggle label="Req Source"    options={[{val:'GRC',text:'GRC'},{val:'WMS',text:'WMS'},{val:'BOTH',text:'GRC + WMS'}]}  value={reqSource}  onChange={v => { setReqSource(v); clearCsvUpload() }}  accent="#6366f1" />
             <PillToggle label="Biz Segment"   options={[{val:'APPS',text:'APPS'},{val:'GM',text:'GM'},{val:'BOTH',text:'Both'}]}         value={bizSegment} onChange={setBizSegment} accent="#0ea5e9" />
             <PillToggle label="Sort Priority" options={[{val:'fill_rate',text:'MC Fill Rate ↑'},{val:'combined_req',text:'Combined Req ↓'},{val:'festive_req',text:'Festive + Req ↓'}]} value={sortMode} onChange={setSortMode} accent="#f59e0b" />
+
+            {/* CSV Stock Upload */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 90, paddingTop: 4 }}>Stock CSV</span>
+              <div style={{ flex: 1 }}>
+                {csvUploadActive && csvUploadMeta ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ background: '#16423c', border: '1px solid #22c55e40', borderRadius: 8, padding: '6px 12px', fontSize: 12 }}>
+                      <span style={{ color: '#4ade80', fontWeight: 700 }}>✓ {csvUploadMeta.filename}</span>
+                      <span style={{ color: tokens.textMuted, marginLeft: 8 }}>{csvUploadMeta.rows.toLocaleString('en-IN')} rows · {csvUploadMeta.qty_col}</span>
+                    </div>
+                    <button onClick={clearCsvUpload} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>
+                      × Clear
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={() => csvInputRef.current?.click()}
+                      disabled={csvUploading}
+                      style={{ fontSize: 12, padding: '5px 14px', borderRadius: 8, border: '1px dashed #6366f180', background: '#6366f110', color: '#818cf8', cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      {csvUploading ? '⏳ Uploading…' : '⬆ Upload Barcode QTY CSV'}
+                    </button>
+                    <span style={{ fontSize: 11, color: tokens.textMuted }}>BARCODE + GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY</span>
+                    <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvUpload(f); e.target.value = '' }} />
+                  </div>
+                )}
+                {csvUploadMsg && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{csvUploadMsg}</div>
+                )}
+              </div>
+            </div>
 
             {/* Scope Builder: Row-based Division × Attr1 (OR between rows, multi-select within row) */}
             <div>

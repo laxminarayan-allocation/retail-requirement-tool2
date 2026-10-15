@@ -532,6 +532,16 @@ export default function DistributionModel() {
       const d = res.data.data
       setDistResult(d)
       setDistMsg(`✓ Distribution done — ${d.total_allocated.toLocaleString('en-IN')} units allocated · ${Math.round(d.elapsed_ms / 1000)}s`)
+      // Auto-fetch division summary for the result panel
+      setDivSummary(null)
+      setDivSummaryLoading(true)
+      try {
+        const sres = await http.get<{ rows_total: number; divisions: DivisionRow[] }>(
+          `/distribution/division-summary?max_round=${maxRound}`
+        )
+        setDivSummaryTotal(sres.data.rows_total)
+        setDivSummary(sres.data.divisions)
+      } catch { setDivSummary([]) } finally { setDivSummaryLoading(false) }
     } catch (e: unknown) {
       setDistMsg(`✗ ${e instanceof Error ? e.message : 'Error'}`)
     } finally { setDistLoading(false) }

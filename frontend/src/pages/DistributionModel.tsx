@@ -868,7 +868,7 @@ export default function DistributionModel() {
                 {divSummaryLoading && (
                   <div style={{ fontSize: 12, color: tokens.textMuted }}>Loading…</div>
                 )}
-                {!divSummaryLoading && divSummary.length > 0 && (
+                {!divSummaryLoading && (divSummary ?? []).length > 0 && (
                   <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
                     <thead>
                       <tr>
@@ -882,7 +882,7 @@ export default function DistributionModel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {divSummary.map(row => {
+                      {(divSummary ?? []).map(row => {
                         const zero = row.rows_total - row.rows_nonzero
                         return (
                           <tr key={row.division}>
@@ -898,27 +898,27 @@ export default function DistributionModel() {
                       <tr style={{ borderTop: `1px solid ${tokens.cardBorder}` }}>
                         <td style={{ padding: '5px 6px', color: tokens.textMuted, fontSize: 11 }}>Total</td>
                         <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary, fontWeight: 700 }}>
-                          {divSummary.reduce((s, r) => s + r.rows_total, 0).toLocaleString('en-IN')}
+                          {(divSummary ?? []).reduce((s, r) => s + r.rows_total, 0).toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>
-                          {divSummary.reduce((s, r) => s + r.rows_nonzero, 0).toLocaleString('en-IN')}
+                          {(divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0).toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted, fontWeight: 700 }}>
-                          {divSummary.reduce((s, r) => s + (r.rows_total - r.rows_nonzero), 0).toLocaleString('en-IN')}
+                          {(divSummary ?? []).reduce((s, r) => s + (r.rows_total - r.rows_nonzero), 0).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
                 )}
-                {!divSummaryLoading && divSummary.length === 0 && (
+                {!divSummaryLoading && (divSummary ?? []).length === 0 && (
                   <div style={{ fontSize: 12, color: tokens.textMuted }}>No division data</div>
                 )}
 
                 {/* Coverage bar */}
                 {distResult.rows > 0 && (() => {
-                  const totalNonzero = divSummary.reduce((s, r) => s + r.rows_nonzero, 0)
-                  const pct = divSummary.length > 0
-                    ? Math.round(totalNonzero / divSummary.reduce((s, r) => s + r.rows_total, 0) * 100)
+                  const totalNonzero = (divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0)
+                  const pct = (divSummary ?? []).length > 0
+                    ? Math.round(totalNonzero / (divSummary ?? []).reduce((s, r) => s + r.rows_total, 0) * 100)
                     : Math.round(distResult.stores_covered / distResult.rows * 100)
                   return (
                     <div style={{ marginTop: 12 }}>

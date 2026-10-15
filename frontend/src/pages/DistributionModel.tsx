@@ -167,6 +167,7 @@ export default function DistributionModel() {
   const [reqSource,   setReqSource]   = useState<ReqSource>(() => ssLoad('reqSource', 'GRC'))
   const [bizSegment,  setBizSegment]  = useState<BizSegment>(() => ssLoad('bizSegment', 'APPS'))
   const [sortMode,    setSortMode]    = useState<SortMode>(() => ssLoad('sortMode', 'combined_req'))
+  const [reqFallback, setReqFallback] = useState<'parquet' | 'zero'>(() => ssLoad('reqFallback', 'parquet'))
 
   // Scope builder: each row = {divisions[], attribute1s[]} — rows are OR-combined
   const [scopes, setScopes] = useState<{divisions: string[]; attribute1s: string[]}[]>(() => ssLoad('scopes', [{ divisions: [], attribute1s: [] }]))
@@ -258,6 +259,44 @@ export default function DistributionModel() {
     setCsvUploadActive(false); setCsvUploadMeta(null); setCsvUploadMsg(null)
   }
 
+  // ── REQ CSV Uploads (Step 2) ───────────────────────────────────────────────
+  type ReqCsvKey = 'barcode' | 'mc' | 'art' | 'mrp' | 'size'
+  const REQ_CSV_SPECS: { key: ReqCsvKey; label: string; hint: string }[] = [
+    { key: 'barcode', label: 'Barcode × Store REQ', hint: 'ICODE, STORE_NAME, REQ' },
+    { key: 'mc',      label: 'MC REQ',              hint: 'DEPARTMENT, DISPLAY_TYPE, STORE_NAME, REQ' },
+    { key: 'art',     label: 'ART REQ',             hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, STORE_NAME, REQ' },
+    { key: 'mrp',     label: 'MRP REQ',             hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP, STORE_NAME, REQ' },
+    { key: 'size',    label: 'SIZE REQ',            hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4, STORE_NAME, SZ_REQ' },
+  ]
+  const [reqCsvMeta,    setReqCsvMeta]    = useState<Partial<Record<ReqCsvKey, {filename: string; rows: number}>>>({})
+  const [reqCsvUploading, setReqCsvUploading] = useState<Partial<Record<ReqCsvKey, boolean>>>({})
+  const [reqCsvMsg,     setReqCsvMsg]     = useState<Partial<Record<ReqCsvKey, string>>>({})
+  const reqCsvRefs = useRef<Partial<Record<ReqCsvKey, HTMLInputElement | null>>>({})
+
+  useEffect(() => {
+    http.get('/distribution/upload-req-csv/status').then(r => {
+      const d = r.data?.data ?? {}
+      setReqCsvMeta(d)
+    }).catch(() => {})
+  }, [])
+
+  const handleReqCsvUpload = async (key: ReqCsvKey, file: File) => {
+    setReqCsvUploading(p => ({ ...p, [key]: true })); setReqCsvMsg(p => ({ ...p, [key]: undefined }))
+    try {
+      const form = new FormData(); form.append('file', file)
+      const res = await http.post<{ success: boolean; data: { filename: string; rows: number }; message: string }>(`/distribution/upload-req-csv/${key}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      if (res.data.success) { setReqCsvMeta(p => ({ ...p, [key]: res.data.data })); setReqCsvMsg(p => ({ ...p, [key]: `✓ ${res.data.message}` })) }
+      else { setReqCsvMsg(p => ({ ...p, [key]: `✗ ${res.data.message}` })) }
+    } catch (e: any) { setReqCsvMsg(p => ({ ...p, [key]: `✗ ${e?.response?.data?.message ?? e?.message ?? 'Upload failed'}` })) }
+    finally { setReqCsvUploading(p => ({ ...p, [key]: false })) }
+  }
+
+  const clearReqCsv = async (key: ReqCsvKey) => {
+    await http.delete(`/distribution/upload-req-csv/${key}`).catch(() => {})
+    setReqCsvMeta(p => { const n = { ...p }; delete n[key]; return n })
+    setReqCsvMsg(p => { const n = { ...p }; delete n[key]; return n })
+  }
+
   const [imStatus,    setImStatus]    = useState<ItemMasterStatus | null>(null)
   const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
   const [olDownloading, setOlDownloading] = useState(false)
@@ -346,7 +385,7 @@ export default function DistributionModel() {
   const buildBase = async () => {
     setBaseLoading(true); setBaseMsg(null); setBaseResult(null)
     try {
-      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode }
+      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback }
       const activeScopes = scopes.filter(s => s.divisions.length > 0 || s.attribute1s.length > 0)
       if (activeScopes.length > 0) params.scopes = JSON.stringify(activeScopes)
       if (selStores.length > 0) params.stores = JSON.stringify(selStores)
@@ -742,6 +781,53 @@ export default function DistributionModel() {
               </div>
             )}
           </div>
+          {/* REQ CSV Overrides */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textMuted, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
+              REQ CSV Overrides (optional)
+            </div>
+            {REQ_CSV_SPECS.map(spec => {
+              const meta = reqCsvMeta[spec.key]
+              const uploading = reqCsvUploading[spec.key]
+              const msg = reqCsvMsg[spec.key]
+              return (
+                <div key={spec.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 160 }}>{spec.label}</span>
+                  {meta ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, background: '#22c55e18', color: '#4ade80', border: '1px solid #22c55e40', borderRadius: 5, padding: '2px 8px', fontWeight: 700 }}>
+                        ✓ {meta.filename} · {meta.rows.toLocaleString('en-IN')} rows
+                      </span>
+                      <button onClick={() => clearReqCsv(spec.key)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>✕ Clear</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => reqCsvRefs.current[spec.key]?.click()} disabled={uploading}
+                      style={{ fontSize: 11, padding: '4px 12px', borderRadius: 5, border: `1px solid ${tokens.border}`, background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>
+                      {uploading ? 'Uploading…' : '+ Upload CSV'}
+                    </button>
+                  )}
+                  <span style={{ fontSize: 10, color: tokens.textMuted, fontFamily: 'monospace' }}>{spec.hint}</span>
+                  {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</span>}
+                  <input ref={el => { reqCsvRefs.current[spec.key] = el }} type="file" accept=".csv" hidden
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleReqCsvUpload(spec.key, f); e.target.value = '' }} />
+                </div>
+              )
+            })}
+            {/* Fallback option -- shown only when any REQ CSV is active */}
+            {Object.keys(reqCsvMeta).length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, padding: '8px 12px', background: tokens.cardBg, borderRadius: 7, border: `1px solid ${tokens.border}` }}>
+                <span style={{ fontSize: 12, color: tokens.textMuted }}>Items not in CSV:</span>
+                {(['parquet', 'zero'] as const).map(opt => (
+                  <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: reqFallback === opt ? tokens.text : tokens.textMuted }}>
+                    <input type="radio" name="reqFallback" value={opt} checked={reqFallback === opt}
+                      onChange={() => { setReqFallback(opt); ssSave({ reqFallback: opt }) }} />
+                    {opt === 'parquet' ? 'Use parquet data (default)' : 'Use 0 (ignore)'}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button onClick={buildBase} disabled={!baseReady} style={S.btn('#10b981', !baseReady)}>
             {baseLoading ? 'â³ Building…' : '▶ Build Base'}
           </button>

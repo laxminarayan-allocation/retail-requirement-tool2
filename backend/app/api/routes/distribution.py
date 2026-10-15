@@ -84,6 +84,94 @@ async def stock_csv_status():
     """Return whether an uploaded stock CSV is active."""
     return APIResponse.ok(data={"active": _uploaded_stock_df is not None, **_uploaded_stock_meta})
 
+
+# ── Uploaded REQ CSVs (barcode-store req + MC/ART/MRP/SIZE req overrides) ────
+# Each entry: key → {df, meta}
+_uploaded_req: dict = {}   # key: "barcode" | "mc" | "art" | "mrp" | "size"
+
+_REQ_UPLOAD_SPECS = {
+    "barcode": {
+        "label": "Barcode × Store REQ",
+        "required_cols": ["ICODE", "STORE_NAME", "REQ"],
+        "aliases": {"BARCODE": "ICODE", "BAR_CODE": "ICODE", "STORE": "STORE_NAME"},
+        "key_cols": ["icode", "store_name"],
+        "val_col": "req",
+    },
+    "mc": {
+        "label": "MC REQ",
+        "required_cols": ["DEPARTMENT", "DISPLAY_TYPE", "STORE_NAME", "REQ"],
+        "aliases": {"STORE": "STORE_NAME", "DEPT": "DEPARTMENT", "DISPLAY": "DISPLAY_TYPE"},
+        "key_cols": ["department", "display_type", "store_name"],
+        "val_col": "req",
+    },
+    "art": {
+        "label": "ART REQ",
+        "required_cols": ["DEPARTMENT", "DISPLAY_TYPE", "ARTICLE_NAME", "STORE_NAME", "REQ"],
+        "aliases": {"STORE": "STORE_NAME", "DEPT": "DEPARTMENT", "ARTICLE": "ARTICLE_NAME"},
+        "key_cols": ["department", "display_type", "article_name", "store_name"],
+        "val_col": "req",
+    },
+    "mrp": {
+        "label": "MRP REQ",
+        "required_cols": ["DEPARTMENT", "DISPLAY_TYPE", "ARTICLE_NAME", "MRP", "STORE_NAME", "REQ"],
+        "aliases": {"STORE": "STORE_NAME", "DEPT": "DEPARTMENT", "ARTICLE": "ARTICLE_NAME"},
+        "key_cols": ["department", "display_type", "article_name", "mrp", "store_name"],
+        "val_col": "req",
+    },
+    "size": {
+        "label": "SIZE REQ",
+        "required_cols": ["DEPARTMENT", "DISPLAY_TYPE", "ARTICLE_NAME", "CAT4", "STORE_NAME", "SZ_REQ"],
+        "aliases": {"STORE": "STORE_NAME", "DEPT": "DEPARTMENT", "ARTICLE": "ARTICLE_NAME", "SIZE": "CAT4", "REQ": "SZ_REQ"},
+        "key_cols": ["department", "display_type", "article_name", "cat4", "store_name"],
+        "val_col": "sz_req",
+    },
+}
+
+
+@router.post("/upload-req-csv/{req_type}", response_model=APIResponse)
+async def upload_req_csv(req_type: str, file: UploadFile = File(...)):
+    """Upload a REQ CSV override. req_type: barcode | mc | art | mrp | size"""
+    global _uploaded_req
+    spec = _REQ_UPLOAD_SPECS.get(req_type)
+    if spec is None:
+        return APIResponse.fail(message=f"Unknown req_type '{req_type}'. Use: {list(_REQ_UPLOAD_SPECS)}")
+    try:
+        content = await file.read()
+        df = pd.read_csv(io.BytesIO(content))
+        df.columns = [c.strip().upper() for c in df.columns]
+        # Apply aliases
+        df.rename(columns=spec["aliases"], inplace=True)
+        # Check required cols
+        missing = [c for c in spec["required_cols"] if c not in df.columns]
+        if missing:
+            return APIResponse.fail(message=f"CSV missing columns: {missing}. Have: {list(df.columns)}")
+        # Keep only needed cols, lowercase
+        keep = list(dict.fromkeys([c for c in spec["required_cols"] if c in df.columns]))
+        out = df[keep].copy()
+        out.columns = [c.lower() for c in out.columns]
+        out[spec["val_col"]] = pd.to_numeric(out[spec["val_col"]], errors="coerce").fillna(0)
+        # Drop all-zero rows
+        out = out[out[spec["val_col"]] > 0]
+        meta = {"filename": file.filename, "rows": len(out), "label": spec["label"]}
+        _uploaded_req[req_type] = {"df": out, "meta": meta}
+        return APIResponse.ok(data=meta, message=f"Uploaded {len(out):,} rows for {spec['label']}")
+    except Exception as exc:
+        logger.error("upload_req_csv[%s]: %s", req_type, exc)
+        return APIResponse.fail(message=str(exc))
+
+
+@router.delete("/upload-req-csv/{req_type}", response_model=APIResponse)
+async def clear_req_csv(req_type: str):
+    global _uploaded_req
+    _uploaded_req.pop(req_type, None)
+    return APIResponse.ok(message=f"Cleared {req_type} REQ CSV.")
+
+
+@router.get("/upload-req-csv/status", response_model=APIResponse)
+async def req_csv_status():
+    return APIResponse.ok(data={k: v["meta"] for k, v in _uploaded_req.items()})
+
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 _IM_OWNER = "REPORT"
 _IM_OBJ   = "V_ITEM_MASTER"
@@ -340,6 +428,7 @@ async def build_distribution_base(
     scopes:              str = "",       # JSON array of {division, attribute1} for OR-filter
     stores:              str = "",       # JSON array of store_name strings to filter
     store_field_filters: str = "",       # JSON dict of {field: [values]} store master field filters
+    req_fallback:        str = "parquet",  # "parquet" | "zero" — for items not matched in REQ CSV
 ):
     """
     Build the full joined distribution base:
@@ -473,6 +562,18 @@ async def build_distribution_base(
             except Exception as _fe:
                 logger.warning("store_field_filters parse error: %s", _fe)
 
+        # ── 1b. Barcode REQ CSV override (replace dist_req per icode×store) ────
+        if "barcode" in _uploaded_req:
+            bc_req = _uploaded_req["barcode"]["df"].copy()  # icode, store_name, req
+            if "icode" in base.columns and "store_name" in base.columns:
+                base = base.merge(bc_req[["icode", "store_name", "req"]].rename(columns={"req": "_csv_req"}),
+                                  on=["icode", "store_name"], how="left")
+                mask = base["_csv_req"].notna()
+                base.loc[mask, "dist_req"] = base.loc[mask, "_csv_req"]
+                if req_fallback == "zero":
+                    base.loc[~mask, "dist_req"] = 0
+                base.drop(columns=["_csv_req"], inplace=True)
+
         # ── 2. Join V_ITEM_MASTER → option_level, allocation_option, sz_grp ───
         im = _load("REPORT", "V_ITEM_MASTER")
         if im is not None:
@@ -511,6 +612,16 @@ async def build_distribution_base(
             base = base.merge(mc_agg, on=mc_key, how="left")
         else:
             base["mc_req"] = 0; base["mc_fill_rate"] = 0; base["mc_pbs"] = 0
+        # MC CSV override
+        if "mc" in _uploaded_req:
+            _mc_csv = _uploaded_req["mc"]["df"].copy()
+            _mc_key = ["department", "display_type", "store_name"]
+            _valid = [k for k in _mc_key if k in _mc_csv.columns and k in base.columns]
+            if _valid and "req" in _mc_csv.columns:
+                base = base.merge(_mc_csv[_valid + ["req"]].rename(columns={"req": "_csv_mc_req"}),
+                                  on=_valid, how="left")
+                base["mc_req"] = base["_csv_mc_req"].fillna(0 if req_fallback == "zero" else base.get("mc_req", 0))
+                base.drop(columns=["_csv_mc_req"], inplace=True)
 
         # ── 4. ART REQ (sort + dist) — dept + display_type + article_name + store ─
         art_frames = []
@@ -533,6 +644,16 @@ async def build_distribution_base(
             base = base.merge(art_agg, on=art_key, how="left")
         else:
             base["art_req"] = 0; base["art_fill_rate"] = 0
+        # ART CSV override
+        if "art" in _uploaded_req:
+            _art_csv = _uploaded_req["art"]["df"].copy()
+            _art_key = ["department", "display_type", "article_name", "store_name"]
+            _valid = [k for k in _art_key if k in _art_csv.columns and k in base.columns]
+            if _valid and "req" in _art_csv.columns:
+                base = base.merge(_art_csv[_valid + ["req"]].rename(columns={"req": "_csv_art_req"}),
+                                  on=_valid, how="left")
+                base["art_req"] = base["_csv_art_req"].fillna(0 if req_fallback == "zero" else base.get("art_req", 0))
+                base.drop(columns=["_csv_art_req"], inplace=True)
 
         # ── 5. MRP REQ (sort + dist) — dept + display_type + article_name + mrp + store ─
         mrp = _load(_CK, "V_MRP_REQ_APPS")
@@ -543,6 +664,16 @@ async def build_distribution_base(
             base = base.merge(mrp_agg, on=mrp_key, how="left")
         else:
             base["mrp_req"] = 0
+        # MRP CSV override
+        if "mrp" in _uploaded_req:
+            _mrp_csv = _uploaded_req["mrp"]["df"].copy()
+            _mrp_key = ["department", "display_type", "article_name", "mrp", "store_name"]
+            _valid = [k for k in _mrp_key if k in _mrp_csv.columns and k in base.columns]
+            if _valid and "req" in _mrp_csv.columns:
+                base = base.merge(_mrp_csv[_valid + ["req"]].rename(columns={"req": "_csv_mrp_req"}),
+                                  on=_valid, how="left")
+                base["mrp_req"] = base["_csv_mrp_req"].fillna(0 if req_fallback == "zero" else base.get("mrp_req", 0))
+                base.drop(columns=["_csv_mrp_req"], inplace=True)
 
         # ── 6. SIZE REQ (sort + dist) — dept + display_type + article_name + cat4 + store ─
         sz = _load(_CK, "V_SZ_REQ_APPS")
@@ -557,6 +688,16 @@ async def build_distribution_base(
                 base["sz_req"] = 0
         else:
             base["sz_req"] = 0
+        # SIZE CSV override
+        if "size" in _uploaded_req:
+            _sz_csv = _uploaded_req["size"]["df"].copy()
+            _sz_key = ["department", "display_type", "article_name", "cat4", "store_name"]
+            _valid = [k for k in _sz_key if k in _sz_csv.columns and k in base.columns]
+            if _valid and "sz_req" in _sz_csv.columns:
+                base = base.merge(_sz_csv[_valid + ["sz_req"]].rename(columns={"sz_req": "_csv_sz_req"}),
+                                  on=_valid, how="left")
+                base["sz_req"] = base["_csv_sz_req"].fillna(0 if req_fallback == "zero" else base.get("sz_req", 0))
+                base.drop(columns=["_csv_sz_req"], inplace=True)
 
         # ── 7. SPARKY REQ (sort + dist) — article_name + store (cat2='SPARKY') ─
         sparky = _load(_CK, "V_SPARKY_PBS_REQ")

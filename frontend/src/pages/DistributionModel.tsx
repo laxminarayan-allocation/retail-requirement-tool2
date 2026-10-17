@@ -574,6 +574,12 @@ export default function DistributionModel() {
       .catch((e: any) => setFetchError(e?.response?.data?.message || 'Backend unreachable'))
   }, [fetchImStatus, fetchOlStatus])
 
+  // Auto-load on mount + auto-refresh when source/segment changes
+  useEffect(() => {
+    const t = setTimeout(() => { fetchBarcodePreview() }, 300)
+    return () => clearTimeout(t)
+  }, [reqSource, bizSegment, fetchBarcodePreview])
+
   useEffect(() => { ssSave({ applyOL }) }, [applyOL])
 
   const buildBase = async () => {

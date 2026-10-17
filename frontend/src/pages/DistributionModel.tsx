@@ -441,7 +441,15 @@ export default function DistributionModel() {
   type HoldRule =
     | { type: 'store'; stores: string[] }
     | { type: 'attr1'; attr1: string; except_stores: string[] }
-  const [holdRules, setHoldRules] = useState<HoldRule[]>([])
+  const [holdRules, setHoldRules] = useState<HoldRule[]>(
+    () => { try { const v = JSON.parse(localStorage.getItem('ck_hold_rules') ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+  )
+  const [savedHoldRules] = useState<HoldRule[]>(
+    () => { try { const v = JSON.parse(localStorage.getItem('ck_hold_rules') ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+  )
+  const [holdMode, setHoldMode] = useState<'skip'|'use_last'|'add_new'>(
+    () => { try { return (localStorage.getItem('ck_hold_mode') as 'skip'|'use_last'|'add_new') ?? 'use_last' } catch { return 'use_last' } }
+  )
   const [holdStoreSelected, setHoldStoreSelected] = useState<string[]>([])
   const [holdAttr1Selected, setHoldAttr1Selected] = useState<string[]>([])
   const [holdExceptSelected, setHoldExceptSelected] = useState<string[]>([])
@@ -476,6 +484,10 @@ export default function DistributionModel() {
     setInvalidating(false)
     setTimeout(() => setInvalidateMsg(''), 4000)
   }
+
+  useEffect(() => {
+    try { localStorage.setItem('ck_hold_rules', JSON.stringify(holdRules)) } catch {}
+  }, [holdRules])
 
   const fetchImStatus = useCallback(async () => {
     try {
@@ -1612,50 +1624,123 @@ export default function DistributionModel() {
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
             <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-              border: `2px solid ${holdRules.length > 0 ? '#22c55e' : '#d97706'}`,
-              background: holdRules.length > 0 ? '#14532d' : DK.cardBg,
-              color: holdRules.length > 0 ? '#4ade80' : '#fbbf24',
+              border: `2px solid ${holdMode === 'skip' ? '#22c55e' : holdRules.length > 0 ? '#dc2626' : '#d97706'}`,
+              background: holdMode === 'skip' ? '#14532d' : holdRules.length > 0 ? '#7f1d1d40' : DK.cardBg,
+              color: holdMode === 'skip' ? '#4ade80' : holdRules.length > 0 ? '#fca5a5' : '#fbbf24',
               fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {holdRules.length > 0 ? '✓' : '7'}
+              {holdMode === 'skip' ? '✓' : holdRules.length > 0 ? '✓' : '7'}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Hold Choosing</div>
-              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Store-level holds · Attr1 holds · Y = distribute · N = hold</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Skip holds · use saved holds · add new holds before distribution</div>
             </div>
             <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
-              background: holdRules.length > 0 ? '#7f1d1d60' : 'transparent',
-              color: holdRules.length > 0 ? '#fca5a5' : tokens.textMuted,
-              border: `1px solid ${holdRules.length > 0 ? '#dc262640' : DK.cardBorder}` }}>
-              {holdRules.length > 0 ? `${holdRules.length} hold${holdRules.length > 1 ? 's' : ''}` : 'No holds'}
+              background: holdMode === 'skip' ? '#14532d' : holdRules.length > 0 ? '#7f1d1d60' : 'transparent',
+              color: holdMode === 'skip' ? '#4ade80' : holdRules.length > 0 ? '#fca5a5' : tokens.textMuted,
+              border: `1px solid ${holdMode === 'skip' ? '#22c55e50' : holdRules.length > 0 ? '#dc262640' : DK.cardBorder}` }}>
+              {holdMode === 'skip' ? 'Skipping holds' : holdRules.length > 0 ? `${holdRules.length} hold${holdRules.length > 1 ? 's' : ''}` : 'No holds'}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Store Hold</span>
-            <MultiSelect label="Stores" options={storeOptions} selected={holdStoreSelected} onChange={setHoldStoreSelected} width={260} />
-            <button onClick={addStoreHold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
+
+          {/* Mode selector: 3 cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+            {([
+              { key: 'skip'     as const, icon: '⏭️', title: 'Skip Holds',
+                hint: 'No holds — all stores distributed normally',
+                accent: '#22c55e', bg: '#0a1f0a' },
+              { key: 'use_last' as const, icon: '📋', title: 'Use Last Holds',
+                hint: savedHoldRules.length > 0
+                  ? `${savedHoldRules.length} saved hold${savedHoldRules.length > 1 ? 's' : ''} — from previous session`
+                  : 'No saved holds found',
+                accent: '#f87171', bg: '#1f0a0a' },
+              { key: 'add_new'  as const, icon: '➕', title: 'Add New Holds',
+                hint: 'Build a fresh hold list for this run',
+                accent: '#f59e0b', bg: '#1a1200' },
+            ] as const).map(opt => (
+              <div key={opt.key} onClick={() => {
+                setHoldMode(opt.key)
+                try { localStorage.setItem('ck_hold_mode', opt.key) } catch {}
+                if (opt.key === 'skip') setHoldRules([])
+                else if (opt.key === 'use_last') setHoldRules(savedHoldRules)
+                else if (opt.key === 'add_new') setHoldRules([])
+              }} style={{
+                border: `1.5px solid ${holdMode === opt.key ? opt.accent : DK.cardBorder}`,
+                borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
+                background: holdMode === opt.key ? opt.bg : DK.cardBg,
+                transition: 'border-color .15s, background .15s',
+                opacity: opt.key === 'use_last' && savedHoldRules.length === 0 ? 0.45 : 1,
+              }}>
+                {holdMode === opt.key && (
+                  <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
+                    borderRadius: 4, fontWeight: 600, background: opt.bg, color: opt.accent,
+                    border: `1px solid ${opt.accent}50` }}>Active</span>
+                )}
+                <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 700,
+                  color: holdMode === opt.key ? opt.accent : tokens.textPrimary, marginBottom: 4 }}>{opt.title}</div>
+                <div style={{ fontSize: 11, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Attr1 Hold</span>
-            <MultiSelect label="Attr1" options={attribute1Options} selected={holdAttr1Selected} onChange={setHoldAttr1Selected} width={160} />
-            <span style={{ fontSize: 11, color: tokens.textMuted }}>except</span>
-            <MultiSelect label="Stores" options={storeOptions} selected={holdExceptSelected} onChange={setHoldExceptSelected} width={240} />
-            <button onClick={addAttr1Hold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
-          </div>
-          {holdRules.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {holdRules.map((r, i) => (
-                <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
-                  padding: '2px 8px', fontSize: 11, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {r.type === 'store'
-                    ? `Store Hold: ${r.stores.join(', ')}`
-                    : `Attr1 "${r.attr1}"${r.except_stores.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
-                  <span onClick={() => removeHold(i)} style={{ cursor: 'pointer', color: '#f87171', fontWeight: 700 }}>x</span>
-                </span>
-              ))}
+
+          {/* Saved holds preview panel (use_last mode) */}
+          {holdMode === 'use_last' && savedHoldRules.length > 0 && (
+            <div style={{ marginBottom: 14, padding: '10px 14px', background: '#1f0a0a',
+              border: '1px solid #dc262630', borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#f87171', marginBottom: 8,
+                textTransform: 'uppercase', letterSpacing: '.06em' }}>📋 Last Session Holds</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {savedHoldRules.map((r, i) => (
+                  <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
+                    padding: '3px 10px', fontSize: 11, color: '#fca5a5' }}>
+                    {r.type === 'store'
+                      ? `🛑 Store: ${r.stores.join(', ')}`
+                      : `📌 Attr1 "${r.attr1}"${r.except_stores?.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add new holds UI */}
+          {holdMode === 'add_new' && (
+            <div style={{ background: '#1a1200', border: '1px solid #f59e0b30', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Store Hold</span>
+                <MultiSelect label="Stores" options={storeOptions} selected={holdStoreSelected} onChange={setHoldStoreSelected} width={260} />
+                <button onClick={addStoreHold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Attr1 Hold</span>
+                <MultiSelect label="Attr1" options={attribute1Options} selected={holdAttr1Selected} onChange={setHoldAttr1Selected} width={160} />
+                <span style={{ fontSize: 11, color: tokens.textMuted }}>except</span>
+                <MultiSelect label="Stores" options={storeOptions} selected={holdExceptSelected} onChange={setHoldExceptSelected} width={240} />
+                <button onClick={addAttr1Hold} style={{ ...S.btn('#dc2626'), padding: '4px 12px', fontSize: 12 }}>+ Hold</button>
+              </div>
+            </div>
+          )}
+
+          {/* Active holds chips */}
+          {holdMode !== 'skip' && holdRules.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: tokens.textMuted, marginBottom: 6,
+                textTransform: 'uppercase', letterSpacing: '.06em' }}>Active Holds</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {holdRules.map((r, i) => (
+                  <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
+                    padding: '2px 8px', fontSize: 11, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {r.type === 'store'
+                      ? `🛑 Store: ${r.stores.join(', ')}`
+                      : `📌 Attr1 "${r.attr1}"${r.except_stores?.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
+                    {holdMode === 'add_new' && (
+                      <span onClick={() => removeHold(i)} style={{ cursor: 'pointer', color: '#f87171', fontWeight: 700 }}>x</span>
+                    )}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </div>
-
         {/* ── Step 8: Run Distribution ─────────────────────────────────────── */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>

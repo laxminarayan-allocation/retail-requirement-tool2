@@ -1837,6 +1837,51 @@ async def division_summary(wh_col: str = "wh_q", max_round: int = 10):
         raise
 
 
+@router.get("/export-preview")
+async def export_preview(wh_col: str = "wh_q", max_round: int = 10, n: int = 10):
+    """Return column list + sample rows so the user can preview before downloading."""
+    _require_oracle()
+    try:
+        result = _get_export_df(wh_col, max_round)
+        cols = _build_export_cols(max_round)
+        avail = [c for c in cols if c in result.columns]
+        out = result[avail].fillna("")
+        out = _ensure_division_col(out)
+        if "division" in out.columns and "division" not in avail:
+            avail = ["division"] + avail
+
+        # Nonzero count
+        alloc_col = "final_allocate" if "final_allocate" in out.columns else None
+        nonzero_rows = int((out[alloc_col] > 0).sum()) if alloc_col else len(out)
+
+        sample = out.head(n)
+        # Convert to serialisable types
+        records = []
+        for _, row in sample.iterrows():
+            rec = {}
+            for c in out.columns:
+                v = row[c]
+                try:
+                    import math
+                    if isinstance(v, float) and math.isnan(v):
+                        rec[c] = None
+                    else:
+                        rec[c] = v.item() if hasattr(v, 'item') else v
+                except Exception:
+                    rec[c] = str(v)
+            records.append(rec)
+
+        return APIResponse.ok(data={
+            "columns": list(out.columns),
+            "total_rows": len(out),
+            "nonzero_rows": nonzero_rows,
+            "sample": records,
+        })
+    except Exception as exc:
+        logger.exception("export_preview error")
+        return APIResponse.fail(message=str(exc))
+
+
 @router.post("/export")
 async def export_distribution(
     wh_col:       str  = "wh_q",

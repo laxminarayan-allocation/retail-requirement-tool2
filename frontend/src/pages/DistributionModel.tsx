@@ -735,6 +735,11 @@ export default function DistributionModel() {
   const [schedLoading, setSchedLoading] = useState(false)
   const [saveToDiskLoading, setSaveToDiskLoading] = useState(false)
   const [saveToDiskPath, setSaveToDiskPath] = useState<string|null>(null)
+  const [exportPreviewLoading, setExportPreviewLoading] = useState(false)
+  const [exportPreview, setExportPreview] = useState<{
+    columns: string[]; total_rows: number; nonzero_rows: number;
+    sample: Record<string, unknown>[];
+  } | null>(null)
   const [divDownloading, setDivDownloading] = useState<Record<string, boolean>>({})
 
   // Poll scheduler status every 3s while running
@@ -2339,28 +2344,151 @@ export default function DistributionModel() {
                 </div>
               )}
 
-              {/* Downloads + Save to Disk */}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                <button onClick={exportCsv} disabled={csvLoading}
-                  style={{ ...S.btn('#0284c7', csvLoading), fontSize: 12, padding: '7px 16px' }}>
-                  {csvLoading ? '⏳ CSV…' : '⬇ Download CSV'}
-                </button>
-                <button onClick={exportDistribution} disabled={exportLoading}
-                  style={{ ...S.btn('#059669', exportLoading), fontSize: 12, padding: '7px 16px' }}>
-                  {exportLoading ? '⏳ Excel…' : '⬇ Download Excel'}
-                </button>
-                <button
-                  onClick={async () => {
-                    setSaveToDiskLoading(true)
-                    try {
-                      const res = await apiFetch('POST', '/distribution/save-to-disk') as { save_path: string; files: string[] }
-                      setSaveToDiskPath(res.save_path)
-                    } catch { /* silent */ } finally { setSaveToDiskLoading(false) }
-                  }}
-                  disabled={saveToDiskLoading}
-                  style={{ ...S.btn('#7c3aed', saveToDiskLoading), fontSize: 12, padding: '7px 16px' }}>
-                  {saveToDiskLoading ? '⏳ Saving…' : '💾 Save to Disk'}
-                </button>
+              {/* Preview + Download section */}
+              <div style={{ border: `1px solid ${DK.cardBorder}`, borderRadius: 8, overflow: 'hidden' }}>
+                {/* Section header */}
+                <div style={{ padding: '10px 14px', background: DK.cardBg, borderBottom: `1px solid ${DK.cardBorder}`,
+                  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textPrimary }}>📋 Final Sheet — Allocation Logic</div>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={async () => {
+                        setExportPreviewLoading(true); setExportPreview(null)
+                        try {
+                          const res = await apiFetch('GET', `/distribution/export-preview?max_round=${maxRound}`) as typeof exportPreview
+                          setExportPreview(res)
+                        } catch { /* silent */ } finally { setExportPreviewLoading(false) }
+                      }}
+                      disabled={exportPreviewLoading}
+                      style={{ ...S.btn('#f59e0b', exportPreviewLoading), fontSize: 11, padding: '5px 13px' }}>
+                      {exportPreviewLoading ? '⏳ Loading…' : exportPreview ? '🔄 Refresh Preview' : '🔍 Preview'}
+                    </button>
+                    {exportPreview && <>
+                      <button onClick={exportCsv} disabled={csvLoading}
+                        style={{ ...S.btn('#0284c7', csvLoading), fontSize: 11, padding: '5px 13px' }}>
+                        {csvLoading ? '⏳…' : '⬇ CSV'}
+                      </button>
+                      <button onClick={exportDistribution} disabled={exportLoading}
+                        style={{ ...S.btn('#059669', exportLoading), fontSize: 11, padding: '5px 13px' }}>
+                        {exportLoading ? '⏳…' : '⬇ Excel'}
+                      </button>
+                    </>}
+                    <button
+                      onClick={async () => {
+                        setSaveToDiskLoading(true)
+                        try {
+                          const res = await apiFetch('POST', '/distribution/save-to-disk') as { save_path: string; files: string[] }
+                          setSaveToDiskPath(res.save_path)
+                        } catch { /* silent */ } finally { setSaveToDiskLoading(false) }
+                      }}
+                      disabled={saveToDiskLoading}
+                      style={{ ...S.btn('#7c3aed', saveToDiskLoading), fontSize: 11, padding: '5px 13px' }}>
+                      {saveToDiskLoading ? '⏳ Saving…' : '💾 Save to Disk'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preview panel */}
+                {exportPreview && (
+                  <div style={{ padding: '12px 14px' }}>
+                    {/* Stats row */}
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+                      {[
+                        { label: 'Total Rows',    val: exportPreview.total_rows.toLocaleString('en-IN'),    color: '#a78bfa' },
+                        { label: 'Allocated Rows', val: exportPreview.nonzero_rows.toLocaleString('en-IN'), color: '#4ade80' },
+                        { label: 'Columns',        val: String(exportPreview.columns.length),               color: '#38bdf8' },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div style={{ fontSize: 10, color: tokens.textMuted }}>{s.label}</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: s.color }}>{s.val}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Column chips */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+                        Output Columns ({exportPreview.columns.length})
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {exportPreview.columns.map(c => {
+                          const isKey = ['store_name','icode','final_allocate','division'].includes(c)
+                          const isAlloc = c.startsWith('round') && c.endsWith('_alloc')
+                          const isBalance = c.startsWith('balance_')
+                          return (
+                            <span key={c} style={{
+                              fontSize: 9, padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace',
+                              background: isKey ? '#14532d' : isAlloc ? '#082f49' : isBalance ? '#1e1040' : DK.cardBorder,
+                              color: isKey ? '#4ade80' : isAlloc ? '#38bdf8' : isBalance ? '#a78bfa' : tokens.textMuted,
+                              border: `1px solid ${isKey ? '#22c55e20' : isAlloc ? '#0369a120' : isBalance ? '#7c3aed20' : 'transparent'}`,
+                            }}>{c}</span>
+                          )
+                        })}
+                      </div>
+                      <div style={{ marginTop: 5, fontSize: 10, color: tokens.textMuted }}>
+                        <span style={{ color: '#4ade80' }}>■</span> key fields &nbsp;
+                        <span style={{ color: '#38bdf8' }}>■</span> round allocations &nbsp;
+                        <span style={{ color: '#a78bfa' }}>■</span> balance columns
+                      </div>
+                    </div>
+
+                    {/* Sample rows table */}
+                    {exportPreview.sample.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10, color: tokens.textMuted, fontWeight: 600, textTransform: 'uppercase',
+                          letterSpacing: '0.06em', marginBottom: 5 }}>
+                          Sample — top {exportPreview.sample.length} rows
+                        </div>
+                        <div style={{ overflowX: 'auto', borderRadius: 6, border: `1px solid ${DK.cardBorder}` }}>
+                          <table style={{ borderCollapse: 'collapse', fontSize: 10, minWidth: '100%' }}>
+                            <thead>
+                              <tr style={{ background: DK.cardBg }}>
+                                {(['store_name','icode','department','display_type','dist_req','final_allocate','reason_not_allocated'] as const)
+                                  .filter(c => exportPreview.columns.includes(c))
+                                  .map(h => (
+                                    <th key={h} style={{ padding: '5px 10px', textAlign: 'left', color: tokens.textMuted,
+                                      fontWeight: 600, whiteSpace: 'nowrap', borderBottom: `1px solid ${DK.cardBorder}` }}>{h}</th>
+                                  ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {exportPreview.sample.map((row, i) => (
+                                <tr key={i} style={{ borderTop: `1px solid ${DK.cardBorder}` }}>
+                                  {(['store_name','icode','department','display_type','dist_req','final_allocate','reason_not_allocated'] as const)
+                                    .filter(c => exportPreview.columns.includes(c))
+                                    .map(c => (
+                                      <td key={c} style={{ padding: '4px 10px', color: c === 'final_allocate'
+                                        ? (Number(row[c]) > 0 ? '#4ade80' : '#f87171')
+                                        : c === 'reason_not_allocated' ? '#f87171'
+                                        : tokens.textSecondary, whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10 }}>
+                                        {String(row[c] ?? '')}
+                                      </td>
+                                    ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={{ marginTop: 6, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <button onClick={exportCsv} disabled={csvLoading}
+                            style={{ ...S.btn('#0284c7', csvLoading), fontSize: 12, padding: '6px 16px' }}>
+                            {csvLoading ? '⏳ CSV…' : '⬇ Download Full CSV'}
+                          </button>
+                          <button onClick={exportDistribution} disabled={exportLoading}
+                            style={{ ...S.btn('#059669', exportLoading), fontSize: 12, padding: '6px 16px' }}>
+                            {exportLoading ? '⏳ Excel…' : '⬇ Download Full Excel'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!exportPreview && !exportPreviewLoading && (
+                  <div style={{ padding: '14px', fontSize: 12, color: tokens.textMuted, textAlign: 'center' }}>
+                    Click <strong style={{ color: '#f59e0b' }}>Preview</strong> to inspect columns &amp; sample rows before downloading
+                  </div>
+                )}
               </div>
 
               {/* Manual save path */}

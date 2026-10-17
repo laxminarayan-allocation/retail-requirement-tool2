@@ -306,6 +306,161 @@ async def distribution_store_list():
         return APIResponse.fail(message=str(exc))
 
 
+# ── Store x Barcode cross-join endpoints
+
+@router.get('/store-barcode/preview')
+async def store_barcode_preview(
+    req_source: str = 'GRC',
+    biz_segment: str = 'BOTH',
+    stores: str = '',
+    scopes: str = '',
+    store_field_filters: str = '',
+):
+    try:
+        import json as _j
+        src = req_source.upper()
+        barcodes: set = set()
+        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+            if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
+                df = _load(_CK, obj)
+                if df is not None:
+                    df.columns = [c.lower() for c in df.columns]
+                    seg = biz_segment.upper()
+                    if seg != 'BOTH' and 'segment' in df.columns:
+                        df = df[df['segment'].str.upper() == seg]
+                    if 'icode' in df.columns:
+                        barcodes.update(df['icode'].dropna().astype(str).unique().tolist())
+        total_barcodes = len(barcodes)
+        store_list = list(_store_list_cache) if _store_list_cache else []
+        if not store_list:
+            for obj in ['V_BARCODE_REQ_APPS_GRC_V2','V_BARCODE_REQ_APPS_WMS_V2']:
+                df = _load(_CK, obj)
+                if df is not None:
+                    df.columns = [c.lower() for c in df.columns]
+                    if 'store_name' in df.columns:
+                        store_list = sorted(df['store_name'].dropna().str.strip().unique().tolist())
+                        break
+        sel = _j.loads(stores) if stores.strip() else []
+        if sel:
+            sel_set = {s.strip() for s in sel}
+            store_list = [s for s in store_list if s in sel_set]
+        sff = _j.loads(store_field_filters) if store_field_filters.strip() else {}
+        if sff:
+            try:
+                from app.repositories.store_repository import StoreRepository
+                sm = StoreRepository().get_all_stores(active_only=False)
+                sm.columns = [c.lower() for c in sm.columns]
+                for field, vals in sff.items():
+                    if vals and field in sm.columns:
+                        sm = sm[sm[field].astype(str).isin([str(v) for v in vals])]
+                if 'store_name' in sm.columns:
+                    allowed = set(sm['store_name'].dropna().str.strip().tolist())
+                    store_list = [s for s in store_list if s in allowed]
+            except Exception:
+                pass
+        total_stores = len(store_list)
+        return APIResponse.ok(data={
+            'stores': total_stores,
+            'barcodes': total_barcodes,
+            'total_rows': total_stores * total_barcodes,
+        })
+    except Exception as exc:
+        logger.error('store_barcode_preview: %s', exc)
+        return APIResponse.fail(message=str(exc))
+
+
+@router.get('/store-barcode/csv')
+async def store_barcode_csv(
+    req_source: str = 'GRC',
+    biz_segment: str = 'BOTH',
+    stores: str = '',
+    scopes: str = '',
+    store_field_filters: str = '',
+):
+    import io as _io, json as _j
+    try:
+        src = req_source.upper()
+        frames = []
+        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+            if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
+                df = _load(_CK, obj)
+                if df is not None:
+                    df = df.copy(); df.columns = [c.lower() for c in df.columns]
+                    seg = biz_segment.upper()
+                    if seg != 'BOTH' and 'segment' in df.columns:
+                        df = df[df['segment'].str.upper() == seg]
+                    df['wh_source'] = key.upper(); frames.append(df)
+        if not frames:
+            from fastapi.responses import Response
+            return Response('No barcode data', media_type='text/plain', status_code=404)
+        if len(frames) == 1:
+            bc_df = frames[0]
+        else:
+            left, right = frames[0], frames[1]
+            common = [c for c in left.columns if c in right.columns and c not in ('icode','store_name','wh_source','segment')]
+            merged = left.merge(right, on='icode', how='outer', suffixes=('_grc','_wms'))
+            merged['wh_source'] = 'BOTH'
+            for c in common:
+                cg, cw = f'{c}_grc', f'{c}_wms'
+                if cg in merged.columns and cw in merged.columns:
+                    merged[c] = merged[cg].fillna(0) + merged[cw].fillna(0)
+                    merged.drop(columns=[cg, cw], inplace=True)
+            bc_df = merged
+        bc_df = bc_df.drop_duplicates(subset=['icode']).reset_index(drop=True)
+        im = _load(_CK, _IM_OBJ)
+        if im is not None:
+            im = im.copy(); im.columns = [c.lower() for c in im.columns]
+            bc_df = bc_df.merge(im, on='icode', how='left')
+        store_list = list(_store_list_cache) if _store_list_cache else []
+        if not store_list:
+            for obj in ['V_BARCODE_REQ_APPS_GRC_V2','V_BARCODE_REQ_APPS_WMS_V2']:
+                df = _load(_CK, obj)
+                if df is not None:
+                    df.columns = [c.lower() for c in df.columns]
+                    if 'store_name' in df.columns:
+                        store_list = sorted(df['store_name'].dropna().str.strip().unique().tolist()); break
+        sel = _j.loads(stores) if stores.strip() else []
+        if sel:
+            sel_set = {s.strip() for s in sel}
+            store_list = [s for s in store_list if s in sel_set]
+        sff = _j.loads(store_field_filters) if store_field_filters.strip() else {}
+        store_meta_df = None
+        if sff:
+            try:
+                from app.repositories.store_repository import StoreRepository
+                sm = StoreRepository().get_all_stores(active_only=False)
+                sm.columns = [c.lower() for c in sm.columns]
+                for field, vals in sff.items():
+                    if vals and field in sm.columns:
+                        sm = sm[sm[field].astype(str).isin([str(v) for v in vals])]
+                if 'store_name' in sm.columns:
+                    allowed = set(sm['store_name'].dropna().str.strip().tolist())
+                    store_list = [s for s in store_list if s in allowed]
+                    store_meta_df = sm
+            except Exception:
+                pass
+        if not store_list:
+            from fastapi.responses import Response
+            return Response('No stores matched filters', media_type='text/plain', status_code=404)
+        stores_df = pd.DataFrame({'store_name': store_list})
+        if store_meta_df is not None and 'store_name' in store_meta_df.columns:
+            meta_cols = [c for c in store_meta_df.columns if c != 'store_name']
+            stores_df = stores_df.merge(store_meta_df[['store_name'] + meta_cols], on='store_name', how='left')
+        stores_df['_key'] = 1; bc_df['_key'] = 1
+        cross = stores_df.merge(bc_df, on='_key').drop(columns=['_key'])
+        buf = _io.StringIO()
+        cross.to_csv(buf, index=False)
+        csv_bytes = ('\ufeff' + buf.getvalue()).encode('utf-8')
+        fname = f'store_x_barcode_{src}_{biz_segment}.csv'
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(_io.BytesIO(csv_bytes), media_type='text/csv',
+            headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+    except Exception as exc:
+        logger.error('store_barcode_csv: %s', exc)
+        from fastapi.responses import Response
+        return Response(str(exc), media_type='text/plain', status_code=500)
+
+
 # ── Store master field filter meta ────────────────────────────────────────────
 
 _STORE_FILTER_META_CACHE: dict = {}

@@ -411,6 +411,9 @@ export default function DistributionModel() {
   const [barcodePreview, setBarcodePreview] = useState<{total: number; breakdown: {wh_source: string; count: number}[]} | null>(null)
   const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
   const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
+  const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number}|null>(null)
+  const [sbLoading, setSbLoading] = useState(false)
+  const [sbMsg, setSbMsg] = useState<string|null>(null)
   const [sourceMode, setSourceMode] = useState<'oracle'|'upload'|'both'>('oracle')
   const [csvFallback, setCsvFallback] = useState<'oracle'|'zero'>('oracle')
   const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
@@ -488,6 +491,23 @@ export default function DistributionModel() {
       setImMsg(`✗ ${e instanceof Error ? e.message : 'Download failed'}`)
     } finally { setImLoading(false) }
   }, [fetchImStatus])
+
+  const fetchStoreBarcodePreview = useCallback(async () => {
+    setSbLoading(true); setSbMsg(null); setSbPreview(null)
+    try {
+      const params = new URLSearchParams({
+        req_source: reqSource,
+        biz_segment: bizSegment,
+        stores: JSON.stringify(selStores),
+        store_field_filters: JSON.stringify(activeFieldFilters),
+      })
+      const res = await apiFetch('GET', `/distribution/store-barcode/preview?${params}`)
+      setSbPreview(res as {stores:number;barcodes:number;total_rows:number})
+      setSbMsg(`\u2713 ${(res as {total_rows:number}).total_rows.toLocaleString('en-IN')} rows`)
+    } catch (e: unknown) {
+      setSbMsg(`\u2717 ${e instanceof Error ? e.message : 'Failed'}`)
+    } finally { setSbLoading(false) }
+  }, [reqSource, bizSegment, selStores, activeFieldFilters])
 
   const fetchOlStatus = useCallback(async () => {
     try {
@@ -1246,6 +1266,54 @@ export default function DistributionModel() {
             <div style={{ marginTop: 5, fontSize: 11, color: tokens.textMuted, marginLeft: 88 }}>
               Blank = include all. Within row = AND. Rows = OR combined.
             </div>
+          </div>
+
+          {/* -- Store x Barcode Cross-join */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+              color: tokens.textMuted, marginBottom: 10 }}>Store × Barcode Cross-join</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button onClick={fetchStoreBarcodePreview} disabled={sbLoading}
+                style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none',
+                  background: sbLoading ? DK.cardBorder : '#7c3aed',
+                  color: sbLoading ? tokens.textMuted : '#fff',
+                  cursor: sbLoading ? 'not-allowed' : 'pointer', opacity: sbLoading ? 0.7 : 1 }}>
+                {sbLoading ? 'Counting…' : '⊞ Cross-join Preview'}
+              </button>
+              {sbMsg && (
+                <span style={{ fontSize: 12, color: sbMsg.startsWith('\u2713') ? '#4ade80' : '#f87171' }}>{sbMsg}</span>
+              )}
+            </div>
+            {sbPreview && (
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {([
+                    { label: 'Stores',     value: sbPreview.stores,     color: '#38bdf8' },
+                    { label: 'Barcodes',   value: sbPreview.barcodes,   color: '#4ade80' },
+                    { label: 'Total Rows', value: sbPreview.total_rows, color: '#a78bfa' },
+                  ] as const).map(t => (
+                    <div key={t.label} style={{ padding: '10px 16px', borderRadius: 8, minWidth: 100,
+                      background: DK.cardBg, border: `1px solid ${DK.cardBorder}` }}>
+                      <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{t.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: t.color }}>{t.value.toLocaleString('en-IN')}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                  background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 8 }}>
+                  <div style={{ flex: 1, fontSize: 12, color: tokens.textSecondary }}>
+                    CSV: store metadata + barcode + qty + Item Master &mdash; {sbPreview.total_rows.toLocaleString('en-IN')} rows
+                  </div>
+                  <a href={`/api/distribution/store-barcode/csv?req_source=${reqSource}&biz_segment=${bizSegment}&stores=${encodeURIComponent(JSON.stringify(selStores))}&store_field_filters=${encodeURIComponent(JSON.stringify(activeFieldFilters))}`}
+                    download
+                    style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7,
+                      border: 'none', background: '#7c3aed', color: '#fff',
+                      textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    ⬇ Download CSV
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

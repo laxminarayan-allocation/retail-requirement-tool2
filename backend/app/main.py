@@ -96,6 +96,9 @@ async def lifespan(app: FastAPI):
     from app.core.allocation_scheduler import start_scheduler as alloc_start_scheduler
     alloc_start_scheduler()
 
+    from app.core.distribution_auto_scheduler import start_scheduler as dist_auto_start
+    dist_auto_start()
+
     # DB Explorer: start configurable auto-refresh scheduler
     from app.core.db_scheduler import start_scheduler as db_start_scheduler
     if settings.is_oracle_configured:

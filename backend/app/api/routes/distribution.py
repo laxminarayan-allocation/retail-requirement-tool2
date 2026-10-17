@@ -1869,3 +1869,60 @@ async def export_distribution_csv(
     except Exception as exc:
         logger.exception("export_csv error")
         raise
+
+
+# ── Auto-scheduler endpoints ───────────────────────────────────────────────────
+
+@router.get("/auto-schedule/status", response_model=APIResponse)
+async def auto_schedule_status():
+    """Return current auto-scheduler config + status."""
+    from app.core.distribution_auto_scheduler import get_status
+    return APIResponse.ok(data=get_status())
+
+
+@router.post("/auto-schedule/config", response_model=APIResponse)
+async def auto_schedule_config(
+    enabled: bool = None,
+    hour: int = None,
+    minute: int = None,
+    wh_col: str = None,
+    max_round: int = None,
+):
+    """Enable/disable or reconfigure the 8 AM daily auto-scheduler."""
+    from app.core.distribution_auto_scheduler import update_config
+    kwargs = {}
+    if enabled is not None:
+        kwargs["enabled"] = enabled
+    if hour is not None:
+        kwargs["hour"] = hour
+    if minute is not None:
+        kwargs["minute"] = minute
+    if wh_col is not None:
+        kwargs["wh_col"] = wh_col
+    if max_round is not None:
+        kwargs["max_round"] = max_round
+    cfg = update_config(**kwargs)
+    return APIResponse.ok(data=cfg, message="Config updated")
+
+
+@router.post("/auto-schedule/run-now", response_model=APIResponse)
+async def auto_schedule_run_now():
+    """Trigger an immediate auto-save run (same as scheduled run)."""
+    from app.core.distribution_auto_scheduler import trigger_now
+    trigger_now()
+    return APIResponse.ok(message="Auto-run triggered — check status for progress")
+
+
+@router.post("/save-to-disk", response_model=APIResponse)
+async def save_result_to_disk_endpoint(wh_col: str = "wh_q", max_round: int = 10):
+    """Save the last distribution result to data/output/auto_runs/YYYY-MM-DD/."""
+    _require_oracle()
+    try:
+        result = _get_export_df(wh_col, max_round)
+        from app.core.distribution_auto_scheduler import save_result_to_disk
+        save_dir, saved_files = save_result_to_disk(result, max_round)
+        return APIResponse.ok(data={"save_path": save_dir, "files": saved_files},
+                              message=f"Saved {len(saved_files)} file(s)")
+    except Exception as exc:
+        logger.exception("save_to_disk error")
+        return APIResponse.fail(message=str(exc))

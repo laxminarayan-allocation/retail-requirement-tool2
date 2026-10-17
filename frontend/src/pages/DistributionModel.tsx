@@ -489,6 +489,14 @@ export default function DistributionModel() {
     try { localStorage.setItem('ck_hold_rules', JSON.stringify(holdRules)) } catch {}
   }, [holdRules])
 
+  const fetchSchedStatus = useCallback(async () => {
+    try {
+      const res = await apiFetch('GET', '/distribution/auto-schedule/status')
+      setSchedStatus(res as typeof schedStatus)
+      setSchedEnabled(!!(res as { config?: { enabled?: boolean } })?.config?.enabled)
+    } catch { /* silent */ }
+  }, [])
+
   const fetchImStatus = useCallback(async () => {
     try {
       const d = await apiFetch<ItemMasterStatus>('GET', '/distribution/item-master/status')
@@ -560,6 +568,7 @@ export default function DistributionModel() {
   useEffect(() => {
     fetchImStatus()
     fetchOlStatus()
+    fetchSchedStatus()
     apiFetch<{ready: boolean}>('GET', '/distribution/base/status')
       .then(d => setBaseCacheReady(d.ready))
       .catch((e: any) => setFetchError(e?.response?.data?.message || 'Backend unreachable'))
@@ -638,6 +647,15 @@ export default function DistributionModel() {
   const [divSummary, setDivSummary] = useState<DivisionRow[] | null>(null)
   const [divSummaryTotal, setDivSummaryTotal] = useState(0)
   const [divSummaryLoading, setDivSummaryLoading] = useState(false)
+  const [schedEnabled, setSchedEnabled] = useState(false)
+  const [schedStatus, setSchedStatus] = useState<{
+    next_run_at: string|null; last_run_at: string|null; last_status: string|null;
+    last_save_path: string|null; saved_files: string[];
+    config: { enabled: boolean; hour: number; minute: number; wh_col: string; max_round: number };
+  }|null>(null)
+  const [schedLoading, setSchedLoading] = useState(false)
+  const [saveToDiskLoading, setSaveToDiskLoading] = useState(false)
+  const [saveToDiskPath, setSaveToDiskPath] = useState<string|null>(null)
   const [divDownloading, setDivDownloading] = useState<Record<string, boolean>>({})
 
   const openExportModal = async (fmt: 'csv' | 'xlsx') => {
@@ -1818,6 +1836,104 @@ export default function DistributionModel() {
               </div>
             )}
           </div>
+          {/* ── Auto-save option cards ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10, marginTop: 10 }}>
+
+            {/* Card 1: Save to Disk (manual) */}
+            <div style={{ background: DK.cardBg, border: `1px solid ${saveToDiskPath ? '#22c55e' : DK.cardBorder}`,
+              borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary, marginBottom: 4 }}>
+                💾 Save Result to Disk
+              </div>
+              <div style={{ fontSize: 11, color: tokens.textSecondary, marginBottom: 12 }}>
+                Save last run output as CSV(s) to auto_runs folder
+              </div>
+              <button
+                onClick={async () => {
+                  setSaveToDiskLoading(true); setSaveToDiskPath(null)
+                  try {
+                    const res = await apiFetch('POST', `/distribution/save-to-disk?wh_col=wh_q&max_round=${maxRound}`)
+                    const r = res as { save_path: string; files: string[] }
+                    setSaveToDiskPath(r.save_path)
+                  } catch (e: unknown) {
+                    setSaveToDiskPath('✗ ' + (e instanceof Error ? e.message : 'Failed'))
+                  } finally { setSaveToDiskLoading(false) }
+                }}
+                disabled={saveToDiskLoading || !distResult}
+                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none',
+                  cursor: (saveToDiskLoading || !distResult) ? 'not-allowed' : 'pointer',
+                  background: (saveToDiskLoading || !distResult) ? DK.cardBorder : '#16a34a',
+                  color: '#fff', opacity: (saveToDiskLoading || !distResult) ? 0.5 : 1, width: '100%' }}>
+                {saveToDiskLoading ? 'Saving…' : '↓ Save to Disk'}
+              </button>
+              {saveToDiskPath && (
+                <div style={{ marginTop: 8, fontSize: 10, color: saveToDiskPath.startsWith('✗') ? '#f87171' : '#4ade80',
+                  wordBreak: 'break-all', lineHeight: 1.4 }}>
+                  {saveToDiskPath.startsWith('✗') ? saveToDiskPath : `✓ Saved to: ${saveToDiskPath}`}
+                </div>
+              )}
+            </div>
+
+            {/* Card 2: Daily 8 AM Scheduler */}
+            <div style={{ background: DK.cardBg,
+              border: `1px solid ${schedEnabled ? '#8b5cf6' : DK.cardBorder}`,
+              borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary }}>⏰ Daily Auto-Run</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type='checkbox' checked={schedEnabled}
+                    onChange={async e => {
+                      const en = e.target.checked
+                      setSchedEnabled(en)
+                      setSchedLoading(true)
+                      try {
+                        await apiFetch('POST', `/distribution/auto-schedule/config?enabled=${en}`)
+                        await fetchSchedStatus()
+                      } catch { /* silent */ } finally { setSchedLoading(false) }
+                    }}
+                    style={{ width: 14, height: 14, accentColor: '#8b5cf6', cursor: 'pointer' }} />
+                  <span style={{ fontSize: 11, color: schedEnabled ? '#a78bfa' : tokens.textMuted, fontWeight: 600 }}>
+                    {schedEnabled ? 'ON' : 'OFF'}
+                  </span>
+                </label>
+              </div>
+              <div style={{ fontSize: 11, color: tokens.textSecondary, marginBottom: 10 }}>
+                8:00 AM daily — uses cached base, saves CSVs to auto_runs
+              </div>
+              {schedStatus && (
+                <div style={{ fontSize: 10, color: tokens.textMuted, lineHeight: 1.7 }}>
+                  {schedStatus.next_run_at && <div>⏰ Next: {schedStatus.next_run_at}</div>}
+                  {schedStatus.last_run_at && <div>✔ Last: {schedStatus.last_run_at}</div>}
+                  {schedStatus.last_status && (
+                    <div style={{ color: schedStatus.last_status === 'success' ? '#4ade80' : schedStatus.last_status === 'running' ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
+                      Status: {schedStatus.last_status}
+                    </div>
+                  )}
+                  {schedStatus.last_save_path && (
+                    <div style={{ marginTop: 4, color: '#4ade80', wordBreak: 'break-all' }}>
+                      📂 {schedStatus.last_save_path}
+                    </div>
+                  )}
+                </div>
+              )}
+              {schedEnabled && (
+                <button onClick={async () => {
+                  setSchedLoading(true)
+                  try {
+                    await apiFetch('POST', '/distribution/auto-schedule/run-now')
+                    setTimeout(fetchSchedStatus, 3000)
+                  } catch { /* silent */ } finally { setSchedLoading(false) }
+                }} disabled={schedLoading}
+                  style={{ marginTop: 10, padding: '5px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6,
+                    border: 'none', cursor: schedLoading ? 'not-allowed' : 'pointer',
+                    background: schedLoading ? DK.cardBorder : '#7c3aed', color: '#fff', width: '100%',
+                    opacity: schedLoading ? 0.6 : 1 }}>
+                  {schedLoading ? 'Running…' : '▶ Run Now'}
+                </button>
+              )}
+            </div>
+          </div>
+
           {!imStatus?.ready && (
             <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
               borderRadius: 7, fontSize: 12, color: '#fbbf24', marginBottom: 8 }}>

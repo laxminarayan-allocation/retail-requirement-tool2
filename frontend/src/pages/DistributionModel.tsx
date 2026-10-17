@@ -1054,6 +1054,21 @@ export default function DistributionModel() {
                 value={reqSource}
                 onChange={v => { setReqSource(v); setBarcodePreview(null) }}
                 accent={sourceMode === 'both' ? '#0369a1' : '#16a34a'} />
+              {/* Oracle view badges */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                {(reqSource === 'GRC' || reqSource === 'BOTH') && (
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '3px 9px', borderRadius: 4,
+                    background: '#0a2a12', color: '#4ade80', border: '1px solid #22c55e30', letterSpacing: '0.02em' }}>
+                    🗄 V_BARCODE_REQ_APPS_GRC_V2
+                  </span>
+                )}
+                {(reqSource === 'WMS' || reqSource === 'BOTH') && (
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '3px 9px', borderRadius: 4,
+                    background: '#082f49', color: '#38bdf8', border: '1px solid #0369a130', letterSpacing: '0.02em' }}>
+                    🗄 V_BARCODE_REQ_APPS_WMS_V2
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

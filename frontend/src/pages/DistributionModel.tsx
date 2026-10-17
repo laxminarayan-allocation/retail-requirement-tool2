@@ -409,6 +409,8 @@ export default function DistributionModel() {
   const [barcodePreview, setBarcodePreview] = useState<{total: number; breakdown: {wh_source: string; count: number}[]} | null>(null)
   const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
   const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
+  const [sourceMode, setSourceMode] = useState<'oracle'|'upload'|'both'>('oracle')
+  const [csvFallback, setCsvFallback] = useState<'oracle'|'zero'>('oracle')
   const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
   const [olDownloading, setOlDownloading] = useState(false)
   const [applyOL,     setApplyOL]     = useState(() => ssLoad('applyOL', false))
@@ -808,30 +810,142 @@ export default function DistributionModel() {
         {/* ── Step 1: Source Configure ─────────────────────────────────────── */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', border: '2px solid #22c55e',
-              background: '#14532d', color: '#4ade80', fontSize: 13, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</div>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+              border: `2px solid ${sourceMode === 'upload' && !csvUploadActive ? '#d97706' : '#22c55e'}`,
+              background: sourceMode === 'upload' && !csvUploadActive ? DK.cardBg : '#14532d',
+              color: sourceMode === 'upload' && !csvUploadActive ? '#fbbf24' : '#4ade80',
+              fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {sourceMode === 'upload' && !csvUploadActive ? '1' : '✓'}
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Source Configure</div>
-              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Oracle stock source (GRC / WMS / Both) · CSV upload override</div>
+              <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>
+                {sourceMode === 'oracle' ? 'Oracle warehouse stock (GRC / WMS / Both)'
+                 : sourceMode === 'upload' ? 'CSV file as primary stock source'
+                 : 'Oracle + CSV combined — CSV overrides, Oracle fills gaps'}
+              </div>
             </div>
             <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
-              background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Configured</span>
+              background: sourceMode === 'upload' && !csvUploadActive ? DK.cardBg : '#14532d',
+              color: sourceMode === 'upload' && !csvUploadActive ? '#fbbf24' : '#4ade80',
+              border: `1px solid ${sourceMode === 'upload' && !csvUploadActive ? '#d9780640' : '#22c55e50'}` }}>
+              {sourceMode === 'upload' && !csvUploadActive ? 'Upload needed' : 'Configured'}
+            </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <PillToggle label="Stock Source"
-              options={[{val:'GRC',text:'Oracle GRC'},{val:'WMS',text:'Oracle WMS'},{val:'BOTH',text:'GRC + WMS'}]}
-              value={reqSource} onChange={v => { setReqSource(v); setBarcodePreview(null); clearCsvUpload() }} accent="#16a34a" />
-            <DkUploadZone
-              label="CSV Stock Override"
-              hint="BARCODE, GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY"
-              active={csvUploadActive} filename={csvUploadMeta?.filename} rows={csvUploadMeta?.rows}
-              uploading={csvUploading} onUpload={handleCsvUpload} onClear={clearCsvUpload} inputRef={csvInputRef}
-            />
-            {csvUploadMsg && <div style={{ fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{csvUploadMsg}</div>}
-          </div>
-        </div>
 
+          {/* 3 source type selection cards */}
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+            color: tokens.textMuted, marginBottom: 8 }}>Source Type</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 18 }}>
+            {([
+              { key: 'oracle' as const, icon: '🏛', title: 'Oracle Only',
+                hint: 'Live GRC / WMS warehouse stock from Oracle ERP' },
+              { key: 'upload' as const, icon: '📄', title: 'Upload Only',
+                hint: 'Your own CSV file as the sole stock source' },
+              { key: 'both'   as const, icon: '🔗', title: 'Oracle + Upload',
+                hint: 'CSV overrides Oracle qty — Oracle fills unmatched barcodes' },
+            ] as const).map(opt => (
+              <div key={opt.key} onClick={() => {
+                setSourceMode(opt.key)
+                setBarcodePreview(null)
+                if (opt.key === 'oracle') clearCsvUpload()
+              }} style={{
+                border: `1.5px solid ${sourceMode === opt.key ? (opt.key === 'both' ? '#0369a1' : '#22c55e') : DK.cardBorder}`,
+                borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
+                background: sourceMode === opt.key ? (opt.key === 'both' ? '#082f49' : '#0a1f0a') : DK.cardBg,
+                transition: 'border-color .15s, background .15s',
+              }}>
+                {sourceMode === opt.key && (
+                  <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
+                    borderRadius: 4, fontWeight: 600,
+                    background: opt.key === 'both' ? '#082f49' : '#14532d',
+                    color: opt.key === 'both' ? '#38bdf8' : '#4ade80',
+                    border: `1px solid ${opt.key === 'both' ? '#0369a130' : '#22c55e50'}` }}>Active</span>
+                )}
+                <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary, marginBottom: 4 }}>{opt.title}</div>
+                <div style={{ fontSize: 11, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Oracle sub-options */}
+          {(sourceMode === 'oracle' || sourceMode === 'both') && (
+            <div style={{ marginBottom: 14 }}>
+              <PillToggle label="Warehouse Source"
+                options={[
+                  {val:'GRC', text:'Oracle GRC'},
+                  {val:'WMS', text:'Oracle WMS'},
+                  {val:'BOTH',text:'GRC + WMS'},
+                ]}
+                value={reqSource}
+                onChange={v => { setReqSource(v); setBarcodePreview(null) }}
+                accent={sourceMode === 'both' ? '#0369a1' : '#16a34a'} />
+            </div>
+          )}
+
+          {/* CSV Upload zone */}
+          {(sourceMode === 'upload' || sourceMode === 'both') && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+                color: tokens.textMuted, marginBottom: 8 }}>
+                {sourceMode === 'both' ? 'CSV Override File (optional)' : 'Stock CSV File (required)'}
+              </div>
+              <DkUploadZone
+                label={sourceMode === 'both' ? 'Upload Override CSV' : 'Upload Stock CSV'}
+                hint="BARCODE · GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY"
+                active={csvUploadActive} filename={csvUploadMeta?.filename} rows={csvUploadMeta?.rows}
+                uploading={csvUploading} onUpload={handleCsvUpload} onClear={clearCsvUpload} inputRef={csvInputRef}
+              />
+              {csvUploadMsg && (
+                <div style={{ marginTop: 4, fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>
+                  {csvUploadMsg}
+                </div>
+              )}
+              {sourceMode === 'both' && csvUploadActive && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                  marginTop: 10, padding: '10px 14px', background: '#1a1200',
+                  borderRadius: 8, border: '1px solid #f59e0b30' }}>
+                  <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    Unmatched barcodes (CSV miss):
+                  </span>
+                  {(['oracle', 'zero'] as const).map(opt => (
+                    <button key={opt} onClick={() => setCsvFallback(opt)}
+                      style={{ fontSize: 12, padding: '4px 12px', borderRadius: 5, fontWeight: 600, cursor: 'pointer',
+                        border: '1px solid #f59e0b40',
+                        background: csvFallback === opt ? '#f59e0b' : 'transparent',
+                        color: csvFallback === opt ? '#000' : '#f59e0b' }}>
+                      {opt === 'oracle' ? 'Oracle fallback' : 'Use 0'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Info banner */}
+          {sourceMode === 'oracle' && (
+            <div style={{ padding: '8px 12px', background: '#0a2a12', border: '1px solid #22c55e30',
+              borderRadius: 8, fontSize: 12, color: '#4ade80', display: 'flex', gap: 8 }}>
+              <span>✓</span>
+              <span>Pulls live stock from <strong>V_BARCODE_REQ_APPS_{reqSource}_V2</strong> · unique barcodes deduplicated</span>
+            </div>
+          )}
+          {sourceMode === 'upload' && csvUploadActive && (
+            <div style={{ padding: '8px 12px', background: '#082f49', border: '1px solid #0369a130',
+              borderRadius: 8, fontSize: 12, color: '#38bdf8', display: 'flex', gap: 8 }}>
+              <span>i</span>
+              <span>CSV is the sole source — Oracle not queried for stock</span>
+            </div>
+          )}
+          {sourceMode === 'both' && (
+            <div style={{ padding: '8px 12px', background: '#082f49', border: '1px solid #0369a130',
+              borderRadius: 8, fontSize: 12, color: '#38bdf8', display: 'flex', gap: 8 }}>
+              <span>🔗</span>
+              <span>CSV barcodes override Oracle qty · unmatched barcodes filled from Oracle {reqSource}</span>
+            </div>
+          )}
+        </div>
         {/* ── Step 2: Item Master Join ─────────────────────────────────────── */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>

@@ -444,9 +444,11 @@ export default function DistributionModel() {
   const [holdRules, setHoldRules] = useState<HoldRule[]>(
     () => { try { const v = JSON.parse(localStorage.getItem('ck_hold_rules') ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
   )
-  const [savedHoldRules] = useState<HoldRule[]>(
-    () => { try { const v = JSON.parse(localStorage.getItem('ck_hold_rules') ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+  const [savedHoldRules, setSavedHoldRules] = useState<HoldRule[]>(
+    () => { try { const v = JSON.parse(localStorage.getItem('ck_hold_rules_saved') ?? localStorage.getItem('ck_hold_rules') ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
   )
+  const [holdCsvMsg, setHoldCsvMsg] = useState<string|null>(null)
+  const holdCsvRef = useRef<HTMLInputElement>(null)
   const [holdMode, setHoldMode] = useState<'skip'|'use_last'|'add_new'>(
     () => { try { return (localStorage.getItem('ck_hold_mode') as 'skip'|'use_last'|'add_new') ?? 'use_last' } catch { return 'use_last' } }
   )
@@ -488,6 +490,52 @@ export default function DistributionModel() {
   useEffect(() => {
     try { localStorage.setItem('ck_hold_rules', JSON.stringify(holdRules)) } catch {}
   }, [holdRules])
+
+  const saveHolds = () => {
+    try {
+      localStorage.setItem('ck_hold_rules_saved', JSON.stringify(holdRules))
+      setSavedHoldRules([...holdRules])
+      setHoldCsvMsg(`✓ ${holdRules.length} hold${holdRules.length !== 1 ? 's' : ''} saved`)
+      setTimeout(() => setHoldCsvMsg(null), 3000)
+    } catch { setHoldCsvMsg('✗ Save failed') }
+  }
+
+  const downloadHoldsCsv = () => {
+    const rows = holdRules.map(r =>
+      r.type === 'store'
+        ? `store,${r.stores.join('|')},`
+        : `attr1,${r.attr1},${(r.except_stores ?? []).join('|')}`
+    )
+    const csv = 'type,stores_or_attr1,except_stores\n' + rows.join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    a.download = `holds_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+  }
+
+  const uploadHoldsCsv = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const lines = (e.target?.result as string).trim().split('\n').slice(1)
+        const imported: HoldRule[] = []
+        for (const line of lines) {
+          const [type, col2, col3] = line.split(',').map(s => s.trim())
+          if (type === 'store' && col2) {
+            imported.push({ type: 'store', stores: col2.split('|').map(s => s.toUpperCase()).filter(Boolean), except_stores: [] })
+          } else if (type === 'attr1' && col2) {
+            imported.push({ type: 'attr1', attr1: col2, stores: [], except_stores: col3 ? col3.split('|').filter(Boolean) : [] })
+          }
+        }
+        if (imported.length === 0) { setHoldCsvMsg('✗ No valid rows found'); return }
+        setHoldRules(imported)
+        setHoldMode('add_new')
+        setHoldCsvMsg(`✓ Imported ${imported.length} hold${imported.length !== 1 ? 's' : ''}`)
+        setTimeout(() => setHoldCsvMsg(null), 3000)
+      } catch { setHoldCsvMsg('✗ Parse error') }
+    }
+    reader.readAsText(file)
+  }
 
   const fetchSchedStatus = useCallback(async () => {
     try {
@@ -1753,24 +1801,64 @@ export default function DistributionModel() {
             </div>
           )}
 
-          {/* Active holds chips */}
-          {holdMode !== 'skip' && holdRules.length > 0 && (
+          {/* Hidden CSV upload input */}
+          <input ref={holdCsvRef} type="file" accept=".csv" style={{ display: 'none' }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadHoldsCsv(f); e.target.value = '' }} />
+
+          {/* Active holds + Save / CSV controls */}
+          {holdMode !== 'skip' && (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: tokens.textMuted, marginBottom: 6,
-                textTransform: 'uppercase', letterSpacing: '.06em' }}>Active Holds</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {holdRules.map((r, i) => (
-                  <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
-                    padding: '2px 8px', fontSize: 11, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {r.type === 'store'
-                      ? `🛑 Store: ${r.stores.join(', ')}`
-                      : `📌 Attr1 "${r.attr1}"${r.except_stores?.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
-                    {holdMode === 'add_new' && (
-                      <span onClick={() => removeHold(i)} style={{ cursor: 'pointer', color: '#f87171', fontWeight: 700 }}>x</span>
-                    )}
+              {holdRules.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: tokens.textMuted, marginBottom: 6,
+                    textTransform: 'uppercase', letterSpacing: '.06em' }}>Active Holds</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    {holdRules.map((r, i) => (
+                      <span key={i} style={{ background: '#7f1d1d33', border: '1px solid #dc2626aa', borderRadius: 4,
+                        padding: '2px 8px', fontSize: 11, color: '#fca5a5', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {r.type === 'store'
+                          ? `🛑 Store: ${r.stores.join(', ')}`
+                          : `📌 Attr1 "${r.attr1}"${r.except_stores?.length ? ` (except ${r.except_stores.join(', ')})` : ''}`}
+                        {holdMode === 'add_new' && (
+                          <span onClick={() => removeHold(i)} style={{ cursor: 'pointer', color: '#f87171', fontWeight: 700 }}>×</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {/* Save + CSV row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {holdRules.length > 0 && (
+                  <button onClick={saveHolds}
+                    style={{ padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none',
+                      cursor: 'pointer', background: '#16a34a', color: '#fff' }}>
+                    💾 Save Holds
+                  </button>
+                )}
+                {holdRules.length > 0 && (
+                  <button onClick={downloadHoldsCsv}
+                    style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+                      border: `1px solid ${DK.cardBorder}`, cursor: 'pointer', background: 'transparent', color: tokens.textSecondary }}>
+                    ↓ CSV
+                  </button>
+                )}
+                <button onClick={() => holdCsvRef.current?.click()}
+                  style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+                    border: `1px solid ${DK.cardBorder}`, cursor: 'pointer', background: 'transparent', color: tokens.textSecondary }}>
+                  ↑ Import CSV
+                </button>
+                {holdCsvMsg && (
+                  <span style={{ fontSize: 11, color: holdCsvMsg.startsWith('✓') ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+                    {holdCsvMsg}
                   </span>
-                ))}
+                )}
               </div>
+              {savedHoldRules.length > 0 && holdRules.length === 0 && holdMode === 'add_new' && (
+                <div style={{ marginTop: 8, fontSize: 11, color: tokens.textMuted }}>
+                  💡 Tip: switch to "Use Last Holds" to load {savedHoldRules.length} saved hold{savedHoldRules.length !== 1 ? 's' : ''}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1490,38 +1490,6 @@ export default function DistributionModel() {
               </div>
             </div>
 
-            {/* Sort Priority cards */}
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
-                color: tokens.textMuted, marginBottom: 8 }}>Sort Priority</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                {([
-                  { key: 'fill_rate'    as const, icon: '📊', title: 'MC Fill Rate ↑',
-                    hint: 'Prioritise by MC fill rate ascending — fill worst-performing MCs first' },
-                  { key: 'combined_req' as const, icon: '📦', title: 'Combined Req ↓',
-                    hint: 'Prioritise by total requirement descending — highest demand first' },
-                  { key: 'festive_req'  as const, icon: '✨', title: 'Festive + Req ↓',
-                    hint: 'Festive season boost + combined req — event-weighted sort' },
-                ] as const).map(opt => (
-                  <div key={opt.key} onClick={() => setSortMode(opt.key)} style={{
-                    border: `1.5px solid ${sortMode === opt.key ? '#f59e0b' : DK.cardBorder}`,
-                    borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
-                    background: sortMode === opt.key ? '#1a1200' : DK.cardBg,
-                    transition: 'border-color .15s, background .15s',
-                  }}>
-                    {sortMode === opt.key && (
-                      <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
-                        borderRadius: 4, fontWeight: 600, background: '#1a1200', color: '#fbbf24',
-                        border: '1px solid #f59e0b40' }}>Active</span>
-                    )}
-                    <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: sortMode === opt.key ? '#fbbf24' : tokens.textPrimary, marginBottom: 4 }}>{opt.title}</div>
-                    <div style={{ fontSize: 11, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <DkCollapse title="REQ CSV Overrides"
               defaultOpen={Object.keys(reqCsvMeta).length > 0}
               badge={Object.keys(reqCsvMeta).length > 0
@@ -1578,6 +1546,38 @@ export default function DistributionModel() {
               {Object.keys(priorityMeta).length > 0 ? `${Object.keys(priorityMeta).length} CSV` : sortMode}
             </span>
           </div>
+          {/* Sort Priority cards */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+              color: tokens.textMuted, marginBottom: 8 }}>Sort Priority</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {([
+                { key: 'fill_rate'    as const, icon: '📊', title: 'MC Fill Rate ↑',
+                  hint: 'Prioritise by MC fill rate ascending — fill worst-performing MCs first' },
+                { key: 'combined_req' as const, icon: '📦', title: 'Combined Req ↓',
+                  hint: 'Prioritise by total requirement descending — highest demand first' },
+                { key: 'festive_req'  as const, icon: '✨', title: 'Festive + Req ↓',
+                  hint: 'Festive season boost + combined req — event-weighted sort' },
+              ] as const).map(opt => (
+                <div key={opt.key} onClick={() => setSortMode(opt.key)} style={{
+                  border: `1.5px solid ${sortMode === opt.key ? '#f59e0b' : DK.cardBorder}`,
+                  borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
+                  background: sortMode === opt.key ? '#1a1200' : DK.cardBg,
+                  transition: 'border-color .15s, background .15s',
+                }}>
+                  {sortMode === opt.key && (
+                    <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
+                      borderRadius: 4, fontWeight: 600, background: '#1a1200', color: '#fbbf24',
+                      border: '1px solid #f59e0b40' }}>Active</span>
+                  )}
+                  <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: sortMode === opt.key ? '#fbbf24' : tokens.textPrimary, marginBottom: 4 }}>{opt.title}</div>
+                  <div style={{ fontSize: 11, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
             {PRIORITY_CSV_SPECS.map(spec => {
               const meta = priorityMeta[spec.key]

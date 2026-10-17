@@ -644,6 +644,12 @@ export default function DistributionModel() {
     return () => clearTimeout(t)
   }, [reqSource, bizSegment, fetchBarcodePreview])
 
+  // Auto cross-join count whenever stores/filters/source/segment change
+  useEffect(() => {
+    const t = setTimeout(() => { fetchStoreBarcodePreview() }, 500)
+    return () => clearTimeout(t)
+  }, [selStores, activeFieldFilters, reqSource, bizSegment, fetchStoreBarcodePreview])
+
   useEffect(() => { ssSave({ applyOL }) }, [applyOL])
 
   const buildBase = async () => {
@@ -1350,12 +1356,23 @@ export default function DistributionModel() {
               <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Store Selection</div>
               <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Choose stores to cross-join · division × attribute1 scope</div>
             </div>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
-              background: selStores.length > 0 ? '#14532d' : 'transparent',
-              color: selStores.length > 0 ? '#4ade80' : tokens.textMuted,
-              border: `1px solid ${selStores.length > 0 ? '#22c55e50' : DK.cardBorder}` }}>
-              {selStores.length > 0 ? `${selStores.length} stores` : 'All stores'}
-            </span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+                background: selStores.length > 0 ? '#14532d' : 'transparent',
+                color: selStores.length > 0 ? '#4ade80' : tokens.textMuted,
+                border: `1px solid ${selStores.length > 0 ? '#22c55e50' : DK.cardBorder}` }}>
+                {selStores.length > 0 ? `${selStores.length} stores` : 'All stores'}
+              </span>
+              {sbLoading && (
+                <span style={{ fontSize: 10, color: tokens.textMuted }}>counting…</span>
+              )}
+              {!sbLoading && sbPreview && (
+                <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
+                  background: '#082f49', color: '#38bdf8', border: '1px solid #0369a130' }}>
+                  ⊞ {sbPreview.total_rows.toLocaleString('en-IN')} rows
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 80 }}>Store Filter</span>

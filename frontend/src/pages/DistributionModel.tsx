@@ -652,6 +652,38 @@ export default function DistributionModel() {
 
   useEffect(() => { ssSave({ applyOL }) }, [applyOL])
 
+  // ── Store Presets ─────────────────────────────────────────────────────────
+  const fetchStorePresets = useCallback(async () => {
+    try {
+      const d = await apiFetch<{ presets: Record<string, string[]> }>('GET', '/distribution/store-presets')
+      setStorePresets(d.presets ?? {})
+    } catch {}
+  }, [])
+
+  useEffect(() => { fetchStorePresets() }, [fetchStorePresets])
+
+  const savePreset = async () => {
+    const name = presetName.trim()
+    if (!name) return
+    setPresetSaving(true); setPresetMsg(null)
+    try {
+      await http.post('/distribution/store-presets', { name, stores: selStores })
+      setPresetMsg(`✓ Saved "${name}"`)
+      setPresetName('')
+      fetchStorePresets()
+    } catch (e: unknown) {
+      setPresetMsg(`✗ ${e instanceof Error ? e.message : 'Error'}`)
+    } finally { setPresetSaving(false) }
+  }
+
+  const deletePreset = async (name: string) => {
+    try {
+      await apiFetch('DELETE', `/distribution/store-presets/${encodeURIComponent(name)}`)
+      setPresetMsg(`Deleted "${name}"`)
+      fetchStorePresets()
+    } catch {}
+  }
+
   const buildBase = async () => {
     setBaseLoading(true); setBaseMsg(null); setBaseResult(null)
     try {
@@ -753,6 +785,10 @@ export default function DistributionModel() {
     sample: Record<string, unknown>[];
   } | null>(null)
   const [divDownloading, setDivDownloading] = useState<Record<string, boolean>>({})
+  const [storePresets, setStorePresets] = useState<Record<string, string[]>>({})
+  const [presetName, setPresetName] = useState('')
+  const [presetSaving, setPresetSaving] = useState(false)
+  const [presetMsg, setPresetMsg] = useState<string | null>(null)
 
   // Poll scheduler status every 3s while running
   // (placed after schedStatus useState to avoid temporal dead zone)
@@ -1464,6 +1500,58 @@ export default function DistributionModel() {
             </div>
             <div style={{ marginTop: 5, fontSize: 11, color: tokens.textMuted, marginLeft: 88 }}>
               Blank = include all. Within row = AND. Rows = OR combined.
+            </div>
+          </div>
+
+          {/* -- Store Presets */}
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${DK.cardBorder}` }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+              color: tokens.textMuted, marginBottom: 8 }}>Store Presets</div>
+            {/* Saved presets list */}
+            {Object.keys(storePresets).length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {Object.entries(storePresets).map(([name, stores]) => (
+                  <div key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '3px 10px 3px 10px', borderRadius: 20, fontSize: 11,
+                    background: '#1e1040', border: '1px solid #7c3aed40', color: '#a78bfa' }}>
+                    <button onClick={() => { setSelStores(stores); setPresetMsg(`Loaded "${name}"`) }}
+                      title={`Load: ${stores.length} stores`}
+                      style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer',
+                        padding: 0, fontSize: 11, fontWeight: 600 }}>
+                      {name} <span style={{ fontSize: 10, opacity: 0.7 }}>({stores.length})</span>
+                    </button>
+                    <button onClick={() => deletePreset(name)} title="Delete preset"
+                      style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer',
+                        padding: '0 0 0 4px', fontSize: 13, lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Save current selection as new preset */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <input value={presetName} onChange={e => setPresetName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && savePreset()}
+                placeholder="Preset name…"
+                style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, width: 160,
+                  border: `1px solid ${tokens.cardBorder}`, background: tokens.inputBg ?? DK.cardBg,
+                  color: tokens.textPrimary, outline: 'none' }} />
+              <button onClick={savePreset} disabled={presetSaving || !presetName.trim()}
+                style={{ padding: '4px 14px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none',
+                  background: presetSaving || !presetName.trim() ? DK.cardBorder : '#7c3aed',
+                  color: presetSaving || !presetName.trim() ? tokens.textMuted : '#fff',
+                  cursor: presetSaving || !presetName.trim() ? 'not-allowed' : 'pointer' }}>
+                {presetSaving ? 'Saving…' : '💾 Save'}
+              </button>
+              {selStores.length > 0 && (
+                <span style={{ fontSize: 11, color: tokens.textMuted }}>
+                  will save {selStores.length} stores
+                </span>
+              )}
+              {presetMsg && (
+                <span style={{ fontSize: 11, color: presetMsg.startsWith('✓') || presetMsg.startsWith('Load') ? '#4ade80' : presetMsg.startsWith('✗') ? '#f87171' : tokens.textMuted }}>
+                  {presetMsg}
+                </span>
+              )}
             </div>
           </div>
 

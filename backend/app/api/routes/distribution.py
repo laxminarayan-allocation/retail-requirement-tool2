@@ -241,6 +241,57 @@ async def reset_view_config():
                           message="Reset to defaults.")
 
 
+# ── Store Selection Presets ────────────────────────────────────────────────────
+_PRESET_PATH = Path(__file__).resolve().parents[4] / "data" / "config" / "store_presets.json"
+_PRESET_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _load_presets() -> dict[str, list[str]]:
+    if _PRESET_PATH.exists():
+        try:
+            return json.loads(_PRESET_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_presets(p: dict[str, list[str]]) -> None:
+    _PRESET_PATH.write_text(json.dumps(p, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+@router.get("/store-presets", response_model=APIResponse)
+async def get_store_presets():
+    return APIResponse.ok(data={"presets": _load_presets()})
+
+
+@router.post("/store-presets", response_model=APIResponse)
+async def save_store_preset(request: Request):
+    try:
+        body = await request.json()
+        name = (body.get("name") or "").strip()
+        stores = body.get("stores", [])
+        if not name:
+            return APIResponse.fail("Preset name is required.")
+        if not isinstance(stores, list):
+            return APIResponse.fail("stores must be a list.")
+        p = _load_presets()
+        p[name] = stores
+        _save_presets(p)
+        return APIResponse.ok(data={"presets": p}, message=f"Preset '{name}' saved ({len(stores)} stores).")
+    except Exception as e:
+        return APIResponse.fail(str(e))
+
+
+@router.delete("/store-presets/{name}", response_model=APIResponse)
+async def delete_store_preset(name: str):
+    p = _load_presets()
+    if name not in p:
+        return APIResponse.fail(f"Preset '{name}' not found.")
+    del p[name]
+    _save_presets(p)
+    return APIResponse.ok(data={"presets": p}, message=f"Preset '{name}' deleted.")
+
+
 # ── Uploaded REQ CSVs (barcode-store req + MC/ART/MRP/SIZE req overrides) ────
 # Each entry: key → {df, meta}
 _uploaded_req: dict = {}   # key: "barcode" | "mc" | "art" | "mrp" | "size"

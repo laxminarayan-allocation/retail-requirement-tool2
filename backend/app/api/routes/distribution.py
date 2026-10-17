@@ -1164,6 +1164,105 @@ async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
         return APIResponse.fail(message=str(exc))
 
 
+@router.get("/barcode-preview/csv")
+async def barcode_preview_csv(stock_source: str = "GRC", biz_segment: str = "BOTH"):
+    """
+    Download unique barcodes as CSV with Item Master + GRC/WMS/ASN qty columns.
+    Merges IM parquet on icode. If same qty col exists in both GRC & WMS, sums them.
+    """
+    _require_oracle()
+    import io
+    from fastapi.responses import StreamingResponse as _SR
+
+    try:
+        src = stock_source.upper()
+
+        grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
+        wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
+        im  = _load(_IM_OWNER, _IM_OBJ)
+
+        frames = []
+        if src in ("GRC", "BOTH") and grc is not None:
+            g = grc.copy()
+            g.columns = [c.lower() for c in g.columns]
+            g["wh_source"] = "GRC"
+            frames.append(g)
+        if src in ("WMS", "BOTH") and wms is not None:
+            w = wms.copy()
+            w.columns = [c.lower() for c in w.columns]
+            w["wh_source"] = "WMS"
+            frames.append(w)
+
+        if not frames:
+            raise ValueError("No parquet data found for selected source.")
+
+        if len(frames) == 1:
+            df = frames[0].copy()
+        else:
+            # BOTH: merge GRC + WMS on icode, sum overlapping qty cols
+            g, w = frames[0], frames[1]
+            qty_cols_g = [c for c in g.columns if c not in ("icode", "wh_source")]
+            qty_cols_w = [c for c in w.columns if c not in ("icode", "wh_source")]
+            common = set(qty_cols_g) & set(qty_cols_w)
+            only_g = [c for c in qty_cols_g if c not in common]
+            only_w = [c for c in qty_cols_w if c not in common]
+
+            # For common cols: sum GRC + WMS; mark source GRC|WMS for barcodes in both
+            merged = g[["icode"] + list(common) + only_g].merge(
+                w[["icode"] + list(common) + only_w],
+                on="icode", how="outer", suffixes=("_grc", "_wms")
+            )
+            for col in common:
+                ca, cb = f"{col}_grc", f"{col}_wms"
+                if ca in merged.columns and cb in merged.columns:
+                    merged[col] = merged[ca].fillna(0) + merged[cb].fillna(0)
+                    merged = merged.drop(columns=[ca, cb])
+                elif ca in merged.columns:
+                    merged[col] = merged.pop(ca)
+                elif cb in merged.columns:
+                    merged[col] = merged.pop(cb)
+            # wh_source
+            in_grc = set(g["icode"])
+            in_wms = set(w["icode"])
+            merged["wh_source"] = merged["icode"].apply(
+                lambda x: "GRC|WMS" if x in in_grc and x in in_wms else ("GRC" if x in in_grc else "WMS")
+            )
+            df = merged
+
+        # Deduplicate on icode (keep first — barcode-level, not store-level)
+        df = df.drop_duplicates("icode").reset_index(drop=True)
+
+        # Merge Item Master
+        if im is not None:
+            im2 = im.copy()
+            im2.columns = [c.lower() for c in im2.columns]
+            im_key = "icode" if "icode" in im2.columns else im2.columns[0]
+            df = df.merge(im2.rename(columns={im_key: "icode"}), on="icode", how="left")
+
+        # Friendly column order: icode, wh_source, IM cols, qty cols
+        im_cols = [c for c in df.columns if c in (
+            "option_level", "allocation_option", "sz_grp", "attribute1", "concept_new"
+        )]
+        qty_cols = [c for c in df.columns if any(k in c for k in ("_q", "req", "qty", "asn", "grc", "wms", "msa"))]
+        other = [c for c in df.columns if c not in ["icode", "wh_source"] + im_cols + qty_cols]
+        ordered = ["icode", "wh_source"] + im_cols + qty_cols + other
+        df = df[[c for c in ordered if c in df.columns]]
+
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        buf.seek(0)
+        filename = f"barcode_preview_{src}_{biz_segment}.csv"
+        return _SR(
+            iter([buf.getvalue().encode("utf-8-sig")]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        logger.exception("barcode_preview_csv error")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
 @router.post("/distribute", response_model=APIResponse)
 async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q", max_round: int = 10):
     """

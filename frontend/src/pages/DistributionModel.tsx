@@ -1102,21 +1102,43 @@ export default function DistributionModel() {
             </div>
           )}
           {barcodePreview && (
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              {barcodePreview.breakdown.map(b => (
-                <div key={b.wh_source} style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90,
-                  background: b.wh_source === 'GRC' ? '#14532d40' : b.wh_source === 'WMS' ? '#17255440' : '#2a1a5e40',
-                  border: `1px solid ${b.wh_source === 'GRC' ? '#22c55e40' : b.wh_source === 'WMS' ? '#3b82f640' : '#8b5cf640'}` }}>
-                  <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{b.wh_source}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700,
-                    color: b.wh_source === 'GRC' ? '#4ade80' : b.wh_source === 'WMS' ? '#60a5fa' : '#a78bfa' }}>
-                    {b.count.toLocaleString('en-IN')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Count tiles */}
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'stretch' }}>
+                {barcodePreview.breakdown.map(b => (
+                  <div key={b.wh_source} style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90,
+                    background: b.wh_source === 'GRC' ? '#14532d40' : b.wh_source === 'WMS' ? '#17255440' : '#2a1a5e40',
+                    border: `1px solid ${b.wh_source === 'GRC' ? '#22c55e40' : b.wh_source === 'WMS' ? '#3b82f640' : '#8b5cf640'}` }}>
+                    <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{b.wh_source}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700,
+                      color: b.wh_source === 'GRC' ? '#4ade80' : b.wh_source === 'WMS' ? '#60a5fa' : '#a78bfa' }}>
+                      {b.count.toLocaleString('en-IN')}
+                    </div>
+                    <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 2 }}>barcodes</div>
                   </div>
+                ))}
+                <div style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90, background: '#1a1a1a', border: `1px solid ${DK.cardBorder}` }}>
+                  <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>Total Unique</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: tokens.textPrimary }}>{barcodePreview.total.toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 2 }}>barcodes</div>
                 </div>
-              ))}
-              <div style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90, background: '#1a1a1a', border: `1px solid ${DK.cardBorder}` }}>
-                <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>Total Unique</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: tokens.textPrimary }}>{barcodePreview.total.toLocaleString('en-IN')}</div>
+              </div>
+
+              {/* CSV download row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 8 }}>
+                <div style={{ flex: 1, fontSize: 12, color: tokens.textSecondary }}>
+                  CSV includes <strong style={{ color: tokens.textPrimary }}>Item Master</strong> metadata + barcode + GRC / ASN / WMS qty columns
+                  {imStatus?.ready ? '' : ' · (load IM first for full metadata)'}
+                </div>
+                <a
+                  href={`/api/distribution/barcode-preview/csv?stock_source=${reqSource}&biz_segment=${bizSegment}`}
+                  download
+                  style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7,
+                    border: 'none', background: '#059669', color: '#fff',
+                    textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  ⬇ Download CSV
+                </a>
               </div>
             </div>
           )}

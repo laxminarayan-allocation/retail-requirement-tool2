@@ -622,13 +622,6 @@ export default function DistributionModel() {
       .catch((e: any) => setFetchError(e?.response?.data?.message || 'Backend unreachable'))
   }, [fetchImStatus, fetchOlStatus])
 
-  // Poll scheduler status every 3s while running
-  useEffect(() => {
-    if (schedStatus?.last_status !== 'running') return
-    const t = setInterval(() => { fetchSchedStatus() }, 3000)
-    return () => clearInterval(t)
-  }, [schedStatus?.last_status, fetchSchedStatus])
-
   // Auto-load on mount + auto-refresh when source/segment changes
   useEffect(() => {
     const t = setTimeout(() => { fetchBarcodePreview() }, 300)
@@ -727,6 +720,14 @@ export default function DistributionModel() {
   const [saveToDiskLoading, setSaveToDiskLoading] = useState(false)
   const [saveToDiskPath, setSaveToDiskPath] = useState<string|null>(null)
   const [divDownloading, setDivDownloading] = useState<Record<string, boolean>>({})
+
+  // Poll scheduler status every 3s while running
+  // (placed after schedStatus useState to avoid temporal dead zone)
+  useEffect(() => {
+    if (schedStatus?.last_status !== 'running') return
+    const t = setInterval(() => { fetchSchedStatus() }, 3000)
+    return () => clearInterval(t)
+  }, [schedStatus?.last_status, fetchSchedStatus])
 
   const openExportModal = async (fmt: 'csv' | 'xlsx') => {
     setExportModal(fmt)

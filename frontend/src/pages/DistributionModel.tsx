@@ -1334,13 +1334,72 @@ export default function DistributionModel() {
               {Object.keys(reqCsvMeta).length > 0 ? `${Object.keys(reqCsvMeta).length} CSV active` : 'Oracle REQ'}
             </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <PillToggle label="Biz Segment"
-              options={[{val:'APPS',text:'APPS'},{val:'GM',text:'GM'},{val:'BOTH',text:'Both'}]}
-              value={bizSegment} onChange={setBizSegment} accent="#0ea5e9" />
-            <PillToggle label="Sort Priority"
-              options={[{val:'fill_rate',text:'MC Fill Rate \u2191'},{val:'combined_req',text:'Combined Req \u2193'},{val:'festive_req',text:'Festive + Req \u2193'}]}
-              value={sortMode} onChange={setSortMode} accent="#f59e0b" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Biz Segment cards */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+                color: tokens.textMuted, marginBottom: 8 }}>Biz Segment</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {([
+                  { key: 'APPS' as const, icon: '👔', title: 'APPS',
+                    hint: 'Apparel division — clothing & footwear stores' },
+                  { key: 'GM'   as const, icon: '🛎', title: 'GM',
+                    hint: 'General Merchandise — non-apparel categories' },
+                  { key: 'BOTH' as const, icon: '🔀', title: 'Both',
+                    hint: 'APPS + GM combined in one run' },
+                ] as const).map(opt => (
+                  <div key={opt.key} onClick={() => setBizSegment(opt.key)} style={{
+                    border: `1.5px solid ${bizSegment === opt.key ? '#0ea5e9' : DK.cardBorder}`,
+                    borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
+                    background: bizSegment === opt.key ? '#082f49' : DK.cardBg,
+                    transition: 'border-color .15s, background .15s',
+                  }}>
+                    {bizSegment === opt.key && (
+                      <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
+                        borderRadius: 4, fontWeight: 600, background: '#082f49', color: '#38bdf8',
+                        border: '1px solid #0369a130' }}>Active</span>
+                    )}
+                    <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: bizSegment === opt.key ? '#38bdf8' : tokens.textPrimary, marginBottom: 4 }}>{opt.title}</div>
+                    <div style={{ fontSize: 11, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Sort Priority cards */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+                color: tokens.textMuted, marginBottom: 8 }}>Sort Priority</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {([
+                  { key: 'fill_rate'    as const, icon: '📊', title: 'MC Fill Rate ↑',
+                    hint: 'Prioritise by MC fill rate ascending — fill worst-performing MCs first' },
+                  { key: 'combined_req' as const, icon: '📦', title: 'Combined Req ↓',
+                    hint: 'Prioritise by total requirement descending — highest demand first' },
+                  { key: 'festive_req'  as const, icon: '✨', title: 'Festive + Req ↓',
+                    hint: 'Festive season boost + combined req — event-weighted sort' },
+                ] as const).map(opt => (
+                  <div key={opt.key} onClick={() => setSortMode(opt.key)} style={{
+                    border: `1.5px solid ${sortMode === opt.key ? '#f59e0b' : DK.cardBorder}`,
+                    borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
+                    background: sortMode === opt.key ? '#1a1200' : DK.cardBg,
+                    transition: 'border-color .15s, background .15s',
+                  }}>
+                    {sortMode === opt.key && (
+                      <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
+                        borderRadius: 4, fontWeight: 600, background: '#1a1200', color: '#fbbf24',
+                        border: '1px solid #f59e0b40' }}>Active</span>
+                    )}
+                    <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: sortMode === opt.key ? '#fbbf24' : tokens.textPrimary, marginBottom: 4 }}>{opt.title}</div>
+                    <div style={{ fontSize: 11, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <DkCollapse title="REQ CSV Overrides"
               defaultOpen={Object.keys(reqCsvMeta).length > 0}
               badge={Object.keys(reqCsvMeta).length > 0
@@ -1380,7 +1439,6 @@ export default function DistributionModel() {
             </DkCollapse>
           </div>
         </div>
-
         {/* ── Step 6: Store Priority ───────────────────────────────────────── */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>

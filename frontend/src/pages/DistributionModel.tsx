@@ -1578,6 +1578,23 @@ export default function DistributionModel() {
                       </table>
                     </div>
                   )}
+                  {/* Download full REQ CSV */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <a
+                      href={`/api/distribution/req-src-download?req_source=${reqSource}&biz_segment=${bizSegment}&mode=${reqSrcMode}`}
+                      download={`final_req_${reqSrcMode}_${bizSegment}.csv`}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7,
+                        background: 'linear-gradient(135deg, #0284c7, #0369a1)', color: '#fff',
+                        textDecoration: 'none', letterSpacing: '0.02em',
+                      }}>
+                      ⬇ Download Final REQ CSV
+                    </a>
+                    <span style={{ fontSize: 11, color: tokens.textMuted }}>
+                      All barcodes · mode: <strong style={{ color: tokens.textSecondary }}>{reqSrcMode}</strong> · {bizSegment}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

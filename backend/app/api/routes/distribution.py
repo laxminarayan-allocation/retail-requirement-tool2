@@ -393,6 +393,80 @@ async def req_src_preview(
         return APIResponse.fail(message=str(exc))
 
 
+@router.get('/req-src-download')
+async def req_src_download(
+    req_source: str = 'GRC',
+    biz_segment: str = 'BOTH',
+    mode: str = 'oracle',
+):
+    """Download the full final REQ as CSV (all barcodes, not just sample)."""
+    from fastapi.responses import StreamingResponse
+    try:
+        src_key = req_source.upper()
+        frames = []
+        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+            if src_key == 'BOTH' or (src_key == 'GRC' and key == 'grc') or (src_key == 'WMS' and key == 'wms'):
+                df = _load(_CK, obj)
+                if df is not None:
+                    df = df.copy(); df.columns = [c.lower() for c in df.columns]
+                    seg = biz_segment.upper()
+                    if seg != 'BOTH' and 'segment' in df.columns:
+                        df = df[df['segment'].str.upper() == seg]
+                    frames.append(df)
+        if not frames:
+            raise HTTPException(status_code=400, detail='Barcode parquets not cached.')
+        oracle_df = pd.concat(frames).drop_duplicates(subset=['icode']).reset_index(drop=True)
+        req_col = next((c for c in ['req', 'combined_req', 'dist_req'] if c in oracle_df.columns), None)
+        if req_col is None:
+            raise HTTPException(status_code=400, detail='No REQ column found in parquet.')
+        oracle_df['oracle_req'] = pd.to_numeric(oracle_df[req_col], errors='coerce').fillna(0).astype(int)
+
+        csv_df = None
+        if _uploaded_req.get('barcode') is not None:
+            csv_df = _uploaded_req['barcode'].copy()
+            csv_df.columns = [c.lower() for c in csv_df.columns]
+            for col in ['req', 'combined_req', 'dist_req']:
+                if col in csv_df.columns:
+                    csv_df.rename(columns={col: 'csv_req'}, inplace=True); break
+            if 'csv_req' not in csv_df.columns:
+                csv_df = None
+
+        merged = oracle_df[['icode', 'oracle_req']].copy()
+        if csv_df is not None and 'icode' in csv_df.columns:
+            merged = merged.merge(csv_df[['icode', 'csv_req']], on='icode', how='left')
+            merged['csv_req'] = merged['csv_req'].fillna(0).astype(int)
+        else:
+            merged['csv_req'] = 0
+
+        m = mode.lower()
+        if m == 'oracle':
+            merged['final_req'] = merged['oracle_req']
+        elif m == 'csv':
+            merged['final_req'] = merged['csv_req']
+        elif m == 'csv_priority':
+            merged['final_req'] = merged.apply(
+                lambda r: int(r['csv_req']) if int(r['csv_req']) > 0 else int(r['oracle_req']), axis=1)
+        elif m == 'max':
+            merged['final_req'] = merged[['oracle_req','csv_req']].max(axis=1).astype(int)
+        elif m == 'sum':
+            merged['final_req'] = (merged['oracle_req'] + merged['csv_req']).astype(int)
+        else:
+            raise HTTPException(status_code=400, detail=f'Unknown mode: {mode}')
+
+        out = io.StringIO()
+        merged[['icode','oracle_req','csv_req','final_req']].to_csv(out, index=False)
+        out.seek(0)
+        filename = f'final_req_{mode}_{biz_segment}.csv'
+        return StreamingResponse(io.BytesIO(out.read().encode()),
+                                 media_type='text/csv',
+                                 headers={'Content-Disposition': f'attachment; filename="{filename}"'})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error('req_src_download: %s', exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # ── Store x Barcode cross-join endpoints
 
 @router.get('/store-barcode/preview')

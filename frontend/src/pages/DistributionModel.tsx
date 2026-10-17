@@ -414,6 +414,11 @@ export default function DistributionModel() {
   const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number}|null>(null)
   const [sbLoading, setSbLoading] = useState(false)
   const [sbMsg, setSbMsg] = useState<string|null>(null)
+  const [reqSrcMode, setReqSrcMode] = useState<'oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
+  const [reqSrcApplied, setReqSrcApplied] = useState<'oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
+  const [reqSrcPreview, setReqSrcPreview] = useState<{oracle_total:number;csv_total:number;result_total:number;sample:Array<{icode:string;oracle:number;csv:number;result:number}>}|null>(null)
+  const [reqSrcPreviewLoading, setReqSrcPreviewLoading] = useState(false)
+  const [reqSrcMsg, setReqSrcMsg] = useState<string|null>(null)
   const [sourceMode, setSourceMode] = useState<'oracle'|'upload'|'both'>('oracle')
   const [csvFallback, setCsvFallback] = useState<'oracle'|'zero'>('oracle')
   const [olStatus,    setOlStatus]    = useState<{ready: boolean; rows: number; cached_at?: string} | null>(null)
@@ -491,6 +496,17 @@ export default function DistributionModel() {
       setImMsg(`✗ ${e instanceof Error ? e.message : 'Download failed'}`)
     } finally { setImLoading(false) }
   }, [fetchImStatus])
+
+  const fetchReqSrcPreview = useCallback(async (mode: 'oracle'|'csv'|'csv_priority'|'max'|'sum') => {
+    setReqSrcPreviewLoading(true); setReqSrcMsg(null); setReqSrcPreview(null)
+    try {
+      const params = new URLSearchParams({ req_source: reqSource, biz_segment: bizSegment, mode })
+      const res = await apiFetch('GET', `/distribution/req-src-preview?${params}`)
+      setReqSrcPreview(res as {oracle_total:number;csv_total:number;result_total:number;sample:Array<{icode:string;oracle:number;csv:number;result:number}>})
+    } catch (e: unknown) {
+      setReqSrcMsg(`✗ ${e instanceof Error ? e.message : 'Preview failed'}`)
+    } finally { setReqSrcPreviewLoading(false) }
+  }, [reqSource, bizSegment])
 
   const fetchStoreBarcodePreview = useCallback(async () => {
     setSbLoading(true); setSbMsg(null); setSbPreview(null)
@@ -1335,6 +1351,112 @@ export default function DistributionModel() {
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+{/* REQ Source Mode */}
+            <div style={{ paddingBottom: 16, borderBottom: `1px solid ${DK.cardBorder}` }}>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+                color: tokens.textMuted, marginBottom: 8 }}>REQ Source</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 14 }}>
+                {([
+                  { key: 'oracle'       as const, icon: '🏛', title: 'Oracle Only',
+                    hint: 'Pull REQ directly from Oracle parquet', accent: '#22c55e', bg: '#0a1f0a' },
+                  { key: 'csv'         as const, icon: '📄', title: 'CSV Only',
+                    hint: 'Use uploaded CSV REQ; 0 for unmatched barcodes', accent: '#38bdf8', bg: '#082f49' },
+                  { key: 'csv_priority' as const, icon: '📌', title: 'CSV Priority',
+                    hint: 'CSV first — Oracle fallback for unmatched rows', accent: '#a78bfa', bg: '#1e1040' },
+                  { key: 'max'         as const, icon: '⬆️', title: 'Max (Both)',
+                    hint: 'max(csv_req, oracle_req) per barcode', accent: '#f59e0b', bg: '#1a1200' },
+                  { key: 'sum'         as const, icon: '➕', title: 'Sum (Both)',
+                    hint: 'csv_req + oracle_req per barcode', accent: '#f87171', bg: '#1f0a0a' },
+                ] as const).map(opt => (
+                  <div key={opt.key} onClick={() => { setReqSrcMode(opt.key); setReqSrcPreview(null); setReqSrcMsg(null) }}
+                    style={{ border: `1.5px solid ${reqSrcMode === opt.key ? opt.accent : DK.cardBorder}`,
+                      borderRadius: 10, padding: '10px 12px', cursor: 'pointer', position: 'relative',
+                      background: reqSrcMode === opt.key ? opt.bg : DK.cardBg,
+                      transition: 'border-color .15s, background .15s' }}>
+                    {reqSrcMode === opt.key && (
+                      <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 9, padding: '1px 5px',
+                        borderRadius: 3, fontWeight: 700, background: opt.bg, color: opt.accent,
+                        border: `1px solid ${opt.accent}50` }}>✓</span>
+                    )}
+                    <div style={{ fontSize: 16, marginBottom: 5 }}>{opt.icon}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700,
+                      color: reqSrcMode === opt.key ? opt.accent : tokens.textPrimary, marginBottom: 3 }}>{opt.title}</div>
+                    <div style={{ fontSize: 10, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Preview + Apply row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={() => fetchReqSrcPreview(reqSrcMode)} disabled={reqSrcPreviewLoading}
+                  style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none',
+                    background: reqSrcPreviewLoading ? DK.cardBorder : '#4f46e5',
+                    color: reqSrcPreviewLoading ? tokens.textMuted : '#fff',
+                    cursor: reqSrcPreviewLoading ? 'not-allowed' : 'pointer', opacity: reqSrcPreviewLoading ? 0.7 : 1 }}>
+                  {reqSrcPreviewLoading ? 'Loading…' : '🔍 Preview REQ'}
+                </button>
+                {reqSrcApplied !== reqSrcMode && reqSrcPreview && (
+                  <button onClick={() => { setReqSrcApplied(reqSrcMode); setReqSrcMsg(`✓ Applied: ${reqSrcMode}`) }}
+                    style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none',
+                      background: '#16a34a', color: '#fff', cursor: 'pointer' }}>
+                    ✓ Apply
+                  </button>
+                )}
+                {reqSrcApplied === reqSrcMode && (
+                  <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 5, fontWeight: 600,
+                    background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>✓ Applied</span>
+                )}
+                {reqSrcMsg && (
+                  <span style={{ fontSize: 12, color: reqSrcMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{reqSrcMsg}</span>
+                )}
+              </div>
+
+              {/* Preview result panel */}
+              {reqSrcPreview && (
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {([
+                      { label: 'Oracle REQ Total',  value: reqSrcPreview.oracle_total,  color: '#4ade80' },
+                      { label: 'CSV REQ Total',     value: reqSrcPreview.csv_total,     color: '#38bdf8' },
+                      { label: 'Result REQ Total',  value: reqSrcPreview.result_total,  color: '#a78bfa' },
+                    ] as const).map(t => (
+                      <div key={t.label} style={{ padding: '10px 14px', borderRadius: 8, minWidth: 130,
+                        background: DK.cardBg, border: `1px solid ${DK.cardBorder}` }}>
+                        <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{t.label}</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: t.color }}>{t.value.toLocaleString('en-IN')}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {reqSrcPreview.sample.length > 0 && (
+                    <div style={{ background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                        color: tokens.textMuted, borderBottom: `1px solid ${DK.cardBorder}` }}>Sample (top 5 rows)</div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                        <thead>
+                          <tr style={{ background: '#0a1a0a' }}>
+                            {['ICODE','Oracle REQ','CSV REQ','Result'].map(h => (
+                              <th key={h} style={{ padding: '6px 12px', textAlign: h === 'ICODE' ? 'left' : 'right',
+                                color: tokens.textMuted, fontWeight: 600 }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reqSrcPreview.sample.map((row, i) => (
+                            <tr key={i} style={{ borderTop: `1px solid ${DK.cardBorder}` }}>
+                              <td style={{ padding: '5px 12px', color: tokens.textSecondary, fontFamily: 'monospace' }}>{row.icode}</td>
+                              <td style={{ padding: '5px 12px', textAlign: 'right', color: '#4ade80' }}>{row.oracle.toLocaleString('en-IN')}</td>
+                              <td style={{ padding: '5px 12px', textAlign: 'right', color: '#38bdf8' }}>{row.csv.toLocaleString('en-IN')}</td>
+                              <td style={{ padding: '5px 12px', textAlign: 'right', color: '#a78bfa', fontWeight: 700 }}>{row.result.toLocaleString('en-IN')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Biz Segment cards */}
             <div>

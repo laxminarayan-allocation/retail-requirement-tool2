@@ -306,6 +306,93 @@ async def distribution_store_list():
         return APIResponse.fail(message=str(exc))
 
 
+# ── REQ source-mode preview ────────────────────────────────────────────────
+
+@router.get('/req-src-preview')
+async def req_src_preview(
+    req_source: str = 'GRC',
+    biz_segment: str = 'BOTH',
+    mode: str = 'oracle',  # oracle | csv | csv_priority | max | sum
+):
+    try:
+        src_key = req_source.upper()
+        # load oracle barcode REQ
+        frames = []
+        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+            if src_key == 'BOTH' or (src_key == 'GRC' and key == 'grc') or (src_key == 'WMS' and key == 'wms'):
+                df = _load(_CK, obj)
+                if df is not None:
+                    df = df.copy(); df.columns = [c.lower() for c in df.columns]
+                    seg = biz_segment.upper()
+                    if seg != 'BOTH' and 'segment' in df.columns:
+                        df = df[df['segment'].str.upper() == seg]
+                    frames.append(df)
+        if not frames:
+            return APIResponse.fail(message='Barcode parquets not cached. Download from Master Data first.')
+        oracle_df = pd.concat(frames).drop_duplicates(subset=['icode']).reset_index(drop=True)
+        req_col = None
+        for c in ['req', 'combined_req', 'dist_req']:
+            if c in oracle_df.columns:
+                req_col = c; break
+        if req_col is None:
+            return APIResponse.fail(message='No REQ column found in parquet (expected: req, combined_req, dist_req).')
+        oracle_df['_oracle_req'] = pd.to_numeric(oracle_df[req_col], errors='coerce').fillna(0).astype(int)
+        oracle_total = int(oracle_df['_oracle_req'].sum())
+
+        # load CSV REQ if available (barcode-level is most granular)
+        csv_df = None
+        if _uploaded_req.get('barcode') is not None:
+            csv_df = _uploaded_req['barcode'].copy()
+            csv_df.columns = [c.lower() for c in csv_df.columns]
+            for col in ['req', 'combined_req', 'dist_req']:
+                if col in csv_df.columns:
+                    csv_df.rename(columns={col: '_csv_req'}, inplace=True); break
+            if '_csv_req' not in csv_df.columns:
+                csv_df = None
+        csv_total = int(csv_df['_csv_req'].sum()) if csv_df is not None else 0
+
+        # merge oracle + csv
+        merged = oracle_df[['icode', '_oracle_req']].copy()
+        if csv_df is not None and 'icode' in csv_df.columns:
+            merged = merged.merge(csv_df[['icode', '_csv_req']], on='icode', how='left')
+            merged['_csv_req'] = merged['_csv_req'].fillna(0).astype(int)
+        else:
+            merged['_csv_req'] = 0
+
+        # apply mode
+        m = mode.lower()
+        if m == 'oracle':
+            merged['_result'] = merged['_oracle_req']
+        elif m == 'csv':
+            merged['_result'] = merged['_csv_req']
+        elif m == 'csv_priority':
+            merged['_result'] = merged.apply(
+                lambda r: int(r['_csv_req']) if int(r['_csv_req']) > 0 else int(r['_oracle_req']), axis=1)
+        elif m == 'max':
+            merged['_result'] = merged[['_oracle_req','_csv_req']].max(axis=1).astype(int)
+        elif m == 'sum':
+            merged['_result'] = (merged['_oracle_req'] + merged['_csv_req']).astype(int)
+        else:
+            return APIResponse.fail(message=f'Unknown mode: {mode}')
+
+        result_total = int(merged['_result'].sum())
+        sample = merged.nlargest(5, '_result')[['icode','_oracle_req','_csv_req','_result']]
+        sample_list = [
+            {'icode': str(r['icode']), 'oracle': int(r['_oracle_req']),
+             'csv': int(r['_csv_req']), 'result': int(r['_result'])}
+            for _, r in sample.iterrows()
+        ]
+        return APIResponse.ok(data={
+            'oracle_total': oracle_total,
+            'csv_total': csv_total,
+            'result_total': result_total,
+            'sample': sample_list,
+        })
+    except Exception as exc:
+        logger.error('req_src_preview: %s', exc)
+        return APIResponse.fail(message=str(exc))
+
+
 # ── Store x Barcode cross-join endpoints
 
 @router.get('/store-barcode/preview')

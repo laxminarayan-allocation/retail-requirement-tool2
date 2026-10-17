@@ -946,6 +946,7 @@ export default function DistributionModel() {
           { n: 6, label: 'Priority',  state: 'done' },
           { n: 7, label: 'Hold',      state: holdRules.length > 0 ? 'done' : 'idle' },
           { n: 8, label: 'Run',       state: distResult ? 'done' : (distLoading || baseLoading) ? 'running' : 'idle' },
+          { n: 9, label: 'Summary',   state: distResult ? 'done' : 'idle' },
         ]
         return (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
@@ -2097,16 +2098,16 @@ export default function DistributionModel() {
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
-                    { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN') },
-                    { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN') },
-                    { label: 'Barcodes Total',  val: distResult.icodes_total },
-                    { label: 'Fully Covered',   val: distResult.icodes_fully_covered },
-                    ...(distResult.ol_held_count ? [{ label: 'OL Hold', val: distResult.ol_held_count.toLocaleString('en-IN') }] : []),
-                    { label: 'Time',             val: `${Math.round(distResult.elapsed_ms / 1000)}s` },
+                    { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN'), color: '#4ade80' },
+                    { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN'), color: '#38bdf8' },
+                    { label: 'Barcodes Total',  val: distResult.icodes_total, color: '#a78bfa' },
+                    { label: 'Fully Covered',   val: distResult.icodes_fully_covered, color: '#a78bfa' },
+                    ...(distResult.ol_held_count ? [{ label: 'OL Hold', val: distResult.ol_held_count.toLocaleString('en-IN'), color: '#f87171' }] : []),
+                    { label: 'Time',             val: `${Math.round(distResult.elapsed_ms / 1000)}s`, color: tokens.textMuted },
                   ].map(stat => (
                     <div key={stat.label}>
                       <div style={{ fontSize: 11, color: tokens.textMuted }}>{stat.label}</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa' }}>{stat.val}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: stat.color }}>{stat.val}</div>
                     </div>
                   ))}
                 </div>
@@ -2208,6 +2209,121 @@ export default function DistributionModel() {
               </div>
             </div>
           )}
+
+          {/* ── Step 9: Summary & Final Sheet ─────────────────────────── */}
+          {distResult && (
+            <div style={{ background: DK.card, border: `1px solid ${DK.cardBorder}`, borderRadius: 10, padding: '16px 20px', marginTop: 8 }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                  ✓
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: tokens.textPrimary }}>Step 9 — Summary & Final Sheet</div>
+                <div style={{ marginLeft: 'auto', fontSize: 11, color: '#4ade80', fontWeight: 600, background: '#14532d', padding: '2px 8px', borderRadius: 10 }}>
+                  Run Complete
+                </div>
+              </div>
+
+              {/* Big KPI row */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+                {[
+                  { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN'), color: '#4ade80', bg: '#14532d' },
+                  { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN'),  color: '#38bdf8', bg: '#0c3055' },
+                  { label: 'Barcodes',        val: String(distResult.icodes_total),                     color: '#a78bfa', bg: '#2e1065' },
+                  { label: 'Fill Rate',
+                    val: (() => {
+                      const total = distResult.icodes_total || 1
+                      return `${Math.round((distResult.icodes_fully_covered / total) * 100)}%`
+                    })(),
+                    color: '#fb923c', bg: '#431407' },
+                  { label: 'Run Time',        val: `${Math.round(distResult.elapsed_ms / 1000)}s`,     color: tokens.textMuted, bg: DK.cardBorder },
+                ].map(k => (
+                  <div key={k.label} style={{ flex: '1 1 120px', background: k.bg, borderRadius: 8, padding: '10px 14px', minWidth: 100 }}>
+                    <div style={{ fontSize: 10, color: k.color, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>{k.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Division breakdown (compact) */}
+              {(divSummary ?? []).length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: tokens.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Division Breakdown</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {(divSummary ?? []).map(d => {
+                      const pct = d.rows_total > 0 ? Math.round(d.rows_nonzero / d.rows_total * 100) : 0
+                      return (
+                        <div key={d.division} style={{ background: DK.cardBorder, borderRadius: 6, padding: '5px 10px', fontSize: 11 }}>
+                          <span style={{ color: tokens.textPrimary, fontWeight: 700 }}>{d.division}</span>
+                          <span style={{ color: tokens.textMuted, marginLeft: 6 }}>{d.rows_nonzero.toLocaleString('en-IN')} units</span>
+                          <span style={{ marginLeft: 6, color: pct >= 60 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Downloads + Save to Disk */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                <button onClick={exportCsv} disabled={csvLoading}
+                  style={{ ...S.btn('#0284c7', csvLoading), fontSize: 12, padding: '7px 16px' }}>
+                  {csvLoading ? '⏳ CSV…' : '⬇ Download CSV'}
+                </button>
+                <button onClick={exportDistribution} disabled={exportLoading}
+                  style={{ ...S.btn('#059669', exportLoading), fontSize: 12, padding: '7px 16px' }}>
+                  {exportLoading ? '⏳ Excel…' : '⬇ Download Excel'}
+                </button>
+                <button
+                  onClick={async () => {
+                    setSaveToDiskLoading(true)
+                    try {
+                      const res = await apiFetch('POST', '/distribution/save-to-disk') as { save_path: string; files: string[] }
+                      setSaveToDiskPath(res.save_path)
+                    } catch { /* silent */ } finally { setSaveToDiskLoading(false) }
+                  }}
+                  disabled={saveToDiskLoading}
+                  style={{ ...S.btn('#7c3aed', saveToDiskLoading), fontSize: 12, padding: '7px 16px' }}>
+                  {saveToDiskLoading ? '⏳ Saving…' : '💾 Save to Disk'}
+                </button>
+              </div>
+
+              {/* Manual save path */}
+              {saveToDiskPath && (
+                <div style={{ marginTop: 10, padding: '8px 12px', background: '#14532d', border: '1px solid #22c55e40', borderRadius: 7, fontSize: 12 }}>
+                  <div style={{ color: '#4ade80', fontWeight: 700, marginBottom: 2 }}>✓ Saved to disk</div>
+                  <div style={{ color: '#86efac', fontFamily: 'monospace', wordBreak: 'break-all', userSelect: 'all' }}>{saveToDiskPath}</div>
+                </div>
+              )}
+
+              {/* Scheduler auto-run last save path */}
+              {schedStatus?.last_save_path && (
+                <div style={{ marginTop: 10, padding: '10px 14px', background: '#1e1b4b', border: '1px solid #4338ca40', borderRadius: 7, fontSize: 12 }}>
+                  <div style={{ color: '#818cf8', fontWeight: 700, marginBottom: 4 }}>⏰ Last Auto-Run Output</div>
+                  <div style={{ color: '#a5b4fc', fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: 6, userSelect: 'all' }}>
+                    📁 {schedStatus.last_save_path}
+                  </div>
+                  {schedStatus.saved_files.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {schedStatus.saved_files.map(f => (
+                        <div key={f} style={{ color: '#c7d2fe', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#4ade80' }}>📄</span>
+                          <span style={{ fontFamily: 'monospace', userSelect: 'all' }}>{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {schedStatus.last_run_at && (
+                    <div style={{ marginTop: 6, color: '#6366f1', fontSize: 10 }}>
+                      Saved on {new Date(schedStatus.last_run_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
 
       </div>

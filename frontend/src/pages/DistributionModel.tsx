@@ -622,6 +622,13 @@ export default function DistributionModel() {
       .catch((e: any) => setFetchError(e?.response?.data?.message || 'Backend unreachable'))
   }, [fetchImStatus, fetchOlStatus])
 
+  // Poll scheduler status every 3s while running
+  useEffect(() => {
+    if (schedStatus?.last_status !== 'running') return
+    const t = setInterval(() => { fetchSchedStatus() }, 3000)
+    return () => clearInterval(t)
+  }, [schedStatus?.last_status, fetchSchedStatus])
+
   // Auto-load on mount + auto-refresh when source/segment changes
   useEffect(() => {
     const t = setTimeout(() => { fetchBarcodePreview() }, 300)
@@ -883,7 +890,11 @@ export default function DistributionModel() {
 
   return (
     <div style={S.page}>
-      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        @keyframes pulse-dot { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:.4; transform:scale(1.5) } }
+        .sched-running-dot { animation: pulse-dot 1.2s ease-in-out infinite }
+      `}</style>
       <ExportModal />
       <StaleBanner />
       {fetchError && (
@@ -2000,7 +2011,12 @@ export default function DistributionModel() {
               border: `1px solid ${schedEnabled ? '#8b5cf6' : DK.cardBorder}`,
               borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary }}>⏰ Daily Auto-Run</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary }}>⏰ Daily Auto-Run</div>
+                  {schedStatus?.last_status === 'running' && (
+                    <span className="sched-running-dot" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
+                  )}
+                </div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                   <input type='checkbox' checked={schedEnabled}
                     onChange={async e => {
@@ -2026,8 +2042,14 @@ export default function DistributionModel() {
                   {schedStatus.next_run_at && <div>⏰ Next: {schedStatus.next_run_at}</div>}
                   {schedStatus.last_run_at && <div>✔ Last: {schedStatus.last_run_at}</div>}
                   {schedStatus.last_status && (
-                    <div style={{ color: schedStatus.last_status === 'success' ? '#4ade80' : schedStatus.last_status === 'running' ? '#fbbf24' : '#f87171', fontWeight: 600 }}>
-                      Status: {schedStatus.last_status}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5,
+                      color: schedStatus.last_status === 'success' ? '#4ade80' : schedStatus.last_status === 'running' ? '#4ade80' : '#f87171',
+                      fontWeight: 600 }}>
+                      {schedStatus.last_status === 'running' && (
+                        <span className="sched-running-dot" style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
+                      )}
+                      {schedStatus.last_status === 'success' && <span style={{ color: '#4ade80' }}>✓</span>}
+                      {schedStatus.last_status === 'running' ? 'Running…' : schedStatus.last_status}
                     </div>
                   )}
                   {schedStatus.last_save_path && (

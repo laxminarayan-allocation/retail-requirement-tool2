@@ -369,12 +369,28 @@ export default function DistributionModel() {
 
   // ── REQ CSV Uploads (Step 2) ───────────────────────────────────────────────
   type ReqCsvKey = 'barcode' | 'mc' | 'art' | 'mrp' | 'size'
-  const REQ_CSV_SPECS: { key: ReqCsvKey; label: string; hint: string }[] = [
-    { key: 'barcode', label: 'Barcode × Store REQ', hint: 'ICODE, STORE_NAME, REQ' },
-    { key: 'mc',      label: 'MC REQ',              hint: 'DEPARTMENT, DISPLAY_TYPE, STORE_NAME, REQ' },
-    { key: 'art',     label: 'ART REQ',             hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, STORE_NAME, REQ' },
-    { key: 'mrp',     label: 'MRP REQ',             hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP, STORE_NAME, REQ' },
-    { key: 'size',    label: 'SIZE REQ',            hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4, STORE_NAME, SZ_REQ' },
+  const REQ_CSV_SPECS: { key: ReqCsvKey; label: string; hint: string; oracleViews: { name: string; color: string; bg: string; border: string }[] }[] = [
+    { key: 'barcode', label: 'Barcode × Store REQ', hint: 'ICODE, STORE_NAME, REQ',
+      oracleViews: [
+        { name: 'V_BARCODE_REQ_APPS_GRC_V2', color: '#4ade80', bg: '#0a2a12', border: '#22c55e30' },
+        { name: 'V_BARCODE_REQ_APPS_WMS_V2', color: '#38bdf8', bg: '#082f49', border: '#0369a130' },
+      ] },
+    { key: 'mc',  label: 'MC REQ', hint: 'DEPARTMENT, DISPLAY_TYPE, STORE_NAME, REQ',
+      oracleViews: [
+        { name: 'V_MC_REQ_APPS_2', color: '#4ade80', bg: '#0a2a12', border: '#22c55e30' },
+        { name: 'V_MC_REQ_GM',     color: '#a78bfa', bg: '#1e1040', border: '#7c3aed30' },
+      ] },
+    { key: 'art', label: 'ART REQ', hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, STORE_NAME, REQ',
+      oracleViews: [
+        { name: 'V_ART_REQ_APPS', color: '#4ade80', bg: '#0a2a12', border: '#22c55e30' },
+        { name: 'V_ART_REQ_GM',   color: '#a78bfa', bg: '#1e1040', border: '#7c3aed30' },
+      ] },
+    { key: 'mrp', label: 'MRP REQ', hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP, STORE_NAME, REQ',
+      oracleViews: [
+        { name: 'V_MRP_REQ_APPS', color: '#fb923c', bg: '#1a0a00', border: '#ea580c30' },
+      ] },
+    { key: 'size', label: 'SIZE REQ', hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4, STORE_NAME, SZ_REQ',
+      oracleViews: [] },
   ]
   const [reqCsvMeta,    setReqCsvMeta]    = useState<Partial<Record<ReqCsvKey, {filename: string; rows: number}>>>({})
   const [reqCsvUploading, setReqCsvUploading] = useState<Partial<Record<ReqCsvKey, boolean>>>({})
@@ -1677,6 +1693,17 @@ export default function DistributionModel() {
                         filename={meta?.filename} rows={meta?.rows} uploading={uploading}
                         onUpload={f => handleReqCsvUpload(spec.key, f)} onClear={() => clearReqCsv(spec.key)}
                         inputRef={{ current: reqCsvRefs.current[spec.key] ?? null }} />
+                      {spec.oracleViews.length > 0 && (
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4, paddingLeft: 2 }}>
+                          {spec.oracleViews.map(v => (
+                            <span key={v.name} style={{ fontSize: 9, fontFamily: 'monospace', padding: '2px 7px',
+                              borderRadius: 3, color: v.color, background: v.bg, border: `1px solid ${v.border}`,
+                              letterSpacing: '0.02em' }}>
+                              🗄 {v.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
                     </div>
                   )

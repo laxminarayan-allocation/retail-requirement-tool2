@@ -406,6 +406,8 @@ export default function DistributionModel() {
   }
 
   const [imStatus,    setImStatus]    = useState<ItemMasterStatus | null>(null)
+  const [imLoading,   setImLoading]   = useState(false)
+  const [imMsg,       setImMsg]       = useState<string | null>(null)
   const [barcodePreview, setBarcodePreview] = useState<{total: number; breakdown: {wh_source: string; count: number}[]} | null>(null)
   const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
   const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
@@ -475,6 +477,17 @@ export default function DistributionModel() {
       setFetchError(e?.response?.data?.message || 'Item master status fetch failed')
     }
   }, [])
+
+  const downloadImMaster = useCallback(async () => {
+    setImLoading(true); setImMsg(null)
+    try {
+      await apiFetch('POST', '/distribution/item-master/download')
+      await fetchImStatus()
+      setImMsg('✓ Item Master refreshed from Oracle')
+    } catch (e: unknown) {
+      setImMsg(`✗ ${e instanceof Error ? e.message : 'Download failed'}`)
+    } finally { setImLoading(false) }
+  }, [fetchImStatus])
 
   const fetchOlStatus = useCallback(async () => {
     try {
@@ -954,7 +967,7 @@ export default function DistributionModel() {
               background: imStatus?.ready ? '#14532d' : DK.cardBg,
               color: imStatus?.ready ? '#4ade80' : '#fbbf24',
               fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {imStatus?.ready ? '✓' : '2'}
+              {imLoading ? '↻' : imStatus?.ready ? '✓' : '2'}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Item Master Join</div>
@@ -967,18 +980,92 @@ export default function DistributionModel() {
               )}
             </div>
           </div>
-          {!imStatus?.ready ? (
-            <div style={{ padding: '8px 12px', background: '#451a00', border: '1px solid #d9780640',
-              borderRadius: 7, fontSize: 12, color: '#fbbf24' }}>
-              ⚠ Download Item Master from <strong>Master Data</strong> page first
+
+          {/* Last cached info row */}
+          {imStatus?.ready ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+              padding: '10px 14px', background: '#061706', border: '1px solid #22c55e30', borderRadius: 8 }}>
+              <span style={{ fontSize: 18 }}>✅</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4ade80' }}>
+                  {imStatus.rows.toLocaleString('en-IN')} rows loaded
+                </div>
+                <div style={{ fontSize: 11, color: tokens.textMuted, marginTop: 2 }}>
+                  Last updated: {imStatus.cached_at ?? '—'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={fetchImStatus} disabled={imLoading}
+                  style={{ padding: '5px 12px', fontSize: 11, fontWeight: 600, borderRadius: 6,
+                    border: `1px solid ${DK.cardBorder}`, background: 'transparent',
+                    color: tokens.textMuted, cursor: imLoading ? 'not-allowed' : 'pointer' }}>
+                  ↺ Check
+                </button>
+                <button onClick={downloadImMaster} disabled={imLoading}
+                  style={{ padding: '5px 12px', fontSize: 11, fontWeight: 700, borderRadius: 6, border: 'none',
+                    background: imLoading ? DK.cardBorder : '#15803d',
+                    color: '#fff', cursor: imLoading ? 'not-allowed' : 'pointer',
+                    opacity: imLoading ? 0.7 : 1 }}>
+                  {imLoading ? 'Loading…' : '↓ Refresh from Oracle'}
+                </button>
+              </div>
             </div>
           ) : (
-            <div style={{ fontSize: 12, color: '#4ade80' }}>
-              ✓ {imStatus.rows.toLocaleString('en-IN')} rows ready · cached {imStatus.cached_at ?? '—'}
+            <div style={{ marginBottom: 14, padding: '10px 14px', background: '#451a00',
+              border: '1px solid #d9780640', borderRadius: 8,
+              display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 18 }}>⚠</span>
+              <div style={{ flex: 1, fontSize: 12, color: '#fbbf24' }}>
+                Item Master not cached — load from Oracle or it was cleared
+              </div>
+              <button onClick={downloadImMaster} disabled={imLoading}
+                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none',
+                  background: imLoading ? DK.cardBorder : '#d97706',
+                  color: imLoading ? tokens.textMuted : '#000',
+                  cursor: imLoading ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
+                {imLoading ? 'Loading…' : '↓ Load from Oracle'}
+              </button>
+            </div>
+          )}
+
+          {/* Load mode selector */}
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+            color: tokens.textMuted, marginBottom: 8 }}>Load Mode</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: imMsg ? 10 : 0 }}>
+            {([
+              { val: 'cache' as const, label: 'Use Last Cache', hint: 'Use existing cached data (fast)', icon: '⚡' },
+              { val: 'refresh' as const, label: 'Refresh from Oracle', hint: 'Re-download fresh from Oracle ERP', icon: '🔄' },
+            ] as const).map(opt => {
+              const isCache = opt.val === 'cache'
+              return (
+                <button key={opt.val} onClick={() => opt.val === 'refresh' ? downloadImMaster() : fetchImStatus()}
+                  disabled={imLoading}
+                  style={{ flex: 1, padding: '10px 14px', borderRadius: 8, cursor: imLoading ? 'not-allowed' : 'pointer',
+                    border: `1.5px solid ${isCache ? '#22c55e' : DK.cardBorder}`,
+                    background: isCache ? '#0a1f0a' : DK.cardBg,
+                    opacity: imLoading ? 0.6 : 1,
+                    display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left' }}>
+                  <span style={{ fontSize: 18 }}>{opt.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700,
+                      color: isCache ? '#4ade80' : tokens.textSecondary }}>
+                      {opt.label}
+                      {isCache && <span style={{ fontSize: 10, marginLeft: 6, padding: '1px 5px', borderRadius: 3,
+                        background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>Default</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: tokens.textMuted, marginTop: 2 }}>{opt.hint}</div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {imMsg && (
+            <div style={{ marginTop: 8, fontSize: 12, color: imMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>
+              {imMsg}
             </div>
           )}
         </div>
-
         {/* ── Step 3: Unique Barcode Preview ──────────────────────────────── */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${DK.cardBorder}` }}>

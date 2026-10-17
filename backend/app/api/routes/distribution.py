@@ -162,6 +162,85 @@ async def store_priority_status():
     return APIResponse.ok(data={k: v["meta"] for k, v in _uploaded_store_priority.items()})
 
 
+# ── Oracle view name overrides ────────────────────────────────────────────────
+# Slot keys map to one or two Oracle object names used in build-base.
+# User can override each via POST /distribution/view-config.
+# Persisted to data/config/oracle_view_overrides.json.
+
+_VIEW_CONFIG_PATH = Path(__file__).resolve().parents[4] / "data" / "config" / "oracle_view_overrides.json"
+_VIEW_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# Default view names per slot (matches hardcoded usage in build-base)
+_VIEW_DEFAULTS: dict[str, list[str]] = {
+    "barcode_grc":  ["V_BARCODE_REQ_APPS_GRC_V2"],
+    "barcode_wms":  ["V_BARCODE_REQ_APPS_WMS_V2"],
+    "mc_apps":      ["V_MC_REQ_APPS_2"],
+    "mc_gm":        ["V_MC_REQ_GM"],
+    "art_apps":     ["V_ART_REQ_APPS"],
+    "art_gm":       ["V_ART_REQ_GM"],
+    "mrp":          ["V_MRP_REQ_APPS"],
+}
+
+def _load_view_config() -> dict[str, str]:
+    """Return {slot: view_name} — user overrides merged over defaults."""
+    defaults = {k: v[0] for k, v in _VIEW_DEFAULTS.items()}
+    if _VIEW_CONFIG_PATH.exists():
+        try:
+            saved = json.loads(_VIEW_CONFIG_PATH.read_text(encoding="utf-8"))
+            defaults.update({k: v for k, v in saved.items() if k in defaults and v.strip()})
+        except Exception:
+            pass
+    return defaults
+
+def _save_view_config(cfg: dict[str, str]) -> None:
+    _VIEW_CONFIG_PATH.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def _vobj(slot: str) -> str:
+    """Resolve a slot to its (possibly overridden) Oracle object name."""
+    return _load_view_config().get(slot, _VIEW_DEFAULTS[slot][0])
+
+
+@router.get("/view-config", response_model=APIResponse)
+async def get_view_config():
+    cfg = _load_view_config()
+    return APIResponse.ok(data={
+        "config": cfg,
+        "defaults": {k: v[0] for k, v in _VIEW_DEFAULTS.items()},
+        "slots": {
+            "barcode_grc": {"label": "Barcode REQ — GRC",     "hint": "V_BARCODE_REQ_APPS_GRC_V2"},
+            "barcode_wms": {"label": "Barcode REQ — WMS",     "hint": "V_BARCODE_REQ_APPS_WMS_V2"},
+            "mc_apps":     {"label": "MC REQ — APPS",         "hint": "V_MC_REQ_APPS_2"},
+            "mc_gm":       {"label": "MC REQ — GM",           "hint": "V_MC_REQ_GM"},
+            "art_apps":    {"label": "ART REQ — APPS",        "hint": "V_ART_REQ_APPS"},
+            "art_gm":      {"label": "ART REQ — GM",          "hint": "V_ART_REQ_GM"},
+            "mrp":         {"label": "MRP REQ",               "hint": "V_MRP_REQ_APPS"},
+        },
+    })
+
+
+@router.post("/view-config", response_model=APIResponse)
+async def save_view_config(request: Request):
+    try:
+        body = await request.json()
+        cfg_in = body.get("config", {})
+        current = _load_view_config()
+        for slot, val in cfg_in.items():
+            if slot in _VIEW_DEFAULTS and isinstance(val, str) and val.strip():
+                current[slot] = val.strip().upper()
+        _save_view_config(current)
+        return APIResponse.ok(data={"config": current}, message="View config saved. Re-download affected parquets to apply.")
+    except Exception as exc:
+        return APIResponse.fail(message=str(exc))
+
+
+@router.post("/view-config/reset", response_model=APIResponse)
+async def reset_view_config():
+    if _VIEW_CONFIG_PATH.exists():
+        _VIEW_CONFIG_PATH.unlink()
+    return APIResponse.ok(data={"config": {k: v[0] for k, v in _VIEW_DEFAULTS.items()}},
+                          message="Reset to defaults.")
+
+
 # ── Uploaded REQ CSVs (barcode-store req + MC/ART/MRP/SIZE req overrides) ────
 # Each entry: key → {df, meta}
 _uploaded_req: dict = {}   # key: "barcode" | "mc" | "art" | "mrp" | "size"
@@ -283,7 +362,7 @@ async def distribution_store_list():
         return APIResponse.ok(data={"stores": _store_list_cache})
     try:
         stores = set()
-        for obj in ["V_BARCODE_REQ_APPS_GRC_V2", "V_BARCODE_REQ_APPS_WMS_V2"]:
+        for obj in [_vobj("barcode_grc"), _vobj("barcode_wms")]:
             df = _load("CK_A2166", obj)
             if df is not None and "store_name" in df.columns:
                 stores.update(df["store_name"].dropna().str.strip().unique().tolist())
@@ -318,7 +397,7 @@ async def req_src_preview(
         src_key = req_source.upper()
         # load oracle barcode REQ
         frames = []
-        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+        for obj, key in [(_vobj('barcode_grc'),'grc'),(_vobj('barcode_wms'),'wms')]:
             if src_key == 'BOTH' or (src_key == 'GRC' and key == 'grc') or (src_key == 'WMS' and key == 'wms'):
                 df = _load(_CK, obj)
                 if df is not None:
@@ -404,7 +483,7 @@ async def req_src_download(
     try:
         src_key = req_source.upper()
         frames = []
-        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+        for obj, key in [(_vobj('barcode_grc'),'grc'),(_vobj('barcode_wms'),'wms')]:
             if src_key == 'BOTH' or (src_key == 'GRC' and key == 'grc') or (src_key == 'WMS' and key == 'wms'):
                 df = _load(_CK, obj)
                 if df is not None:
@@ -481,7 +560,7 @@ async def store_barcode_preview(
         import json as _j
         src = req_source.upper()
         barcodes: set = set()
-        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+        for obj, key in [(_vobj('barcode_grc'),'grc'),(_vobj('barcode_wms'),'wms')]:
             if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
                 df = _load(_CK, obj)
                 if df is not None:
@@ -494,7 +573,7 @@ async def store_barcode_preview(
         total_barcodes = len(barcodes)
         store_list = list(_store_list_cache) if _store_list_cache else []
         if not store_list:
-            for obj in ['V_BARCODE_REQ_APPS_GRC_V2','V_BARCODE_REQ_APPS_WMS_V2']:
+            for obj in [_vobj('barcode_grc'), _vobj('barcode_wms')]:
                 df = _load(_CK, obj)
                 if df is not None:
                     df.columns = [c.lower() for c in df.columns]
@@ -542,7 +621,7 @@ async def store_barcode_csv(
     try:
         src = req_source.upper()
         frames = []
-        for obj, key in [('V_BARCODE_REQ_APPS_GRC_V2','grc'),('V_BARCODE_REQ_APPS_WMS_V2','wms')]:
+        for obj, key in [(_vobj('barcode_grc'),'grc'),(_vobj('barcode_wms'),'wms')]:
             if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
                 df = _load(_CK, obj)
                 if df is not None:
@@ -574,7 +653,7 @@ async def store_barcode_csv(
             bc_df = bc_df.merge(im, on='icode', how='left')
         store_list = list(_store_list_cache) if _store_list_cache else []
         if not store_list:
-            for obj in ['V_BARCODE_REQ_APPS_GRC_V2','V_BARCODE_REQ_APPS_WMS_V2']:
+            for obj in [_vobj('barcode_grc'), _vobj('barcode_wms')]:
                 df = _load(_CK, obj)
                 if df is not None:
                     df.columns = [c.lower() for c in df.columns]
@@ -997,11 +1076,11 @@ async def build_distribution_base(
         biz = biz_segment.upper()
         mc_frames = []
         if biz in ("APPS", "BOTH"):
-            mc_apps = _load(_CK, "V_MC_REQ_APPS_2")
+            mc_apps = _load(_CK, _vobj("mc_apps"))
             if mc_apps is not None:
                 mc_frames.append(mc_apps)
         if biz in ("GM", "BOTH"):
-            mc_gm = _load(_CK, "V_MC_REQ_GM")
+            mc_gm = _load(_CK, _vobj("mc_gm"))
             if mc_gm is not None:
                 mc_frames.append(mc_gm)
         if mc_frames:
@@ -1030,11 +1109,11 @@ async def build_distribution_base(
         # ── 4. ART REQ (sort + dist) — dept + display_type + article_name + store ─
         art_frames = []
         if biz in ("APPS", "BOTH"):
-            art_apps = _load(_CK, "V_ART_REQ_APPS")
+            art_apps = _load(_CK, _vobj("art_apps"))
             if art_apps is not None:
                 art_frames.append(art_apps)
         if biz in ("GM", "BOTH"):
-            art_gm = _load(_CK, "V_ART_REQ_GM")
+            art_gm = _load(_CK, _vobj("art_gm"))
             if art_gm is not None:
                 art_frames.append(art_gm)
         if art_frames:
@@ -1060,7 +1139,7 @@ async def build_distribution_base(
                 base.drop(columns=["_csv_art_req"], inplace=True)
 
         # ── 5. MRP REQ (sort + dist) — dept + display_type + article_name + mrp + store ─
-        mrp = _load(_CK, "V_MRP_REQ_APPS")
+        mrp = _load(_CK, _vobj("mrp"))
         if mrp is not None:
             mrp.columns = [c.lower() for c in mrp.columns]
             mrp_key = ["department", "display_type", "article_name", "mrp", "store_name"]

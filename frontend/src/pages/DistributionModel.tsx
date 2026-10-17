@@ -741,6 +741,12 @@ export default function DistributionModel() {
   const [schedLoading, setSchedLoading] = useState(false)
   const [saveToDiskLoading, setSaveToDiskLoading] = useState(false)
   const [saveToDiskPath, setSaveToDiskPath] = useState<string|null>(null)
+  const [viewConfig, setViewConfig] = useState<Record<string, string> | null>(null)
+  const [viewConfigDefaults, setViewConfigDefaults] = useState<Record<string, string>>({})
+  const [viewConfigSlots, setViewConfigSlots] = useState<Record<string, {label: string; hint: string}>>({})
+  const [viewConfigEdits, setViewConfigEdits] = useState<Record<string, string>>({})
+  const [viewConfigSaving, setViewConfigSaving] = useState(false)
+  const [viewConfigMsg, setViewConfigMsg] = useState<string | null>(null)
   const [exportPreviewLoading, setExportPreviewLoading] = useState(false)
   const [exportPreview, setExportPreview] = useState<{
     columns: string[]; total_rows: number; nonzero_rows: number;
@@ -1744,6 +1750,96 @@ export default function DistributionModel() {
                       {opt === 'parquet' ? 'Oracle fallback' : 'Use 0'}
                     </button>
                   ))}
+                </div>
+              )}
+            </DkCollapse>
+
+            {/* Oracle View / SQL Config */}
+            <DkCollapse title="🗄 Oracle View Config"
+              defaultOpen={false}
+              badge={<span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600,
+                background: viewConfig && Object.entries(viewConfig).some(([k, v]) => v !== viewConfigDefaults[k]) ? '#1e1040' : '#2a2a2c',
+                color: viewConfig && Object.entries(viewConfig).some(([k, v]) => v !== viewConfigDefaults[k]) ? '#a78bfa' : '#6b6b6e',
+                border: '1px solid #7c3aed30' }}>
+                {viewConfig && Object.entries(viewConfig).some(([k, v]) => v !== viewConfigDefaults[k]) ? 'custom' : 'default'}
+              </span>}>
+              {!viewConfig ? (
+                <button onClick={async () => {
+                  const res = await apiFetch('GET', '/distribution/view-config') as {
+                    config: Record<string,string>; defaults: Record<string,string>; slots: Record<string,{label:string;hint:string}>
+                  }
+                  setViewConfig(res.config)
+                  setViewConfigDefaults(res.defaults)
+                  setViewConfigSlots(res.slots)
+                  setViewConfigEdits({...res.config})
+                }} style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, border: 'none',
+                  background: '#1e1040', color: '#a78bfa', cursor: 'pointer', fontWeight: 600 }}>
+                  Load Config
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 4 }}>
+                    Change which Oracle view is used per requirement slot. After saving, re-download that parquet from Master Data for the change to take effect.
+                  </div>
+                  {Object.entries(viewConfigSlots).map(([slot, info]) => {
+                    const current = viewConfigEdits[slot] ?? viewConfig[slot] ?? ''
+                    const isChanged = current !== viewConfigDefaults[slot]
+                    return (
+                      <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ minWidth: 160, fontSize: 11, color: isChanged ? '#a78bfa' : tokens.textSecondary, fontWeight: isChanged ? 700 : 400 }}>
+                          {info.label}
+                        </div>
+                        <input
+                          value={current}
+                          onChange={e => setViewConfigEdits(p => ({ ...p, [slot]: e.target.value.toUpperCase() }))}
+                          placeholder={info.hint}
+                          style={{ flex: 1, minWidth: 220, padding: '4px 10px', fontSize: 11, fontFamily: 'monospace',
+                            borderRadius: 5, border: `1px solid ${isChanged ? '#7c3aed' : DK.cardBorder}`,
+                            background: isChanged ? '#1e1040' : DK.cardBg, color: isChanged ? '#a78bfa' : tokens.textPrimary,
+                            outline: 'none' }}
+                        />
+                        {isChanged && (
+                          <button onClick={() => setViewConfigEdits(p => ({ ...p, [slot]: viewConfigDefaults[slot] }))}
+                            style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, border: '1px solid #f87171',
+                              background: 'transparent', color: '#f87171', cursor: 'pointer' }}>reset</button>
+                        )}
+                        <span style={{ fontSize: 9, color: tokens.textMuted, fontFamily: 'monospace' }}>default: {viewConfigDefaults[slot]}</span>
+                      </div>
+                    )
+                  })}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+                    <button
+                      onClick={async () => {
+                        setViewConfigSaving(true); setViewConfigMsg(null)
+                        try {
+                          const r = await http.post<{success:boolean;data:{config:Record<string,string>};message:string}>('/distribution/view-config', { config: viewConfigEdits })
+                          setViewConfig(r.data.data.config)
+                          setViewConfigEdits({...r.data.data.config})
+                          setViewConfigMsg(`✓ Saved — re-download affected parquets to apply`)
+                        } catch (e: unknown) {
+                          setViewConfigMsg(`✗ ${e instanceof Error ? e.message : 'Save failed'}`)
+                        } finally { setViewConfigSaving(false) }
+                      }}
+                      disabled={viewConfigSaving}
+                      style={{ ...S.btn('#7c3aed', viewConfigSaving), fontSize: 12, padding: '6px 16px' }}>
+                      {viewConfigSaving ? 'Saving…' : '💾 Save Config'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const r = await http.post<{success:boolean;data:{config:Record<string,string>};message:string}>('/distribution/view-config/reset')
+                        setViewConfig(r.data.data.config); setViewConfigEdits({...r.data.data.config})
+                        setViewConfigMsg('✓ Reset to defaults')
+                      }}
+                      style={{ fontSize: 11, padding: '5px 12px', borderRadius: 6, border: `1px solid ${DK.cardBorder}`,
+                        background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>
+                      Reset All
+                    </button>
+                    {viewConfigMsg && (
+                      <span style={{ fontSize: 11, color: viewConfigMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>
+                        {viewConfigMsg}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </DkCollapse>

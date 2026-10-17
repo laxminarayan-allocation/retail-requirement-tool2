@@ -1478,8 +1478,23 @@ export default function DistributionModel() {
 
 {/* REQ Source Mode */}
             <div style={{ paddingBottom: 16, borderBottom: `1px solid ${DK.cardBorder}` }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
-                color: tokens.textMuted, marginBottom: 8 }}>REQ Source</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: tokens.textMuted }}>REQ Source</div>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {(reqSource === 'GRC' || reqSource === 'BOTH') && (
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4,
+                      background: '#0a2a12', color: '#4ade80', border: '1px solid #22c55e30', letterSpacing: '0.02em' }}>
+                      🗄 V_BARCODE_REQ_APPS_GRC_V2
+                    </span>
+                  )}
+                  {(reqSource === 'WMS' || reqSource === 'BOTH') && (
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4,
+                      background: '#082f49', color: '#38bdf8', border: '1px solid #0369a130', letterSpacing: '0.02em' }}>
+                      🗄 V_BARCODE_REQ_APPS_WMS_V2
+                    </span>
+                  )}
+                </div>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 14 }}>
                 {([
                   { key: 'oracle'       as const, icon: '🏛', title: 'Oracle Only',

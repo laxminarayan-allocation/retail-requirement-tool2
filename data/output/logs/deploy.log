@@ -1,0 +1,107 @@
+[15:06:25] Before: [WinError 
+[15:06:25] git fetch …
+[15:06:25]   [WinError 2] The system cannot find the file specified
+[15:06:25] git pull …
+[15:06:25]   [WinError 2] The system cannot find the file specified
+[15:06:25] ERROR: git pull failed
+[15:16:11] Before: 96c80216b0
+[15:16:11] git fetch …
+[15:16:19]   (no output)
+[15:16:19] git pull …
+[15:16:21]   Already up to date.
+[15:16:21] After:  96c80216b0
+[15:16:21] Already up to date — no restarts needed
+[15:21:14] Before: 96c80216b0
+[15:21:14] git fetch …
+[15:21:16]   (no output)
+[15:21:16] git pull …
+[15:21:18]   Already up to date.
+[15:21:18] After:  96c80216b0
+[15:21:18] Changed files (0): 
+[15:21:18] Building frontend for mobile (vite build) …
+[15:21:18]   vite build: FAILED
+[15:21:18]   [WinError 2] The system cannot find the file specified
+[15:21:18] Deploy done: mobile build done
+[15:22:14] Before: 96c80216b0
+[15:22:14] git fetch …
+[15:22:16]   (no output)
+[15:22:16] git pull …
+[15:22:18]   Already up to date.
+[15:22:18] After:  96c80216b0
+[15:22:18] Changed files (0): 
+[15:22:18] Building frontend for mobile (vite build) …
+[15:22:18]   vite build: FAILED
+[15:22:18]   [WinError 2] The system cannot find the file specified
+[15:22:18] Deploy done: mobile build done
+[15:41:09] Before: 1dc5635ced
+[15:41:09] Before: 1dc5635ced
+[15:41:09] git fetch …
+[15:41:09] git fetch …
+[15:41:17]   (no output)
+[15:41:17]   (no output)
+[15:41:17] git pull …
+[15:41:17] git pull …
+[15:41:19]   Already up to date.
+[15:41:19]   fatal: Cannot fast-forward to multiple branches.
+[15:41:19] ERROR: git pull failed
+[15:41:19] After:  1dc5635ced
+[15:41:19] Changed files (0): 
+[15:41:19] Building frontend for mobile (vite build) …
+[15:41:19]   vite build: FAILED
+[15:41:19]   [WinError 2] The system cannot find the file specified
+[15:41:19] Deploy done: mobile build done
+[15:41:19] Before: 1dc5635ced
+[15:41:19] git fetch …
+[15:41:28]   (no output)
+[15:41:28] git pull …
+[15:41:30]   Already up to date.
+[15:41:31] After:  1dc5635ced
+[15:41:32] Changed files (0): 
+[15:41:32] Building frontend for mobile (vite build) …
+[15:41:32]   vite build: FAILED
+[15:41:32]   [WinError 2] The system cannot find the file specified
+[15:41:32] Deploy done: mobile build done
+[15:41:32] Before: 1dc5635ced
+[15:41:32] git fetch …
+[15:41:33]   (no output)
+[15:41:33] git pull …
+[15:41:36]   Already up to date.
+[15:41:36] After:  1dc5635ced
+[15:41:36] Changed files (0): 
+[15:41:36] Building frontend for mobile (vite build) …
+[15:41:36]   vite build: FAILED
+[15:41:36]   [WinError 2] The system cannot find the file specified
+[15:41:36] Deploy done: mobile build done
+[16:18:10] Before: 71bf5c26ba
+[16:18:10] git fetch …
+[16:18:12]   (no output)
+[16:18:12] git pull …
+[16:18:14]   Already up to date.
+[16:18:14] After:  71bf5c26ba
+[16:18:14] Changed files (0): 
+[16:18:14] Building frontend for mobile (vite build) …
+[16:18:14]   vite build: FAILED
+[16:18:14]   [WinError 2] The system cannot find the file specified
+[16:18:14] Deploy done: mobile build done
+[13:02:34] Before: 83cbcc613d
+[13:02:34] git fetch …
+[13:02:36]   (no output)
+[13:02:36] git pull …
+[13:02:38]   Already up to date.
+[13:02:38] After:  83cbcc613d
+[13:02:38] Changed files (0): 
+[13:02:38] Building frontend for mobile (vite build) …
+[13:02:38]   vite build: FAILED
+[13:02:38]   [WinError 2] The system cannot find the file specified
+[13:02:38] Deploy done: mobile build done
+[13:10:56] Before: 83cbcc613d
+[13:10:56] git fetch …
+[13:10:58]   (no output)
+[13:10:58] git pull …
+[13:11:00]   Already up to date.
+[13:11:00] After:  83cbcc613d
+[13:11:00] Changed files (0): 
+[13:11:00] Building frontend for mobile (vite build) …
+[13:11:00]   vite build: FAILED
+[13:11:00]   [WinError 2] The system cannot find the file specified
+[13:11:00] Deploy done: mobile build done

@@ -883,6 +883,7 @@ export default function DistributionModel() {
 
   return (
     <div style={S.page}>
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
       <ExportModal />
       <StaleBanner />
       {fetchError && (
@@ -894,13 +895,30 @@ export default function DistributionModel() {
 
       {/* ── Header ── */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0, letterSpacing: '-0.5px' }}>🔀 Distribution Model</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0, letterSpacing: '-0.5px', flex: 1, minWidth: 200 }}>🔀 Distribution Model</h1>
           <button onClick={handleInvalidate} disabled={invalidating}
             style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: '#7f1d1d', border: 'none', color: '#fff', cursor: invalidating ? 'not-allowed' : 'pointer', opacity: invalidating ? 0.7 : 1 }}>
             {invalidating ? 'Clearing…' : '🗑 Clear Cache'}
           </button>
           {invalidateMsg && <span style={{ fontSize: 12, color: '#4ade80' }}>{invalidateMsg}</span>}
+          <button
+            onClick={async () => { await buildBase(); await runDistribution() }}
+            disabled={!imStatus?.ready || distLoading || baseLoading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 18px', fontSize: 13, fontWeight: 800, borderRadius: 8, border: 'none',
+              cursor: (!imStatus?.ready || distLoading || baseLoading) ? 'not-allowed' : 'pointer',
+              background: (!imStatus?.ready || distLoading || baseLoading) ? DK.cardBorder : 'linear-gradient(135deg, #16a34a, #15803d)',
+              color: '#fff', opacity: (!imStatus?.ready || distLoading || baseLoading) ? 0.5 : 1,
+              boxShadow: (!imStatus?.ready || distLoading || baseLoading) ? 'none' : '0 2px 8px #16a34a50',
+              letterSpacing: '0.02em',
+            }}>
+            {(distLoading || baseLoading)
+              ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 14 }}>⟳</span> {baseLoading ? 'Building…' : 'Running…'}</>
+              : <><span style={{ fontSize: 15 }}>▶</span> Run All</>
+            }
+          </button>
         </div>
         <p style={{ fontSize: 13, color: tokens.textMuted, marginTop: 4 }}>Warehouse stock distribution — barcode × store replenishment engine</p>
       </div>

@@ -234,7 +234,7 @@ function ssSave(patch: Record<string, unknown>) {
 }
 
 export default function DistributionModel() {
-  const { tokens } = useTheme()
+  const { tokens, theme } = useTheme()
   const isMobile = useIsMobile()
 
   const [reqSource,   setReqSource]   = useState<ReqSource>(() => ssLoad('reqSource', 'GRC'))
@@ -594,13 +594,22 @@ export default function DistributionModel() {
     } finally { setBaseLoading(false) }
   }
 
-  // CityKart-style green skin — overrides theme tokens for this page
-  const DK = {
+  // CityKart-style green skin — theme-aware
+  const isLight = theme === 'light'
+  const DK = isLight ? {
+    pageBg:      tokens.contentBg,
+    cardBg:      tokens.cardBg,
+    cardBorder:  tokens.cardBorder,
+    cardBorder2: '#16a34a30',
+  } : {
     pageBg:     '#061006',
     cardBg:     '#0a1a0a',
     cardBorder: '#1e4d1e',
     cardBorder2: '#22c55e30',
   }
+
+  // In light mode, deep-dark card accent bgs become light-tinted equivalents
+  const accentBg = (darkColor: string, lightColor: string) => isLight ? lightColor : darkColor
 
   const S = {
     page: { padding: isMobile ? '16px 12px' : '24px 32px', minHeight: '100vh', background: DK.pageBg, color: tokens.textPrimary } as React.CSSProperties,
@@ -931,7 +940,7 @@ export default function DistributionModel() {
               }} style={{
                 border: `1.5px solid ${sourceMode === opt.key ? (opt.key === 'both' ? '#0369a1' : '#22c55e') : DK.cardBorder}`,
                 borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
-                background: sourceMode === opt.key ? (opt.key === 'both' ? '#082f49' : '#0a1f0a') : DK.cardBg,
+                background: sourceMode === opt.key ? (opt.key === 'both' ? accentBg('#082f49', '#f0f9ff') : accentBg('#0a1f0a', '#f0fdf4')) : DK.cardBg,
                 transition: 'border-color .15s, background .15s',
               }}>
                 {sourceMode === opt.key && (
@@ -1011,14 +1020,14 @@ export default function DistributionModel() {
             </div>
           )}
           {sourceMode === 'upload' && csvUploadActive && (
-            <div style={{ padding: '8px 12px', background: '#082f49', border: '1px solid #0369a130',
+            <div style={{ padding: '8px 12px', background: accentBg('#082f49', '#f0f9ff'), border: '1px solid #0369a130',
               borderRadius: 8, fontSize: 12, color: '#38bdf8', display: 'flex', gap: 8 }}>
               <span>i</span>
               <span>CSV is the sole source — Oracle not queried for stock</span>
             </div>
           )}
           {sourceMode === 'both' && (
-            <div style={{ padding: '8px 12px', background: '#082f49', border: '1px solid #0369a130',
+            <div style={{ padding: '8px 12px', background: accentBg('#082f49', '#f0f9ff'), border: '1px solid #0369a130',
               borderRadius: 8, fontSize: 12, color: '#38bdf8', display: 'flex', gap: 8 }}>
               <span>🔗</span>
               <span>CSV barcodes override Oracle qty · unmatched barcodes filled from Oracle {reqSource}</span>
@@ -1108,7 +1117,7 @@ export default function DistributionModel() {
                   disabled={imLoading}
                   style={{ flex: 1, padding: '10px 14px', borderRadius: 8, cursor: imLoading ? 'not-allowed' : 'pointer',
                     border: `1.5px solid ${isCache ? '#22c55e' : DK.cardBorder}`,
-                    background: isCache ? '#0a1f0a' : DK.cardBg,
+                    background: isCache ? accentBg('#0a1f0a', '#f0fdf4') : DK.cardBg,
                     opacity: imLoading ? 0.6 : 1,
                     display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left' }}>
                   <span style={{ fontSize: 18 }}>{opt.icon}</span>
@@ -1389,15 +1398,15 @@ export default function DistributionModel() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 14 }}>
                 {([
                   { key: 'oracle'       as const, icon: '🏛', title: 'Oracle Only',
-                    hint: 'Pull REQ directly from Oracle parquet', accent: '#22c55e', bg: '#0a1f0a' },
+                    hint: 'Pull REQ directly from Oracle parquet', accent: '#22c55e', bg: accentBg('#0a1f0a', '#f0fdf4') },
                   { key: 'csv'         as const, icon: '📄', title: 'CSV Only',
-                    hint: 'Use uploaded CSV REQ; 0 for unmatched barcodes', accent: '#38bdf8', bg: '#082f49' },
+                    hint: 'Use uploaded CSV REQ; 0 for unmatched barcodes', accent: '#38bdf8', bg: accentBg('#082f49', '#f0f9ff') },
                   { key: 'csv_priority' as const, icon: '📌', title: 'CSV Priority',
-                    hint: 'CSV first — Oracle fallback for unmatched rows', accent: '#a78bfa', bg: '#1e1040' },
+                    hint: 'CSV first — Oracle fallback for unmatched rows', accent: '#a78bfa', bg: accentBg('#1e1040', '#faf5ff') },
                   { key: 'max'         as const, icon: '⬆️', title: 'Max (Both)',
-                    hint: 'max(csv_req, oracle_req) per barcode', accent: '#f59e0b', bg: '#1a1200' },
+                    hint: 'max(csv_req, oracle_req) per barcode', accent: '#f59e0b', bg: accentBg('#1a1200', '#fffbeb') },
                   { key: 'sum'         as const, icon: '➕', title: 'Sum (Both)',
-                    hint: 'csv_req + oracle_req per barcode', accent: '#f87171', bg: '#1f0a0a' },
+                    hint: 'csv_req + oracle_req per barcode', accent: '#f87171', bg: accentBg('#1f0a0a', '#fff1f2') },
                 ] as const).map(opt => (
                   <div key={opt.key} onClick={() => { setReqSrcMode(opt.key); setReqSrcPreview(null); setReqSrcMsg(null) }}
                     style={{ border: `1.5px solid ${reqSrcMode === opt.key ? opt.accent : DK.cardBorder}`,
@@ -1464,7 +1473,7 @@ export default function DistributionModel() {
                         color: tokens.textMuted, borderBottom: `1px solid ${DK.cardBorder}` }}>Sample (top 5 rows)</div>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                         <thead>
-                          <tr style={{ background: '#0a1a0a' }}>
+                          <tr style={{ background: DK.cardBg }}>
                             {['ICODE','Oracle REQ','CSV REQ','Result'].map(h => (
                               <th key={h} style={{ padding: '6px 12px', textAlign: h === 'ICODE' ? 'left' : 'right',
                                 color: tokens.textMuted, fontWeight: 600 }}>{h}</th>
@@ -1504,7 +1513,7 @@ export default function DistributionModel() {
                   <div key={opt.key} onClick={() => setBizSegment(opt.key)} style={{
                     border: `1.5px solid ${bizSegment === opt.key ? '#0ea5e9' : DK.cardBorder}`,
                     borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
-                    background: bizSegment === opt.key ? '#082f49' : DK.cardBg,
+                    background: bizSegment === opt.key ? accentBg('#082f49', '#f0f9ff') : DK.cardBg,
                     transition: 'border-color .15s, background .15s',
                   }}>
                     {bizSegment === opt.key && (
@@ -1592,12 +1601,12 @@ export default function DistributionModel() {
                 <div key={opt.key} onClick={() => setSortMode(opt.key)} style={{
                   border: `1.5px solid ${sortMode === opt.key ? '#f59e0b' : DK.cardBorder}`,
                   borderRadius: 10, padding: '12px 14px', cursor: 'pointer', position: 'relative',
-                  background: sortMode === opt.key ? '#1a1200' : DK.cardBg,
+                  background: sortMode === opt.key ? accentBg('#1a1200', '#fffbeb') : DK.cardBg,
                   transition: 'border-color .15s, background .15s',
                 }}>
                   {sortMode === opt.key && (
                     <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px',
-                      borderRadius: 4, fontWeight: 600, background: '#1a1200', color: '#fbbf24',
+                      borderRadius: 4, fontWeight: 600, background: accentBg('#1a1200', '#fffbeb'), color: accentBg('#fbbf24', '#d97706'),
                       border: '1px solid #f59e0b40' }}>Active</span>
                   )}
                   <div style={{ fontSize: 18, marginBottom: 6 }}>{opt.icon}</div>
@@ -1665,15 +1674,15 @@ export default function DistributionModel() {
             {([
               { key: 'skip'     as const, icon: '⏭️', title: 'Skip Holds',
                 hint: 'No holds — all stores distributed normally',
-                accent: '#22c55e', bg: '#0a1f0a' },
+                accent: '#22c55e', bg: accentBg('#0a1f0a', '#f0fdf4') },
               { key: 'use_last' as const, icon: '📋', title: 'Use Last Holds',
                 hint: savedHoldRules.length > 0
                   ? `${savedHoldRules.length} saved hold${savedHoldRules.length > 1 ? 's' : ''} — from previous session`
                   : 'No saved holds found',
-                accent: '#f87171', bg: '#1f0a0a' },
+                accent: '#f87171', bg: accentBg('#1f0a0a', '#fff1f2') },
               { key: 'add_new'  as const, icon: '➕', title: 'Add New Holds',
                 hint: 'Build a fresh hold list for this run',
-                accent: '#f59e0b', bg: '#1a1200' },
+                accent: '#f59e0b', bg: accentBg('#1a1200', '#fffbeb') },
             ] as const).map(opt => (
               <div key={opt.key} onClick={() => {
                 setHoldMode(opt.key)
@@ -1703,7 +1712,7 @@ export default function DistributionModel() {
 
           {/* Saved holds preview panel (use_last mode) */}
           {holdMode === 'use_last' && savedHoldRules.length > 0 && (
-            <div style={{ marginBottom: 14, padding: '10px 14px', background: '#1f0a0a',
+            <div style={{ marginBottom: 14, padding: '10px 14px', background: accentBg('#1f0a0a', '#fff1f2'),
               border: '1px solid #dc262630', borderRadius: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#f87171', marginBottom: 8,
                 textTransform: 'uppercase', letterSpacing: '.06em' }}>📋 Last Session Holds</div>
@@ -1722,7 +1731,7 @@ export default function DistributionModel() {
 
           {/* Add new holds UI */}
           {holdMode === 'add_new' && (
-            <div style={{ background: '#1a1200', border: '1px solid #f59e0b30', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+            <div style={{ background: accentBg('#1a1200', '#fffbeb'), border: '1px solid #f59e0b30', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: tokens.textSecondary, minWidth: 80, flexShrink: 0 }}>Store Hold</span>
                 <MultiSelect label="Stores" options={storeOptions} selected={holdStoreSelected} onChange={setHoldStoreSelected} width={260} />

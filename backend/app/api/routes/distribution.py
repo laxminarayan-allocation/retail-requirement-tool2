@@ -651,7 +651,8 @@ async def store_barcode_preview(
                     elif vals:
                         sff_error = f"Field '{field}' not in store master (cols: {list(sm.columns)[:8]})"
                 if 'store_name' in sm.columns:
-                    allowed = set(sm['store_name'].dropna().str.strip().tolist())
+                    allowed = set(sm['store_name'].astype(str).str.strip().tolist())
+                    store_list = [str(s).strip() for s in store_list]
                     logger.info("sff allowed sample: %s | store_list sample: %s", list(allowed)[:3], store_list[:3])
                     store_list = [s for s in store_list if s in allowed]
                 logger.info("store_barcode_preview sff: %s → %d→%d stores", sff, before, len(store_list))
@@ -735,7 +736,8 @@ async def store_barcode_csv(
                     if vals and field in sm.columns:
                         sm = sm[sm[field].astype(str).isin([str(v) for v in vals])]
                 if 'store_name' in sm.columns:
-                    allowed = set(sm['store_name'].dropna().str.strip().tolist())
+                    allowed = set(sm['store_name'].astype(str).str.strip().tolist())
+                    store_list = [str(s).strip() for s in store_list]
                     store_list = [s for s in store_list if s in allowed]
                     store_meta_df = sm
             except Exception as _sff_exc2:
@@ -1096,6 +1098,9 @@ async def build_distribution_base(
                         filter_cols = [c for c in field_map.keys() if c in sm.columns]
                         if filter_cols:
                             sm_sub = sm[[sm_sn] + filter_cols].drop_duplicates(sm_sn)
+                            # cast both sides to str to avoid int64/object merge error
+                            base[base_sn] = base[base_sn].astype(str)
+                            sm_sub = sm_sub.copy(); sm_sub[sm_sn] = sm_sub[sm_sn].astype(str)
                             # Merge, apply filters, drop helper cols
                             merged = base.merge(sm_sub, left_on=base_sn, right_on=sm_sn, how="left", suffixes=("", "_sm"))
                             mask = pd.Series(True, index=merged.index)

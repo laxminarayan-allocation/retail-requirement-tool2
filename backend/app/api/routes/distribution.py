@@ -1827,6 +1827,8 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
         total_stock   = int(result[wh_col].sum()) if wh_col in result.columns else 0
         total_balance = total_stock - total_allocated
         alloc_pct     = round(total_allocated / total_stock * 100, 1) if total_stock > 0 else 0.0
+        # unique barcode qty (wh_q per icode, not multiplied by stores)
+        icode_qty = int(result.drop_duplicates("icode")[wh_col].sum()) if wh_col in result.columns else 0
 
         # ── Sample: key display columns ────────────────────────────────────────
         display_cols = [
@@ -1874,6 +1876,7 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
             "total_stock":            total_stock,
             "total_balance":          total_balance,
             "alloc_pct":              alloc_pct,
+            "icode_qty":              icode_qty,
             "columns":                avail,
             "sample":                 sample_df.to_dict(orient="records"),
         })

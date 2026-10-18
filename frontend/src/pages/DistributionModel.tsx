@@ -30,7 +30,7 @@ interface DistResult {
   rows: number; elapsed_ms: number; max_round: number
   total_allocated: number; stores_covered: number
   icodes_total: number; icodes_fully_covered: number
-  total_stock: number; total_balance: number; alloc_pct: number
+  total_stock: number; total_balance: number; alloc_pct: number; icode_qty: number
   columns: string[]; sample: Record<string, unknown>[]
 }
 
@@ -2395,14 +2395,15 @@ export default function DistributionModel() {
                   {[
                     { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN'), color: '#4ade80' },
                     { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN'), color: '#38bdf8' },
-                    { label: 'Barcodes Total',  val: distResult.icodes_total, color: '#a78bfa' },
-                    { label: 'Fully Covered',   val: distResult.icodes_fully_covered, color: '#a78bfa' },
-                    ...(distResult.ol_held_count ? [{ label: 'OL Hold', val: distResult.ol_held_count.toLocaleString('en-IN'), color: '#f87171' }] : []),
-                    { label: 'Time',             val: `${Math.round(distResult.elapsed_ms / 1000)}s`, color: tokens.textMuted },
+                    { label: 'Barcodes Total',  val: distResult.icodes_total, color: '#a78bfa', sub: `${(distResult.icode_qty ?? 0).toLocaleString('en-IN')} qty` },
+                    { label: 'Fully Covered',   val: distResult.icodes_fully_covered, color: '#a78bfa', sub: undefined },
+                    ...(distResult.ol_held_count ? [{ label: 'OL Hold', val: distResult.ol_held_count.toLocaleString('en-IN'), color: '#f87171', sub: undefined }] : []),
+                    { label: 'Time',             val: `${Math.round(distResult.elapsed_ms / 1000)}s`, color: tokens.textMuted, sub: undefined },
                   ].map(stat => (
                     <div key={stat.label}>
                       <div style={{ fontSize: 11, color: tokens.textMuted }}>{stat.label}</div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: stat.color }}>{stat.val}</div>
+                      {stat.sub && <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 1 }}>{stat.sub}</div>}
                     </div>
                   ))}
                 </div>

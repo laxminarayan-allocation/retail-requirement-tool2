@@ -608,6 +608,7 @@ async def store_barcode_preview(
     stores: str = '',
     scopes: str = '',
     store_field_filters: str = '',
+    min_qty: int = 10,
 ):
     try:
         import json as _j
@@ -617,12 +618,16 @@ async def store_barcode_preview(
             if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
                 df = _load(_CK, obj)
                 if df is not None:
-                    df.columns = [c.lower() for c in df.columns]
+                    df_c = df.copy(); df_c.columns = [c.lower() for c in df_c.columns]
                     seg = biz_segment.upper()
-                    if seg != 'BOTH' and 'segment' in df.columns:
-                        df = df[df['segment'].str.upper() == seg]
-                    if 'icode' in df.columns:
-                        barcodes.update(df['icode'].dropna().astype(str).unique().tolist())
+                    if seg != 'BOTH' and 'segment' in df_c.columns:
+                        df_c = df_c[df_c['segment'].str.upper() == seg]
+                    if min_qty > 0:
+                        qty_col = _get_qty_col(df_c, ['grc_q','wms_q','qty','stock'])
+                        if qty_col:
+                            df_c = df_c[pd.to_numeric(df_c[qty_col], errors='coerce').fillna(0) >= min_qty]
+                    if 'icode' in df_c.columns:
+                        barcodes.update(df_c['icode'].dropna().astype(str).unique().tolist())
         total_barcodes = len(barcodes)
         store_list = list(_store_list_cache) if _store_list_cache else []
         if not store_list:

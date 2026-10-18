@@ -602,6 +602,7 @@ export default function DistributionModel() {
         biz_segment: bizSegment,
         stores: JSON.stringify(selStores),
         store_field_filters: JSON.stringify(activeFieldFilters),
+        min_qty: String(minQty),
       })
       const res = await apiFetch('GET', `/distribution/store-barcode/preview?${params}`)
       setSbPreview(res as {stores:number;barcodes:number;total_rows:number;sff_error?:string})
@@ -609,7 +610,7 @@ export default function DistributionModel() {
     } catch (e: unknown) {
       setSbMsg(`\u2717 ${e instanceof Error ? e.message : 'Failed'}`)
     } finally { setSbLoading(false) }
-  }, [reqSource, bizSegment, selStores, activeFieldFilters])
+  }, [reqSource, bizSegment, selStores, activeFieldFilters, minQty])
 
   const fetchOlStatus = useCallback(async () => {
     try {

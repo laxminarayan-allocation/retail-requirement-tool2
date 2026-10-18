@@ -1383,7 +1383,7 @@ export default function DistributionModel() {
                 <button
                   onClick={async () => {
                     try {
-                      const token = localStorage.getItem('ck_jwt') || ''
+                      const token = localStorage.getItem('ck_ss27_token') || ''
                       const res = await fetch(`/api/distribution/barcode-preview/csv?stock_source=${reqSource}&biz_segment=${bizSegment}`, {
                         headers: { Authorization: `Bearer ${token}` }
                       })

@@ -623,7 +623,7 @@ async def store_barcode_preview(
                     if seg != 'BOTH' and 'segment' in df_c.columns:
                         df_c = df_c[df_c['segment'].str.upper() == seg]
                     if min_qty > 0:
-                        qty_col = _get_qty_col(df_c, ['grc_q','wms_q','qty','stock'])
+                        qty_col = next((c for c in ['grc_q','wms_q','qty','stock'] if c in df_c.columns), None)
                         if qty_col:
                             df_c = df_c[pd.to_numeric(df_c[qty_col], errors='coerce').fillna(0) >= min_qty]
                     if 'icode' in df_c.columns:

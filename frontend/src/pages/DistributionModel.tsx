@@ -429,7 +429,7 @@ export default function DistributionModel() {
   const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
   const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
   const [minQty, setMinQty] = useState(10)
-  const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number}|null>(null)
+  const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number;sff_error?:string}|null>(null)
   const [sbLoading, setSbLoading] = useState(false)
   const [sbMsg, setSbMsg] = useState<string|null>(null)
   const [reqSrcMode, setReqSrcMode] = useState<'oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
@@ -604,7 +604,7 @@ export default function DistributionModel() {
         store_field_filters: JSON.stringify(activeFieldFilters),
       })
       const res = await apiFetch('GET', `/distribution/store-barcode/preview?${params}`)
-      setSbPreview(res as {stores:number;barcodes:number;total_rows:number})
+      setSbPreview(res as {stores:number;barcodes:number;total_rows:number;sff_error?:string})
       setSbMsg(`\u2713 ${(res as {total_rows:number}).total_rows.toLocaleString('en-IN')} rows`)
     } catch (e: unknown) {
       setSbMsg(`\u2717 ${e instanceof Error ? e.message : 'Failed'}`)
@@ -1617,6 +1617,12 @@ export default function DistributionModel() {
                     </div>
                   ))}
                 </div>
+                {sbPreview.sff_error && (
+                  <div style={{ padding: '6px 12px', borderRadius: 6, background: '#450a0a', border: '1px solid #991b1b',
+                    fontSize: 11, color: '#fca5a5' }}>
+                    ⚠ Store filter error: {sbPreview.sff_error}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
                   background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 8 }}>
                   <div style={{ flex: 1, fontSize: 12, color: tokens.textSecondary }}>

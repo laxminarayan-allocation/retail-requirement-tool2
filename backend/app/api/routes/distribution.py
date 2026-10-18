@@ -638,24 +638,32 @@ async def store_barcode_preview(
             sel_set = {s.strip() for s in sel}
             store_list = [s for s in store_list if s in sel_set]
         sff = _j.loads(store_field_filters) if store_field_filters.strip() else {}
+        sff_error = None
         if sff:
             try:
                 from app.repositories.store_repository import StoreRepository
                 sm = StoreRepository().get_all_stores(active_only=False)
                 sm.columns = [c.lower() for c in sm.columns]
+                before = len(store_list)
                 for field, vals in sff.items():
                     if vals and field in sm.columns:
                         sm = sm[sm[field].astype(str).isin([str(v) for v in vals])]
+                    elif vals:
+                        sff_error = f"Field '{field}' not in store master (cols: {list(sm.columns)[:8]})"
                 if 'store_name' in sm.columns:
                     allowed = set(sm['store_name'].dropna().str.strip().tolist())
+                    logger.info("sff allowed sample: %s | store_list sample: %s", list(allowed)[:3], store_list[:3])
                     store_list = [s for s in store_list if s in allowed]
-            except Exception:
-                pass
+                logger.info("store_barcode_preview sff: %s → %d→%d stores", sff, before, len(store_list))
+            except Exception as _sff_exc:
+                sff_error = str(_sff_exc)
+                logger.error("store_barcode_preview sff error: %s", _sff_exc)
         total_stores = len(store_list)
         return APIResponse.ok(data={
             'stores': total_stores,
             'barcodes': total_barcodes,
             'total_rows': total_stores * total_barcodes,
+            **({"sff_error": sff_error} if sff_error else {}),
         })
     except Exception as exc:
         logger.error('store_barcode_preview: %s', exc)
@@ -730,8 +738,8 @@ async def store_barcode_csv(
                     allowed = set(sm['store_name'].dropna().str.strip().tolist())
                     store_list = [s for s in store_list if s in allowed]
                     store_meta_df = sm
-            except Exception:
-                pass
+            except Exception as _sff_exc2:
+                logger.error("store_barcode_csv sff error: %s", _sff_exc2)
         if not store_list:
             from fastapi.responses import Response
             return Response('No stores matched filters', media_type='text/plain', status_code=404)

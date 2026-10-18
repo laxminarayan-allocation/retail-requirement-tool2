@@ -1564,7 +1564,7 @@ async def base_status():
 
 
 @router.get("/barcode-preview", response_model=APIResponse)
-async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
+async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH", min_qty: int = 10):
     """
     Lightweight preview: unique barcode count + wh_source breakdown from parquet.
     Does not build the full base — just reads existing parquets.
@@ -1618,6 +1618,10 @@ async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
         # Sum qty per icode (for BOTH: GRC qty + WMS qty), then deduplicate
         icode_qty = df.groupby("icode")["qty"].sum().reset_index()
         df = df.drop_duplicates("icode")[["icode", "wh_source"]].merge(icode_qty, on="icode", how="left")
+
+        # Apply min qty filter (exclude zero/negative and below threshold)
+        if min_qty > 0:
+            df = df[df["qty"] >= min_qty]
 
         breakdown = df.groupby("wh_source").agg(count=("icode", "count"), qty=("qty", "sum")).reset_index().rename(columns={"count": "count"}).to_dict(orient="records")
         total_qty = int(df["qty"].sum())

@@ -428,6 +428,7 @@ export default function DistributionModel() {
   const [barcodePreview, setBarcodePreview] = useState<{total: number; total_qty: number; breakdown: {wh_source: string; count: number; qty: number}[]} | null>(null)
   const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
   const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
+  const [minQty, setMinQty] = useState(10)
   const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number}|null>(null)
   const [sbLoading, setSbLoading] = useState(false)
   const [sbMsg, setSbMsg] = useState<string|null>(null)
@@ -622,7 +623,7 @@ export default function DistributionModel() {
   const fetchBarcodePreview = useCallback(async () => {
     setBarcodePreviewLoading(true); setBarcodePreviewMsg(null)
     try {
-      const d = await apiFetch<{total: number; breakdown: {wh_source: string; count: number}[]}>('GET', '/distribution/barcode-preview', { stock_source: reqSource, biz_segment: bizSegment })
+      const d = await apiFetch<{total: number; breakdown: {wh_source: string; count: number}[]}>('GET', '/distribution/barcode-preview', { stock_source: reqSource, biz_segment: bizSegment, min_qty: minQty })
       setBarcodePreview(d)
       setBarcodePreviewMsg(`✓ ${d.total.toLocaleString('en-IN')} unique barcodes`)
     } catch (e: unknown) {
@@ -643,7 +644,7 @@ export default function DistributionModel() {
   useEffect(() => {
     const t = setTimeout(() => { fetchBarcodePreview() }, 300)
     return () => clearTimeout(t)
-  }, [reqSource, bizSegment, fetchBarcodePreview])
+  }, [reqSource, bizSegment, minQty, fetchBarcodePreview])
 
   // Auto cross-join count whenever stores/filters/source/segment change
   useEffect(() => {
@@ -1325,7 +1326,18 @@ export default function DistributionModel() {
               <div style={{ fontSize: 15, fontWeight: 700, color: tokens.textPrimary }}>Unique Barcode</div>
               <div style={{ fontSize: 12, color: tokens.textMuted, marginTop: 2 }}>Preview distinct barcodes per segment (GRC / WMS / GRC|WMS)</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* Min qty filter */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 7, padding: '3px 8px' }}>
+                <span style={{ fontSize: 11, color: tokens.textMuted, whiteSpace: 'nowrap' }}>Min qty ≥</span>
+                <input
+                  type="number"
+                  value={minQty}
+                  onChange={e => setMinQty(Math.max(0, parseInt(e.target.value) || 0))}
+                  style={{ width: 52, fontSize: 12, fontWeight: 700, background: 'transparent', border: 'none', outline: 'none',
+                    color: tokens.textPrimary, textAlign: 'center' }}
+                />
+              </div>
               {barcodePreview && (
                 <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, fontWeight: 600,
                   background: '#14532d', color: '#4ade80', border: '1px solid #22c55e50' }}>

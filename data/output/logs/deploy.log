@@ -105,3 +105,14 @@
 [13:11:00]   vite build: FAILED
 [13:11:00]   [WinError 2] The system cannot find the file specified
 [13:11:00] Deploy done: mobile build done
+[13:24:31] Before: 9a19bf69da
+[13:24:31] git fetch …
+[13:24:33]   (no output)
+[13:24:33] git pull …
+[13:24:35]   Already up to date.
+[13:24:35] After:  9a19bf69da
+[13:24:35] Changed files (0): 
+[13:24:35] Building frontend for mobile (vite build) …
+[13:24:35]   vite build: FAILED
+[13:24:35]   [WinError 2] The system cannot find the file specified
+[13:24:35] Deploy done: mobile build done

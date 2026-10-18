@@ -1,18 +1,25 @@
 {
-  "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs",
+  "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data",
   "files": [
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\01_Put-Away.xlsb"
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\01_Put-Away.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\06_STO vs ALLOCATED.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\BARCODE_APPS_REQ_GRC.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\04_STO_DATA_APPS.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\07_LOGISTIC_Report.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\GRC_MTD.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\02_STOCK-DC_TRADING_STK.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\03_Scan_Report(30_Days).xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\APPS_MC_REQ WMS_Q.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\GM_MC_REQ WMS_Q.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\05_STO_DATA_GM.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\08_NSO-(Allocation_Planning).xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\09_PRD_REPORT.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\Fill_Rate.xlsb",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs\\10_Allocation_PBS_V.xlsb"
   ],
   "recent_folders": [
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs",
-    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data"
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data",
+    "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs"
   ],
-  "schedules": [
-    {
-      "id": "ad7dfbc5-4801-4dfd-8096-dcd95f5ea80f",
-      "enabled": true,
-      "cron": "0 8 * * 1-6",
-      "folder": ""
-    }
-  ]
+  "schedules": []
 }

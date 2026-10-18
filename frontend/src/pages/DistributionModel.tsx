@@ -425,7 +425,7 @@ export default function DistributionModel() {
   const [imStatus,    setImStatus]    = useState<ItemMasterStatus | null>(null)
   const [imLoading,   setImLoading]   = useState(false)
   const [imMsg,       setImMsg]       = useState<string | null>(null)
-  const [barcodePreview, setBarcodePreview] = useState<{total: number; breakdown: {wh_source: string; count: number}[]} | null>(null)
+  const [barcodePreview, setBarcodePreview] = useState<{total: number; total_qty: number; breakdown: {wh_source: string; count: number; qty: number}[]} | null>(null)
   const [barcodePreviewLoading, setBarcodePreviewLoading] = useState(false)
   const [barcodePreviewMsg, setBarcodePreviewMsg] = useState<string | null>(null)
   const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number}|null>(null)
@@ -1350,22 +1350,26 @@ export default function DistributionModel() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Count tiles */}
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'stretch' }}>
-                {barcodePreview.breakdown.map(b => (
-                  <div key={b.wh_source} style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90,
-                    background: b.wh_source === 'GRC' ? '#14532d40' : b.wh_source === 'WMS' ? '#17255440' : '#2a1a5e40',
-                    border: `1px solid ${b.wh_source === 'GRC' ? '#22c55e40' : b.wh_source === 'WMS' ? '#3b82f640' : '#8b5cf640'}` }}>
-                    <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{b.wh_source}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700,
-                      color: b.wh_source === 'GRC' ? '#4ade80' : b.wh_source === 'WMS' ? '#60a5fa' : '#a78bfa' }}>
-                      {b.count.toLocaleString('en-IN')}
+                {barcodePreview.breakdown.map(b => {
+                  const clr = b.wh_source === 'GRC' ? '#4ade80' : b.wh_source === 'WMS' ? '#60a5fa' : '#a78bfa'
+                  const bg  = b.wh_source === 'GRC' ? '#14532d40' : b.wh_source === 'WMS' ? '#17255440' : '#2a1a5e40'
+                  const bdr = b.wh_source === 'GRC' ? '#22c55e40' : b.wh_source === 'WMS' ? '#3b82f640' : '#8b5cf640'
+                  return (
+                    <div key={b.wh_source} style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90, background: bg, border: `1px solid ${bdr}` }}>
+                      <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>{b.wh_source}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: clr }}>{b.count.toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 2 }}>barcodes</div>
+                      {(b.qty ?? 0) > 0 && <div style={{ fontSize: 11, color: clr, opacity: 0.8, marginTop: 3, fontWeight: 600 }}>{b.qty.toLocaleString('en-IN')} qty</div>}
                     </div>
-                    <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 2 }}>barcodes</div>
-                  </div>
-                ))}
+                  )
+                })}
                 <div style={{ padding: '10px 16px', borderRadius: 8, minWidth: 90, background: '#1a1a1a', border: `1px solid ${DK.cardBorder}` }}>
                   <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4 }}>Total Unique</div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: tokens.textPrimary }}>{barcodePreview.total.toLocaleString('en-IN')}</div>
                   <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 2 }}>barcodes</div>
+                  {(barcodePreview.total_qty ?? 0) > 0 && (
+                    <div style={{ fontSize: 11, color: '#a78bfa', marginTop: 3, fontWeight: 600 }}>{barcodePreview.total_qty.toLocaleString('en-IN')} qty</div>
+                  )}
                 </div>
               </div>
 
@@ -2521,23 +2525,40 @@ export default function DistributionModel() {
                 </div>
               </div>
 
+              {/* Stock / Allocated / Balance / Alloc% summary */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
+                {[
+                  { label: 'Total Stock (WH)', val: (distResult.total_stock ?? 0).toLocaleString('en-IN'),   bg: '#082f49', color: '#38bdf8', border: '#0369a130' },
+                  { label: 'Allocated',         val: distResult.total_allocated.toLocaleString('en-IN'),      bg: '#14532d', color: '#4ade80', border: '#22c55e30' },
+                  { label: 'Balance',           val: (distResult.total_balance ?? 0).toLocaleString('en-IN'), bg: '#1a0a00', color: '#fb923c', border: '#ea580c30' },
+                  { label: 'Allocate %',        val: `${distResult.alloc_pct ?? 0}%`,                        bg: '#1e1040', color: '#a78bfa', border: '#7c3aed30' },
+                ].map(t => (
+                  <div key={t.label} style={{ padding: '12px 16px', borderRadius: 10, background: t.bg, border: `1px solid ${t.border}` }}>
+                    <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>{t.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: t.color, fontVariantNumeric: 'tabular-nums' }}>{t.val}</div>
+                  </div>
+                ))}
+              </div>
+
               {/* Big KPI row */}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
                 {[
-                  { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN'), color: '#4ade80', bg: '#14532d' },
-                  { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN'),  color: '#38bdf8', bg: '#0c3055' },
-                  { label: 'Barcodes',        val: String(distResult.icodes_total),                     color: '#a78bfa', bg: '#2e1065' },
+                  { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN'), color: '#4ade80', bg: '#14532d', sub: undefined },
+                  { label: 'Stores Covered',  val: distResult.stores_covered.toLocaleString('en-IN'),  color: '#38bdf8', bg: '#0c3055', sub: undefined },
+                  { label: 'Barcodes',        val: String(distResult.icodes_total),                     color: '#a78bfa', bg: '#2e1065',
+                    sub: (distResult.icode_qty ?? 0) > 0 ? `${(distResult.icode_qty ?? 0).toLocaleString('en-IN')} qty` : undefined },
                   { label: 'Fill Rate',
                     val: (() => {
                       const total = distResult.icodes_total || 1
                       return `${Math.round((distResult.icodes_fully_covered / total) * 100)}%`
                     })(),
-                    color: '#fb923c', bg: '#431407' },
-                  { label: 'Run Time',        val: `${Math.round(distResult.elapsed_ms / 1000)}s`,     color: tokens.textMuted, bg: DK.cardBorder },
+                    color: '#fb923c', bg: '#431407', sub: undefined },
+                  { label: 'Run Time',        val: `${Math.round(distResult.elapsed_ms / 1000)}s`,     color: tokens.textMuted, bg: DK.cardBorder, sub: undefined },
                 ].map(k => (
                   <div key={k.label} style={{ flex: '1 1 120px', background: k.bg, borderRadius: 8, padding: '10px 14px', minWidth: 100 }}>
                     <div style={{ fontSize: 10, color: k.color, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>{k.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.val}</div>
+                    {k.sub && <div style={{ fontSize: 10, color: k.color, opacity: 0.75, marginTop: 2 }}>{k.sub}</div>}
                   </div>
                 ))}
               </div>

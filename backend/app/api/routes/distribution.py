@@ -1576,34 +1576,59 @@ async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
         grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
         wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
 
+        def _get_qty_col(frame, candidates):
+            for c in candidates:
+                if c in frame.columns:
+                    return c
+            return None
+
         frames = []
         if src in ("GRC", "BOTH") and grc is not None:
-            g = grc[["icode"]].copy() if "icode" in grc.columns else grc[[grc.columns[0]]].rename(columns={grc.columns[0]: "icode"})
+            gcols = [c.lower() for c in grc.columns]
+            grc.columns = gcols
+            qty_col = _get_qty_col(grc, ["grc_q", "qty", "stock"])
+            g = grc[["icode"]].copy() if "icode" in gcols else grc[[gcols[0]]].rename(columns={gcols[0]: "icode"})
             g.columns = ["icode"]
             g["wh_source"] = "GRC"
+            if qty_col:
+                g["qty"] = pd.to_numeric(grc[qty_col], errors="coerce").fillna(0).astype(int)
+            else:
+                g["qty"] = 0
             frames.append(g)
         if src in ("WMS", "BOTH") and wms is not None:
-            w = wms[["icode"]].copy() if "icode" in wms.columns else wms[[wms.columns[0]]].rename(columns={wms.columns[0]: "icode"})
+            wcols = [c.lower() for c in wms.columns]
+            wms.columns = wcols
+            qty_col = _get_qty_col(wms, ["wms_q", "qty", "stock"])
+            w = wms[["icode"]].copy() if "icode" in wcols else wms[[wcols[0]]].rename(columns={wcols[0]: "icode"})
             w.columns = ["icode"]
             w["wh_source"] = "WMS"
+            if qty_col:
+                w["qty"] = pd.to_numeric(wms[qty_col], errors="coerce").fillna(0).astype(int)
+            else:
+                w["qty"] = 0
             frames.append(w)
 
         if not frames:
             return APIResponse.fail(message="No parquets found for selected source.")
 
         df = pd.concat(frames, ignore_index=True)
-        # If BOTH: barcodes in both → "GRC|WMS"
+        # If BOTH: barcodes in both → "GRC|WMS"; sum qty across sources per icode
         if src == "BOTH":
             counts = df.groupby("icode")["wh_source"].nunique()
             both_icodes = counts[counts > 1].index
             df.loc[df["icode"].isin(both_icodes), "wh_source"] = "GRC|WMS"
-        df = df.drop_duplicates("icode")
 
-        breakdown = df.groupby("wh_source").size().reset_index(name="count").to_dict(orient="records")
+        # Aggregate qty per icode (sum across sources), then deduplicate
+        icode_qty = df.groupby("icode")["qty"].sum().reset_index()
+        df = df.drop_duplicates("icode")[["icode", "wh_source"]].merge(icode_qty, on="icode", how="left")
+
+        breakdown = df.groupby("wh_source").agg(count=("icode", "count"), qty=("qty", "sum")).reset_index().rename(columns={"count": "count"}).to_dict(orient="records")
+        total_qty = int(df["qty"].sum())
         sample = df.head(10).to_dict(orient="records")
 
         return APIResponse.ok(data={
             "total": len(df),
+            "total_qty": total_qty,
             "breakdown": breakdown,
             "sample": sample,
         })

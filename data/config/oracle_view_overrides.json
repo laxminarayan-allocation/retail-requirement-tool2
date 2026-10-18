@@ -1,0 +1,9 @@
+{
+  "barcode_grc": "V_BARCODE_REQ_APPS_GRC_V2",
+  "barcode_wms": "V_BARCODE_REQ_APPS_WMS_V2",
+  "mc_apps": "V_MC_REQ_APPS",
+  "mc_gm": "V_MC_REQ_GM",
+  "art_apps": "V_ART_REQ_APPS",
+  "art_gm": "V_ART_REQ_GM",
+  "mrp": "V_MRP_REQ_APPS"
+}

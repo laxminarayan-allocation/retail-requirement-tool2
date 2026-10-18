@@ -1850,11 +1850,11 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
         fully_covered   = result.groupby("icode").apply(
             lambda g: (g["final_allocate"] >= g["art_grid"].fillna(0)).all()
         ).sum()
-        total_stock   = int(result[wh_col].sum()) if wh_col in result.columns else 0
+        # unique barcode stock — deduplicate on icode first (avoid store-level inflation)
+        icode_qty     = int(result.drop_duplicates("icode")[wh_col].sum()) if wh_col in result.columns else 0
+        total_stock   = icode_qty
         total_balance = total_stock - total_allocated
         alloc_pct     = round(total_allocated / total_stock * 100, 1) if total_stock > 0 else 0.0
-        # unique barcode qty (wh_q per icode, not multiplied by stores)
-        icode_qty = int(result.drop_duplicates("icode")[wh_col].sum()) if wh_col in result.columns else 0
 
         # ── Sample: key display columns ────────────────────────────────────────
         display_cols = [

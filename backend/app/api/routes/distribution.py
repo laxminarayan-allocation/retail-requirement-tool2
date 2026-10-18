@@ -1588,31 +1588,34 @@ async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
             grc_copy.columns = [c.lower() for c in grc_copy.columns]
             qty_col = _get_qty_col(grc_copy, ["grc_q", "qty", "stock"])
             icode_col = "icode" if "icode" in grc_copy.columns else grc_copy.columns[0]
-            g = grc_copy[[icode_col]].rename(columns={icode_col: "icode"})
+            # deduplicate on icode first — parquet is store-level, qty is per barcode
+            cols = [icode_col] + ([qty_col] if qty_col else [])
+            g = grc_copy[cols].drop_duplicates(icode_col).rename(columns={icode_col: "icode"})
             g["wh_source"] = "GRC"
-            g["qty"] = pd.to_numeric(grc_copy[qty_col], errors="coerce").fillna(0).astype(int) if qty_col else 0
-            frames.append(g)
+            g["qty"] = pd.to_numeric(g[qty_col], errors="coerce").fillna(0).astype(int) if qty_col else 0
+            frames.append(g[["icode", "wh_source", "qty"]])
         if src in ("WMS", "BOTH") and wms is not None:
             wms_copy = wms.copy()
             wms_copy.columns = [c.lower() for c in wms_copy.columns]
             qty_col = _get_qty_col(wms_copy, ["wms_q", "qty", "stock"])
             icode_col = "icode" if "icode" in wms_copy.columns else wms_copy.columns[0]
-            w = wms_copy[[icode_col]].rename(columns={icode_col: "icode"})
+            cols = [icode_col] + ([qty_col] if qty_col else [])
+            w = wms_copy[cols].drop_duplicates(icode_col).rename(columns={icode_col: "icode"})
             w["wh_source"] = "WMS"
-            w["qty"] = pd.to_numeric(wms_copy[qty_col], errors="coerce").fillna(0).astype(int) if qty_col else 0
-            frames.append(w)
+            w["qty"] = pd.to_numeric(w[qty_col], errors="coerce").fillna(0).astype(int) if qty_col else 0
+            frames.append(w[["icode", "wh_source", "qty"]])
 
         if not frames:
             return APIResponse.fail(message="No parquets found for selected source.")
 
         df = pd.concat(frames, ignore_index=True)
-        # If BOTH: barcodes in both → "GRC|WMS"; sum qty across sources per icode
+        # If BOTH: barcodes in both → "GRC|WMS"; sum qty across both sources per icode
         if src == "BOTH":
             counts = df.groupby("icode")["wh_source"].nunique()
             both_icodes = counts[counts > 1].index
             df.loc[df["icode"].isin(both_icodes), "wh_source"] = "GRC|WMS"
 
-        # Aggregate qty per icode (sum across sources), then deduplicate
+        # Sum qty per icode (for BOTH: GRC qty + WMS qty), then deduplicate
         icode_qty = df.groupby("icode")["qty"].sum().reset_index()
         df = df.drop_duplicates("icode")[["icode", "wh_source"]].merge(icode_qty, on="icode", how="left")
 

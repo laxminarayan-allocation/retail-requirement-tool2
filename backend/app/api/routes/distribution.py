@@ -1824,6 +1824,9 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
         fully_covered   = result.groupby("icode").apply(
             lambda g: (g["final_allocate"] >= g["art_grid"].fillna(0)).all()
         ).sum()
+        total_stock   = int(result[wh_col].sum()) if wh_col in result.columns else 0
+        total_balance = total_stock - total_allocated
+        alloc_pct     = round(total_allocated / total_stock * 100, 1) if total_stock > 0 else 0.0
 
         # ── Sample: key display columns ────────────────────────────────────────
         display_cols = [
@@ -1868,6 +1871,9 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
             "icodes_total":           icodes_total,
             "icodes_fully_covered":   int(fully_covered),
             "ol_held_count":          ol_held_count,
+            "total_stock":            total_stock,
+            "total_balance":          total_balance,
+            "alloc_pct":              alloc_pct,
             "columns":                avail,
             "sample":                 sample_df.to_dict(orient="records"),
         })

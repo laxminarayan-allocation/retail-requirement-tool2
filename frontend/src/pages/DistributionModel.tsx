@@ -30,6 +30,7 @@ interface DistResult {
   rows: number; elapsed_ms: number; max_round: number
   total_allocated: number; stores_covered: number
   icodes_total: number; icodes_fully_covered: number
+  total_stock: number; total_balance: number; alloc_pct: number
   columns: string[]; sample: Record<string, unknown>[]
 }
 
@@ -2376,6 +2377,20 @@ export default function DistributionModel() {
           {distResult && (
             <div style={{ display: 'flex', gap: 16, marginTop: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                {/* ── Stock / Allocate / Balance / % summary card ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+                  {[
+                    { label: 'Total Stock (WH)',  val: (distResult.total_stock ?? 0).toLocaleString('en-IN'),    bg: '#082f49', color: '#38bdf8', border: '#0369a130' },
+                    { label: 'Allocated',          val: distResult.total_allocated.toLocaleString('en-IN'),       bg: '#14532d', color: '#4ade80', border: '#22c55e30' },
+                    { label: 'Balance',            val: (distResult.total_balance ?? 0).toLocaleString('en-IN'),  bg: '#1a0a00', color: '#fb923c', border: '#ea580c30' },
+                    { label: 'Allocate %',         val: `${distResult.alloc_pct ?? 0}%`,                         bg: '#1e1040', color: '#a78bfa', border: '#7c3aed30' },
+                  ].map(t => (
+                    <div key={t.label} style={{ padding: '12px 16px', borderRadius: 10, background: t.bg, border: `1px solid ${t.border}` }}>
+                      <div style={{ fontSize: 10, color: tokens.textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>{t.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: t.color, fontVariantNumeric: 'tabular-nums' }}>{t.val}</div>
+                    </div>
+                  ))}
+                </div>
                 <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
                   {[
                     { label: 'Units Allocated', val: distResult.total_allocated.toLocaleString('en-IN'), color: '#4ade80' },

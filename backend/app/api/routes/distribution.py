@@ -1584,28 +1584,22 @@ async def barcode_preview(stock_source: str = "GRC", biz_segment: str = "BOTH"):
 
         frames = []
         if src in ("GRC", "BOTH") and grc is not None:
-            gcols = [c.lower() for c in grc.columns]
-            grc.columns = gcols
-            qty_col = _get_qty_col(grc, ["grc_q", "qty", "stock"])
-            g = grc[["icode"]].copy() if "icode" in gcols else grc[[gcols[0]]].rename(columns={gcols[0]: "icode"})
-            g.columns = ["icode"]
+            grc_copy = grc.copy()
+            grc_copy.columns = [c.lower() for c in grc_copy.columns]
+            qty_col = _get_qty_col(grc_copy, ["grc_q", "qty", "stock"])
+            icode_col = "icode" if "icode" in grc_copy.columns else grc_copy.columns[0]
+            g = grc_copy[[icode_col]].rename(columns={icode_col: "icode"})
             g["wh_source"] = "GRC"
-            if qty_col:
-                g["qty"] = pd.to_numeric(grc[qty_col], errors="coerce").fillna(0).astype(int)
-            else:
-                g["qty"] = 0
+            g["qty"] = pd.to_numeric(grc_copy[qty_col], errors="coerce").fillna(0).astype(int) if qty_col else 0
             frames.append(g)
         if src in ("WMS", "BOTH") and wms is not None:
-            wcols = [c.lower() for c in wms.columns]
-            wms.columns = wcols
-            qty_col = _get_qty_col(wms, ["wms_q", "qty", "stock"])
-            w = wms[["icode"]].copy() if "icode" in wcols else wms[[wcols[0]]].rename(columns={wcols[0]: "icode"})
-            w.columns = ["icode"]
+            wms_copy = wms.copy()
+            wms_copy.columns = [c.lower() for c in wms_copy.columns]
+            qty_col = _get_qty_col(wms_copy, ["wms_q", "qty", "stock"])
+            icode_col = "icode" if "icode" in wms_copy.columns else wms_copy.columns[0]
+            w = wms_copy[[icode_col]].rename(columns={icode_col: "icode"})
             w["wh_source"] = "WMS"
-            if qty_col:
-                w["qty"] = pd.to_numeric(wms[qty_col], errors="coerce").fillna(0).astype(int)
-            else:
-                w["qty"] = 0
+            w["qty"] = pd.to_numeric(wms_copy[qty_col], errors="coerce").fillna(0).astype(int) if qty_col else 0
             frames.append(w)
 
         if not frames:

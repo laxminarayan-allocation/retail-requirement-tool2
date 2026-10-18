@@ -1380,14 +1380,28 @@ export default function DistributionModel() {
                   CSV includes <strong style={{ color: tokens.textPrimary }}>Item Master</strong> metadata + barcode + GRC / ASN / WMS qty columns
                   {imStatus?.ready ? '' : ' · (load IM first for full metadata)'}
                 </div>
-                <a
-                  href={`/api/distribution/barcode-preview/csv?stock_source=${reqSource}&biz_segment=${bizSegment}`}
-                  download
+                <button
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem('ck_jwt') || ''
+                      const res = await fetch(`/api/distribution/barcode-preview/csv?stock_source=${reqSource}&biz_segment=${bizSegment}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                      })
+                      if (!res.ok) throw new Error(await res.text())
+                      const blob = await res.blob()
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `barcode_preview_${reqSource}_${bizSegment}.csv`
+                      a.click()
+                      URL.revokeObjectURL(url)
+                    } catch (e) { alert('CSV download failed: ' + e) }
+                  }}
                   style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7,
-                    border: 'none', background: '#059669', color: '#fff',
-                    textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    border: 'none', background: '#059669', color: '#fff', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   ⬇ Download CSV
-                </a>
+                </button>
               </div>
             </div>
           )}

@@ -690,7 +690,7 @@ export default function DistributionModel() {
   const buildBase = async () => {
     setBaseLoading(true); setBaseMsg(null); setBaseResult(null)
     try {
-      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback }
+      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback, min_qty: String(minQty) }
       const activeScopes = scopes.filter(s => s.divisions.length > 0 || s.attribute1s.length > 0)
       if (activeScopes.length > 0) params.scopes = JSON.stringify(activeScopes)
       if (selStores.length > 0) params.stores = JSON.stringify(selStores)
@@ -738,7 +738,7 @@ export default function DistributionModel() {
     setDistLoading(true); setDistMsg(null); setDistResult(null)
     try {
       const res = await http.post<{ success: boolean; data: DistResult; message: string | null }>(
-        `/distribution/distribute`,
+        `/distribution/distribute?min_qty=${minQty}`,
         { wh_col: 'wh_q', max_round: maxRound, hold_rules: holdRules, apply_option_listing: applyOL },
         { timeout: 300_000 }
       )

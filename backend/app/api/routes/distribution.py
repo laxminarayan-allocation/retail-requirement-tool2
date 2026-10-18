@@ -971,6 +971,7 @@ async def build_distribution_base(
     stores:              str = "",       # JSON array of store_name strings to filter
     store_field_filters: str = "",       # JSON dict of {field: [values]} store master field filters
     req_fallback:        str = "parquet",  # "parquet" | "zero" — for items not matched in REQ CSV
+    min_qty:             int = 0,        # minimum wh_q per unique barcode (0 = no filter)
 ):
     """
     Build the full joined distribution base:
@@ -1052,6 +1053,15 @@ async def build_distribution_base(
         # filter fnl_list = Y
         if "fnl_list" in base.columns:
             base = base[base["fnl_list"].astype(str).str.upper() == "Y"].copy()
+
+        # ── min_qty filter: exclude barcodes whose unique wh_q < min_qty ─────────
+        if min_qty > 0 and "wh_q" in base.columns and "icode" in base.columns:
+            icode_qty = base.drop_duplicates("icode").set_index("icode")["wh_q"]
+            icode_qty = pd.to_numeric(icode_qty, errors="coerce").fillna(0)
+            keep_icodes = icode_qty[icode_qty >= min_qty].index
+            before_rows = len(base)
+            base = base[base["icode"].isin(keep_icodes)].copy()
+            logger.info("min_qty=%d filter: %d→%d rows (%d barcodes kept)", min_qty, before_rows, len(base), len(keep_icodes))
 
         # ── Scope filter (Division × Attribute1 OR-combined, multi-select) ───────
         if scopes:
@@ -1759,7 +1769,7 @@ async def barcode_preview_csv(stock_source: str = "GRC", biz_segment: str = "BOT
 
 
 @router.post("/distribute", response_model=APIResponse)
-async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q", max_round: int = 10):
+async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q", max_round: int = 10, min_qty: int = 0):
     """
     Run the min→max grid distribution loop on the cached base (v2).
     Accepts optional JSON body (DistributeRequest) with hold_rules.
@@ -1782,6 +1792,15 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
         t0   = time.perf_counter()
         base = read_cache("DIST", "BASE")
         base.columns = [c.lower() for c in base.columns]
+
+        # min_qty filter — exclude barcodes with total unique wh_q below threshold
+        if min_qty > 0 and wh_col in base.columns and "icode" in base.columns:
+            icode_qty = pd.to_numeric(
+                base.drop_duplicates("icode").set_index("icode")[wh_col], errors="coerce"
+            ).fillna(0)
+            keep = icode_qty[icode_qty >= min_qty].index
+            base = base[base["icode"].isin(keep)].copy()
+            logger.info("distribute min_qty=%d: %d barcodes kept", min_qty, len(keep))
 
         # fallback for old cache without wh_q
         if wh_col not in base.columns:

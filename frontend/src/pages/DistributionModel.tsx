@@ -31,6 +31,7 @@ interface DistResult {
   total_allocated: number; stores_covered: number
   icodes_total: number; icodes_fully_covered: number
   total_stock: number; total_balance: number; alloc_pct: number; icode_qty: number
+  wh_source_breakdown?: {wh_source: string; allocated: number; barcodes: number; stock?: number}[]
   columns: string[]; sample: Record<string, unknown>[]
 }
 
@@ -2513,6 +2514,36 @@ export default function DistributionModel() {
                 )}
                 {!divSummaryLoading && (divSummary ?? []).length === 0 && (
                   <div style={{ fontSize: 12, color: tokens.textMuted }}>No division data</div>
+                )}
+                {/* WH Source Breakdown */}
+                {(distResult.wh_source_breakdown ?? []).length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: tokens.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>WH Source Breakdown</div>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                      <thead>
+                        <tr>
+                          {(['Source', 'Stock', 'Allocated', 'Barcodes'] as const).map(h => (
+                            <th key={h} style={{ padding: '3px 6px', textAlign: h === 'Source' ? 'left' : 'right',
+                              color: tokens.textMuted, fontWeight: 600, fontSize: 11,
+                              borderBottom: `1px solid ${tokens.cardBorder}` }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(distResult.wh_source_breakdown ?? []).map(row => {
+                          const clr = row.wh_source === 'GRC' ? '#38bdf8' : row.wh_source === 'WMS' ? '#a78bfa' : '#4ade80'
+                          return (
+                            <tr key={row.wh_source}>
+                              <td style={{ padding: '4px 6px', fontWeight: 700, color: clr }}>{row.wh_source}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: tokens.textSecondary }}>{(row.stock ?? 0).toLocaleString('en-IN')}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{row.allocated.toLocaleString('en-IN')}</td>
+                              <td style={{ padding: '4px 6px', textAlign: 'right', color: tokens.textMuted }}>{row.barcodes.toLocaleString('en-IN')}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
                 {distResult.rows > 0 && (() => {
                   const totalNonzero = (divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0)

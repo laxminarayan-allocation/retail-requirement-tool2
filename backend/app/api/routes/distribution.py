@@ -1896,6 +1896,25 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
         total_balance = total_stock - total_allocated
         alloc_pct     = round(total_allocated / total_stock * 100, 1) if total_stock > 0 else 0.0
 
+        # wh_source breakdown: allocated units + stock per source
+        wh_source_breakdown = []
+        if "wh_source" in result.columns:
+            src_grp = result.groupby("wh_source").agg(
+                allocated=("final_allocate", "sum"),
+                barcodes=("icode", "nunique"),
+            ).reset_index()
+            # add unique stock per source (dedup by icode within each source)
+            if wh_col in result.columns:
+                src_stock = (
+                    result.drop_duplicates("icode")
+                    .groupby("wh_source")[wh_col]
+                    .sum()
+                    .reset_index()
+                    .rename(columns={wh_col: "stock"})
+                )
+                src_grp = src_grp.merge(src_stock, on="wh_source", how="left")
+            wh_source_breakdown = src_grp.fillna(0).astype({"allocated": int, "barcodes": int}).to_dict(orient="records")
+
         # ── Sample: key display columns ────────────────────────────────────────
         display_cols = [
             # identity
@@ -1943,6 +1962,7 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
             "total_balance":          total_balance,
             "alloc_pct":              alloc_pct,
             "icode_qty":              icode_qty,
+            "wh_source_breakdown":    wh_source_breakdown,
             "columns":                avail,
             "sample":                 sample_df.to_dict(orient="records"),
         })

@@ -991,6 +991,7 @@ async def build_distribution_base(
     store_field_filters: str = "",       # JSON dict of {field: [values]} store master field filters
     req_fallback:        str = "parquet",  # "parquet" | "zero" — for items not matched in REQ CSV
     min_qty:             int = 0,        # minimum wh_q per unique barcode (0 = no filter)
+    priority_source:     str = "grc",   # grc | wms | max_req | none — which source barcodes go first
 ):
     """
     Build the full joined distribution base:
@@ -1046,25 +1047,50 @@ async def build_distribution_base(
                 base["dist_req"] = base.get("req", 0)
                 base["wh_q"] = base.get("wms_q", 0)
                 base["wh_source"] = "WMS"
-            else:  # BOTH
+            else:  # BOTH — outer join so WMS-only barcodes are included too
                 if grc is None or wms is None:
                     return APIResponse.fail(message="Both GRC and WMS parquets required.")
                 grc.columns = [c.lower() for c in grc.columns]
                 wms.columns = [c.lower() for c in wms.columns]
+                grc_cols = list(grc.columns)
+                # Outer join: GRC left + WMS right → all unique (icode, store_name) from both
                 base = grc.merge(
                     wms[["icode", "store_name", "req", "wms_q"]].rename(columns={"req": "wms_req", "wms_q": "wms_stock"}),
-                    on=["icode", "store_name"], how="left"
+                    on=["icode", "store_name"], how="outer"
                 )
+                # For WMS-only rows (not in GRC), fill GRC columns from WMS
+                wms_full = wms.copy()
+                wms_full.columns = [c.lower() for c in wms_full.columns]
+                # Fill missing GRC-side columns for outer-joined WMS-only rows
+                for col in ["req", "grc_q"]:
+                    if col not in base.columns:
+                        base[col] = 0
+                base["req"]       = base["req"].fillna(0)
+                base["grc_q"]     = base.get("grc_q", 0)
+                if "grc_q" in base.columns:
+                    base["grc_q"] = pd.to_numeric(base["grc_q"], errors="coerce").fillna(0)
                 base["wms_req"]   = base["wms_req"].fillna(0)
                 base["wms_stock"] = base["wms_stock"].fillna(0)
-                base["dist_req"]  = base.get("req", 0) + base["wms_req"]
-                grc_q = base.get("grc_q", 0).fillna(0)
+                # dist_req = max(grc_req, wms_req) per row — take the larger demand signal
+                base["dist_req"]  = base[["req", "wms_req"]].max(axis=1)
+                grc_q = pd.to_numeric(base.get("grc_q", 0), errors="coerce").fillna(0)
                 wms_q = base["wms_stock"]
                 base["wh_q"] = grc_q + wms_q
-                # Per barcode: if both sources have qty → "GRC|WMS", else whichever has qty
+                # wh_source label
                 base["wh_source"] = "GRC|WMS"
                 base.loc[(grc_q > 0) & (wms_q == 0), "wh_source"] = "GRC"
                 base.loc[(grc_q == 0) & (wms_q > 0), "wh_source"] = "WMS"
+                # For WMS-only rows, fill remaining GRC columns with values from wms df
+                wms_key_cols = [c for c in wms_full.columns if c not in ("icode", "store_name", "req", "wms_q")]
+                wms_fill = wms_full[["icode", "store_name"] + [c for c in wms_key_cols if c not in base.columns]]
+                if wms_fill.shape[1] > 2:
+                    base = base.merge(wms_fill, on=["icode", "store_name"], how="left")
+                logger.info("build-base BOTH (outer): %d rows (%d GRC-only, %d WMS-only, %d shared)",
+                    len(base),
+                    int((grc_q > 0).sum() - ((grc_q > 0) & (wms_q > 0)).sum()),
+                    int((wms_q > 0).sum() - ((grc_q > 0) & (wms_q > 0)).sum()),
+                    int(((grc_q > 0) & (wms_q > 0)).sum()),
+                )
 
         # normalise col names
         base.columns = [c.lower() for c in base.columns]
@@ -1380,6 +1406,36 @@ async def build_distribution_base(
         else:
             base["concept_rank"] = 1
 
+        # ── 12c. Priority source — bring chosen-source ICODEs to top ──────────
+        # priority_source only meaningful for BOTH (outer join); for GRC/WMS-only it's a no-op.
+        if priority_source in ("grc", "wms", "max_req") and req_source == "BOTH" and "wh_source" in base.columns:
+            if priority_source == "grc":
+                # GRC-present barcodes first (GRC or GRC|WMS), pure WMS-only last
+                base["_priority_grp"] = (base["wh_source"] == "WMS").astype(int)  # 0=priority, 1=last
+            elif priority_source == "wms":
+                # WMS-present barcodes first (WMS or GRC|WMS), pure GRC-only last
+                base["_priority_grp"] = (base["wh_source"] == "GRC").astype(int)
+            else:  # max_req: highest dist_req icodes first (aggregate per icode)
+                icode_max_req = base.groupby("icode")["dist_req"].max().rename("_icode_max_req")
+                base = base.merge(icode_max_req, on="icode", how="left")
+                base["_priority_grp"] = -base["_icode_max_req"].fillna(0)
+                base = base.drop(columns=["_icode_max_req"])
+
+            # Re-sort: priority group first, then existing icode + store ordering
+            sort_cols = ["_priority_grp", "icode"]
+            asc_flags = [True, True]
+            if sort_mode == "fill_rate":
+                sort_cols += ["_sort_fill"] if "_sort_fill" in base.columns else ["total_req"]
+                asc_flags += [True]
+            elif sort_mode == "festive_req":
+                sort_cols += ["total_req"]
+                asc_flags += [False]
+            else:
+                sort_cols += ["total_req"]
+                asc_flags += [False]
+            base = base.sort_values(sort_cols, ascending=asc_flags)
+            base = base.drop(columns=["_priority_grp"], errors="ignore")
+
         # ── 13. Cache base for distribution loop ──────────────────────────────
         write_cache("DIST", "BASE", base)
 
@@ -1388,13 +1444,14 @@ async def build_distribution_base(
         base = base.where(base.notna(), None)
 
         return APIResponse.ok(data={
-            "rows":        len(base),
-            "columns":     list(base.columns),
-            "elapsed_ms":  elapsed,
-            "req_source":  req_source,
-            "biz_segment": biz_segment,
-            "sort_mode":   sort_mode,
-            "sample":      base.head(5).to_dict(orient="records"),
+            "rows":            len(base),
+            "columns":         list(base.columns),
+            "elapsed_ms":      elapsed,
+            "req_source":      req_source,
+            "biz_segment":     biz_segment,
+            "sort_mode":       sort_mode,
+            "priority_source": priority_source,
+            "sample":          base.head(5).to_dict(orient="records"),
         })
 
     except Exception as exc:

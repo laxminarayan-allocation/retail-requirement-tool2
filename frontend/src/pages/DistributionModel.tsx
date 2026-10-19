@@ -243,6 +243,8 @@ export default function DistributionModel() {
   const [bizSegment,  setBizSegment]  = useState<BizSegment>(() => ssLoad('bizSegment', 'APPS'))
   const [sortMode,    setSortMode]    = useState<SortMode>(() => ssLoad('sortMode', 'combined_req'))
   const [reqFallback, setReqFallback] = useState<'parquet' | 'zero'>(() => ssLoad('reqFallback', 'parquet'))
+  type PrioritySource = 'grc' | 'wms' | 'max_req' | 'none'
+  const [prioritySource, setPrioritySource] = useState<PrioritySource>(() => ssLoad('prioritySource', 'grc'))
 
   // Scope builder: each row = {divisions[], attribute1s[]} — rows are OR-combined
   const [scopes, setScopes] = useState<{divisions: string[]; attribute1s: string[]}[]>(() => ssLoad('scopes', [{ divisions: [], attribute1s: [] }]))
@@ -274,6 +276,7 @@ export default function DistributionModel() {
   useEffect(() => { ssSave({ reqSource }) }, [reqSource])
   useEffect(() => { ssSave({ bizSegment }) }, [bizSegment])
   useEffect(() => { ssSave({ sortMode }) }, [sortMode])
+  useEffect(() => { ssSave({ prioritySource }) }, [prioritySource])
   useEffect(() => { ssSave({ scopes }) }, [scopes])
   useEffect(() => { ssSave({ selStores }) }, [selStores])
   useEffect(() => { ssSave({ activeFieldFilters }) }, [activeFieldFilters])
@@ -456,7 +459,7 @@ export default function DistributionModel() {
   const [distMsg,       setDistMsg]       = useState<string | null>(null)
   // Captured at run-time for Logic Sheet
   const [runParams, setRunParams] = useState<{
-    reqSource: string; reqSrcApplied: string; bizSegment: string; sortMode: string; minQty: number; maxRound: number
+    reqSource: string; reqSrcApplied: string; bizSegment: string; sortMode: string; prioritySource: string; minQty: number; maxRound: number
     applyOL: boolean; holdRules: number
     selStores: string[]; activeFieldFilters: Record<string, string[]>
   } | null>(null)
@@ -713,7 +716,7 @@ export default function DistributionModel() {
   const buildBase = async () => {
     setBaseLoading(true); setBaseMsg(null); setBaseResult(null)
     try {
-      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback, min_qty: String(minQty) }
+      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback, min_qty: String(minQty), priority_source: prioritySource }
       const activeScopes = scopes.filter(s => s.divisions.length > 0 || s.attribute1s.length > 0)
       if (activeScopes.length > 0) params.scopes = JSON.stringify(activeScopes)
       if (selStores.length > 0) params.stores = JSON.stringify(selStores)
@@ -760,7 +763,7 @@ export default function DistributionModel() {
   const runDistribution = async () => {
     setDistLoading(true); setDistMsg(null); setDistResult(null)
     try { sessionStorage.setItem('ss27_distribution_running', '1') } catch {}
-    setRunParams({ reqSource, reqSrcApplied, bizSegment, sortMode, minQty, maxRound, applyOL, holdRules: holdRules.length, selStores, activeFieldFilters })
+    setRunParams({ reqSource, reqSrcApplied, bizSegment, sortMode, prioritySource, minQty, maxRound, applyOL, holdRules: holdRules.length, selStores, activeFieldFilters })
     try {
       const res = await http.post<{ success: boolean; data: DistResult; message: string | null }>(
         `/distribution/distribute?min_qty=${minQty}`,
@@ -2045,6 +2048,41 @@ export default function DistributionModel() {
             </div>
           </div>
 
+          {/* Source Priority — which warehouse source gets allocated first */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+              color: tokens.textMuted, marginBottom: 8 }}>Barcode Source Priority</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {([
+                { key: 'grc'     as const, icon: '🏭', title: 'GRC First',     hint: 'GRC barcodes allocated before WMS-only (default)' },
+                { key: 'wms'     as const, icon: '📦', title: 'WMS First',     hint: 'WMS barcodes allocated before GRC-only' },
+                { key: 'max_req' as const, icon: '🔝', title: 'Max REQ First', hint: 'Highest demand barcodes first (regardless of source)' },
+                { key: 'none'    as const, icon: '—',  title: 'No Priority',   hint: 'Natural sort order (icode then store req)' },
+              ] as const).map(opt => (
+                <div key={opt.key} onClick={() => setPrioritySource(opt.key)} style={{
+                  border: `1.5px solid ${prioritySource === opt.key ? '#06b6d4' : DK.cardBorder}`,
+                  borderRadius: 10, padding: '10px 12px', cursor: 'pointer', position: 'relative',
+                  background: prioritySource === opt.key ? accentBg('#001a1f', '#ecfeff') : DK.cardBg,
+                  transition: 'border-color .15s, background .15s',
+                }}>
+                  {prioritySource === opt.key && (
+                    <span style={{ position: 'absolute', top: 6, right: 7, fontSize: 9, padding: '1px 6px',
+                      borderRadius: 4, fontWeight: 700, background: '#0e7490', color: '#e0f2fe',
+                      border: '1px solid #06b6d440' }}>Active</span>
+                  )}
+                  <div style={{ fontSize: 16, marginBottom: 4 }}>{opt.icon}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: prioritySource === opt.key ? '#22d3ee' : tokens.textPrimary, marginBottom: 3 }}>{opt.title}</div>
+                  <div style={{ fontSize: 10, color: tokens.textSecondary, lineHeight: 1.4 }}>{opt.hint}</div>
+                </div>
+              ))}
+            </div>
+            {reqSource !== 'BOTH' && (
+              <div style={{ fontSize: 10, color: tokens.textMuted, marginTop: 6, fontStyle: 'italic' }}>
+                Source priority applies only when REQ Source = BOTH (outer join mode)
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
             {PRIORITY_CSV_SPECS.map(spec => {
               const meta = priorityMeta[spec.key]
@@ -2673,12 +2711,14 @@ export default function DistributionModel() {
               {/* Logic Sheet — Run Parameters */}
               {runParams && (() => {
                 const REQ_MODE_LABELS: Record<string, string> = { oracle: 'Oracle Only', csv: 'CSV Only', csv_priority: 'CSV Priority', max: 'Max (Both)', sum: 'Sum (Both)' }
-                const DEFAULTS = { reqSource: 'GRC', reqSrcApplied: 'oracle', bizSegment: 'APPS', sortMode: 'combined_req', minQty: 10, maxRound: 10, applyOL: false, holdRules: 0, selStores: 0, activeFieldFilters: 0 }
+                const PRIORITY_SRC_LABELS: Record<string, string> = { grc: 'GRC First', wms: 'WMS First', max_req: 'Max REQ First', none: 'No Priority' }
+                const DEFAULTS = { reqSource: 'GRC', reqSrcApplied: 'oracle', bizSegment: 'APPS', sortMode: 'combined_req', prioritySource: 'grc', minQty: 10, maxRound: 10, applyOL: false, holdRules: 0, selStores: 0, activeFieldFilters: 0 }
                 const rows: { label: string; def: string; used: string; changed: boolean }[] = [
-                  { label: 'WH Source',      def: DEFAULTS.reqSource,                   used: runParams.reqSource,                           changed: runParams.reqSource !== DEFAULTS.reqSource },
-                  { label: 'REQ Mode',        def: REQ_MODE_LABELS[DEFAULTS.reqSrcApplied], used: REQ_MODE_LABELS[runParams.reqSrcApplied] ?? runParams.reqSrcApplied, changed: runParams.reqSrcApplied !== DEFAULTS.reqSrcApplied },
-                  { label: 'Segment',         def: DEFAULTS.bizSegment,                  used: runParams.bizSegment,                          changed: runParams.bizSegment !== DEFAULTS.bizSegment },
-                  { label: 'Sort Mode',       def: DEFAULTS.sortMode,                    used: runParams.sortMode,                            changed: runParams.sortMode !== DEFAULTS.sortMode },
+                  { label: 'WH Source',       def: DEFAULTS.reqSource,                                   used: runParams.reqSource,                                                     changed: runParams.reqSource !== DEFAULTS.reqSource },
+                  { label: 'REQ Mode',        def: REQ_MODE_LABELS[DEFAULTS.reqSrcApplied],              used: REQ_MODE_LABELS[runParams.reqSrcApplied] ?? runParams.reqSrcApplied,     changed: runParams.reqSrcApplied !== DEFAULTS.reqSrcApplied },
+                  { label: 'Segment',         def: DEFAULTS.bizSegment,                                  used: runParams.bizSegment,                                                    changed: runParams.bizSegment !== DEFAULTS.bizSegment },
+                  { label: 'Sort Mode',       def: DEFAULTS.sortMode,                                    used: runParams.sortMode,                                                      changed: runParams.sortMode !== DEFAULTS.sortMode },
+                  { label: 'Src Priority',    def: PRIORITY_SRC_LABELS[DEFAULTS.prioritySource] ?? DEFAULTS.prioritySource, used: PRIORITY_SRC_LABELS[runParams.prioritySource] ?? runParams.prioritySource, changed: runParams.prioritySource !== DEFAULTS.prioritySource },
                   { label: 'Min Qty',         def: String(DEFAULTS.minQty),              used: String(runParams.minQty),                      changed: runParams.minQty !== DEFAULTS.minQty },
                   { label: 'Max Rounds',      def: String(DEFAULTS.maxRound),            used: String(runParams.maxRound),                    changed: runParams.maxRound !== DEFAULTS.maxRound },
                   { label: 'Option Listing',  def: 'Off',                                used: runParams.applyOL ? 'On' : 'Off',              changed: runParams.applyOL !== DEFAULTS.applyOL },

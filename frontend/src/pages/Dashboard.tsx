@@ -1081,6 +1081,7 @@ function StoreMapCard() {
   const [distPoints, setDistPoints] = useState<MapStore[]>([])
   const [distSearch, setDistSearch] = useState('')
   const [mapFullscreen, setMapFullscreen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMap = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -1780,275 +1781,270 @@ function onSearch(v){
   const distRoadKm = distKm ? Math.round(distKm * 1.3) : null
   const distHrs = distRoadKm ? distRoadKm / 50 : null
 
+  // Sidebar button helper
+  const SbBtn = ({ active, color, children, onClick, title }: { active?: boolean; color?: string; children: React.ReactNode; onClick: () => void; title?: string }) => {
+    const c = color ?? '#818cf8'
+    return (
+      <button onClick={onClick} title={title} style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+        padding: '6px 4px', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+        fontSize: 9, lineHeight: 1.3, textAlign: 'center', width: '100%', border: 'none',
+        background: active ? c + '22' : 'transparent',
+        color: active ? c : '#64748b',
+        outline: active ? `1px solid ${c}44` : 'none',
+        transition: 'background 0.12s, color 0.12s',
+      }}>{children}</button>
+    )
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Row 1: Color mode + Status + Dropdowns */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflowX: 'auto', paddingBottom: 2 }}>
-        {/* Satellite toggle */}
-        <button onClick={() => {
-          const L = (window as any).L
-          if (!leafletMap.current || !L) return
-          const newSat = !satView
-          setSatView(newSat)
-          if (tileLayerRef.current) {
-            leafletMap.current.removeLayer(tileLayerRef.current)
-          }
-          tileLayerRef.current = newSat
-            ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                maxZoom: 19,
-              }).addTo(leafletMap.current)
-            : L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                maxZoom: 19,
-              }).addTo(leafletMap.current)
-        }} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: satView ? '#f59e0b22' : 'transparent',
-          border: `1px solid ${satView ? '#f59e0b' : '#334155'}`,
-          color: satView ? '#f59e0b' : '#475569',
-        }}>🛰 Satellite</button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Main layout: sidebar + map */}
+      <div style={{ display: 'flex', gap: 0, alignItems: 'stretch', minHeight: 540 }}>
 
-        {/* Rain Radar toggle (RainViewer) */}
-        <button onClick={async () => {
-          const L = (window as any).L
-          if (!leafletMap.current || !L) return
-          const newRain = !rainView
-          setRainView(newRain)
-          if (rainLayerRef.current) {
-            leafletMap.current.removeLayer(rainLayerRef.current)
-            rainLayerRef.current = null
-          }
-          if (newRain) {
-            try {
-              const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
-              const data = await res.json()
-              const frames = data?.radar?.past ?? []
-              const latest = frames[frames.length - 1]
-              if (latest?.path) {
-                rainLayerRef.current = L.tileLayer(
-                  `https://tilecache.rainviewer.com${latest.path}/512/{z}/{x}/{y}/4/1_1.png`,
-                  { opacity: 0.6, attribution: 'Rain data © <a href="https://rainviewer.com">RainViewer</a>', maxZoom: 19 }
-                ).addTo(leafletMap.current)
+        {/* ── Left Sidebar ── */}
+        <div style={{
+          width: sidebarOpen ? 148 : 44,
+          flexShrink: 0,
+          background: '#0a1220',
+          border: '1px solid #1e293b',
+          borderRight: 'none',
+          borderRadius: '8px 0 0 8px',
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'width 0.2s ease',
+          overflow: 'hidden',
+        }}>
+          {/* Collapse toggle */}
+          <button onClick={() => { setSidebarOpen(o => !o); setTimeout(() => leafletMap.current?.invalidateSize(), 220) }}
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: sidebarOpen ? 'flex-end' : 'center',
+              padding: '7px 8px', background: 'none', border: 'none', borderBottom: '1px solid #1e293b',
+              cursor: 'pointer', color: '#475569', fontSize: 12, flexShrink: 0 }}>
+            {sidebarOpen ? '◀' : '▶'}
+          </button>
+
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+            {/* Section: Map Layer */}
+            {sidebarOpen && <div style={{ fontSize: 8, color: '#334155', fontWeight: 700, letterSpacing: '.08em', padding: '4px 2px 2px', textTransform: 'uppercase' }}>Layer</div>}
+
+            <SbBtn active={satView} color="#f59e0b" title="Satellite view" onClick={() => {
+              const L = (window as any).L
+              if (!leafletMap.current || !L) return
+              const newSat = !satView
+              setSatView(newSat)
+              if (tileLayerRef.current) leafletMap.current.removeLayer(tileLayerRef.current)
+              tileLayerRef.current = newSat
+                ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 }).addTo(leafletMap.current)
+                : L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(leafletMap.current)
+            }}>🛰{sidebarOpen && <span>Satellite</span>}</SbBtn>
+
+            <SbBtn active={rainView} color="#38bdf8" title="Rain Radar" onClick={async () => {
+              const L = (window as any).L
+              if (!leafletMap.current || !L) return
+              const newRain = !rainView
+              setRainView(newRain)
+              if (rainLayerRef.current) { leafletMap.current.removeLayer(rainLayerRef.current); rainLayerRef.current = null }
+              if (newRain) {
+                try {
+                  const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
+                  const data = await res.json()
+                  const frames = data?.radar?.past ?? []
+                  const latest = frames[frames.length - 1]
+                  if (latest?.path) {
+                    rainLayerRef.current = L.tileLayer(
+                      `https://tilecache.rainviewer.com${latest.path}/512/{z}/{x}/{y}/4/1_1.png`,
+                      { opacity: 0.6, attribution: 'RainViewer', maxZoom: 19 }
+                    ).addTo(leafletMap.current)
+                  }
+                } catch { setRainView(false) }
               }
-            } catch { setRainView(false) }
-          }
-        }} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: rainView ? '#38bdf822' : 'transparent',
-          border: `1px solid ${rainView ? '#38bdf8' : '#334155'}`,
-          color: rainView ? '#38bdf8' : '#475569',
-        }}>🌧 Rain Radar</button>
+            }}>🌧{sidebarOpen && <span>Rain Radar</span>}</SbBtn>
 
-        {/* Color by */}
-        <div style={{ display: 'flex', gap: 3 }}>
-          {(['zone','cluster'] as const).map(m => (
-            <button key={m} onClick={() => setColorBy(m)} style={{
-              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: colorBy === m ? '#818cf822' : 'transparent',
-              border: `1px solid ${colorBy === m ? '#818cf8' : '#334155'}`,
-              color: colorBy === m ? '#818cf8' : '#475569',
-            }}>{m === 'zone' ? 'Zone' : 'Cluster'}</button>
-          ))}
+            {sidebarOpen && <div style={{ height: 1, background: '#1e293b', margin: '4px 0' }} />}
+            {sidebarOpen && <div style={{ fontSize: 8, color: '#334155', fontWeight: 700, letterSpacing: '.08em', padding: '2px 2px', textTransform: 'uppercase' }}>Color By</div>}
+
+            {(['zone','cluster'] as const).map(m => (
+              <SbBtn key={m} active={colorBy === m} color="#818cf8" onClick={() => setColorBy(m)}>
+                {m === 'zone' ? '🟣' : '🔷'}{sidebarOpen && <span>{m === 'zone' ? 'Zone' : 'Cluster'}</span>}
+              </SbBtn>
+            ))}
+
+            {sidebarOpen && <div style={{ height: 1, background: '#1e293b', margin: '4px 0' }} />}
+            {sidebarOpen && <div style={{ fontSize: 8, color: '#334155', fontWeight: 700, letterSpacing: '.08em', padding: '2px 2px', textTransform: 'uppercase' }}>Status</div>}
+
+            {([['all','All','⚪'],['ACTIVE','Active','🟢'],['UPCOMING_STORE','Upcoming','🔵']] as const).map(([v,l,ic]) => (
+              <SbBtn key={v} active={filterStatus === v} color="#06b6d4" onClick={() => setFilterStatus(v as any)}>
+                {ic}{sidebarOpen && <span>{l}</span>}
+              </SbBtn>
+            ))}
+
+            {sidebarOpen && <div style={{ height: 1, background: '#1e293b', margin: '4px 0' }} />}
+            {sidebarOpen && <div style={{ fontSize: 8, color: '#334155', fontWeight: 700, letterSpacing: '.08em', padding: '2px 2px', textTransform: 'uppercase' }}>Filter</div>}
+
+            {sidebarOpen && <>
+              <ZoneDropdown allKeys={allZones} selected={selectedZones} onToggle={toggleZone} colorMap={ZONE_COLORS} label="Zone" />
+              <ZoneDropdown allKeys={allClusters} selected={selectedClusters} onToggle={toggleCluster} colorMap={CLUSTER_COLORS} label="Cluster" />
+              <ZoneDropdown allKeys={allStates} selected={selectedStates} onToggle={toggleState} colorFn={hashColor} label="State" />
+              <ZoneDropdown allKeys={allCities} selected={selectedCities} onToggle={toggleCity} colorFn={hashColor} label="City" />
+            </>}
+            {!sidebarOpen && <>
+              <SbBtn active={selectedZones.size > 0} color="#818cf8" onClick={() => setSidebarOpen(true)} title="Zone filter">🟣</SbBtn>
+              <SbBtn active={selectedStates.size > 0} color="#818cf8" onClick={() => setSidebarOpen(true)} title="State filter">🗺</SbBtn>
+            </>}
+
+            {sidebarOpen && <div style={{ height: 1, background: '#1e293b', margin: '4px 0' }} />}
+            {sidebarOpen && <div style={{ fontSize: 8, color: '#334155', fontWeight: 700, letterSpacing: '.08em', padding: '2px 2px', textTransform: 'uppercase' }}>Boundary</div>}
+
+            {sidebarOpen && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, padding: '0 2px' }}>
+                <button onClick={() => setShowAllBounds(b => !b)} style={{
+                  fontSize: 9, padding: '3px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, flexShrink: 0,
+                  background: showAllBounds ? '#34d39922' : 'transparent', border: `1px solid ${showAllBounds ? '#34d399' : '#334155'}`, color: showAllBounds ? '#34d399' : '#475569',
+                }}>⬡ On/Off</button>
+                {(['zone','cluster','state','city'] as const).map(m => (
+                  <button key={m} onClick={() => {
+                    setBoundaryBy(m); setShowAllBounds(true)
+                    if (leafletMap.current && stores.length > 0) {
+                      const L = (window as any).L
+                      const bounds = L.latLngBounds(stores.map((s: any) => [s.lat, s.lon]))
+                      leafletMap.current.fitBounds(bounds, { padding: [30, 30] })
+                    }
+                  }} style={{
+                    fontSize: 9, padding: '2px 5px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+                    background: boundaryBy === m && showAllBounds ? '#34d39933' : 'transparent',
+                    border: `1px solid ${boundaryBy === m && showAllBounds ? '#34d399' : '#1e293b'}`,
+                    color: boundaryBy === m && showAllBounds ? '#34d399' : '#475569',
+                  }}>{m[0].toUpperCase() + m.slice(1)}</button>
+                ))}
+              </div>
+            )}
+            {!sidebarOpen && (
+              <SbBtn active={showAllBounds} color="#34d399" onClick={() => setShowAllBounds(b => !b)} title="Boundary">⬡</SbBtn>
+            )}
+
+            {sidebarOpen && <div style={{ height: 1, background: '#1e293b', margin: '4px 0' }} />}
+
+            <SbBtn active={distMode} color="#ef4444" title="Distance mode" onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistPoints([]); setDistSearch('') } }}>
+              📏{sidebarOpen && <span>Distance</span>}
+            </SbBtn>
+
+            {sidebarOpen && <div style={{ height: 1, background: '#1e293b', margin: '4px 0' }} />}
+            {sidebarOpen && <div style={{ fontSize: 8, color: '#334155', fontWeight: 700, letterSpacing: '.08em', padding: '2px 2px', textTransform: 'uppercase' }}>Export</div>}
+
+            {sidebarOpen && (() => {
+              function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+                const R = 6371, r = Math.PI / 180
+                const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r
+                const a = Math.sin(dLat/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)**2
+                return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 10) / 10
+              }
+              const validStores = filteredStores.filter(s => s.lat && s.lon)
+              const date = new Date().toISOString().slice(0, 10)
+
+              function downloadMatrix() {
+                const labels = validStores.map(s => s.name || s.code)
+                const header = ['', ...labels].join(',')
+                const rows = validStores.map((a, i) =>
+                  [labels[i], ...validStores.map(b => haversine(a.lat, a.lon, b.lat, b.lon))].join(',')
+                )
+                const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+                const url = URL.createObjectURL(blob)
+                const el = document.createElement('a')
+                el.href = url; el.download = `store_distance_matrix_${date}.csv`; el.click()
+                setTimeout(() => URL.revokeObjectURL(url), 10000)
+              }
+
+              function downloadPairs() {
+                const header = 'Store A Code,Store A Name,Store B Code,Store B Name,Distance (km)'
+                const rows: string[] = []
+                for (let i = 0; i < stores.length; i++) {
+                  for (let j = 0; j < stores.length; j++) {
+                    const a = stores[i], b = stores[j]
+                    const d = i === j ? 0 : (a.lat && a.lon && b.lat && b.lon) ? haversine(a.lat, a.lon, b.lat, b.lon) : ''
+                    rows.push(`"${a.code}","${(a.name||'').replace(/"/g,'""')}","${b.code}","${(b.name||'').replace(/"/g,'""')}",${d}`)
+                  }
+                }
+                const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+                const url = URL.createObjectURL(blob)
+                const el = document.createElement('a')
+                el.href = url; el.download = `store_distance_pairs_${date}.csv`; el.click()
+                setTimeout(() => URL.revokeObjectURL(url), 10000)
+              }
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <button onClick={downloadMatrix} style={{ fontSize: 9, padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, background: 'transparent', border: '1px solid #334155', color: '#94a3b8', textAlign: 'left' }}>⬇ Dist Matrix</button>
+                  <button onClick={downloadPairs} style={{ fontSize: 9, padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, background: 'transparent', border: '1px solid #334155', color: '#94a3b8', textAlign: 'left' }}>⬇ Dist Pairs</button>
+                  <button onClick={async () => {
+                    setMLoading(true)
+                    try {
+                      let data: Record<string, Record<string, {min: number, max: number, predicted?: boolean}>> | null = null
+                      for (let attempt = 0; attempt < 20; attempt++) {
+                        const r = await http.get('/dashboard/store-monthly-temps?years=3&predict=1', { timeout: 30000 })
+                        if (!r.data.success) break
+                        if (r.data.data?.loading) { await new Promise(res => setTimeout(res, 5000)); continue }
+                        data = r.data.data; break
+                      }
+                      if (!data) return
+                      const months = Array.from(new Set(Object.values(data).flatMap(v => Object.keys(v)))).sort()
+                      const predictedSet = new Set(Object.values(data).flatMap(sd => Object.entries(sd).filter(([,v]) => v.predicted).map(([m]) => m)))
+                      const header = ['Store Code','Store Name','City','State','Zone','Cluster',
+                        ...months.flatMap(m => predictedSet.has(m) ? [`${m} Pred Min (°C)`,`${m} Pred Max (°C)`] : [`${m} Min (°C)`,`${m} Max (°C)`])].join(',')
+                      const rows = stores.map(s => {
+                        const sd = data![String(s.code)] ?? {}
+                        const esc = (v: any) => `"${String(v ?? '').replace(/"/g,'""')}"`
+                        const mtemps = months.flatMap(m => sd[m] ? [sd[m].min, sd[m].max] : ['',''])
+                        return [esc(s.code),esc(s.name),esc(s.city),esc(s.state),esc(s.zone),esc(s.cluster),...mtemps].join(',')
+                      })
+                      const blob = new Blob([[header,...rows].join('\n')], { type: 'text/csv' })
+                      const url = URL.createObjectURL(blob)
+                      const el = document.createElement('a')
+                      el.href = url; el.download = `store_monthly_temp_3yr+pred_${new Date().toISOString().slice(0,10)}.csv`; el.click()
+                      setTimeout(() => URL.revokeObjectURL(url), 10000)
+                    } catch { alert('Monthly temp fetch failed') } finally { setMLoading(false) }
+                  }} disabled={mLoading} style={{ fontSize: 9, padding: '4px 6px', borderRadius: 4, cursor: mLoading ? 'wait' : 'pointer', fontWeight: 600, background: 'transparent', border: '1px solid #334155', color: mLoading ? '#475569' : '#94a3b8', textAlign: 'left' }}>
+                    {mLoading ? '⏳ Fetching...' : '⬇ Monthly Temp'}
+                  </button>
+                  <button onClick={() => {
+                    const header = 'Store Code,Store Name,City,State,Zone,Cluster,Grade,Status,Current Temp (°C),High Temp (°C),Low Temp (°C)'
+                    const rows = filteredStores.map(s => {
+                      const td = (temps as any)[s.code]
+                      const cur  = td != null ? (td.cur  ?? td) : ''
+                      const tmax = td?.max ?? ''; const tmin = td?.min ?? ''
+                      const esc  = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
+                      return [esc(s.code),esc(s.name),esc(s.city),esc(s.state),esc(s.zone),esc(s.cluster),esc(s.grade),esc(s.status),cur,tmax,tmin].join(',')
+                    })
+                    const csv = [header,...rows].join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url; a.download = `store_temp_report_${new Date().toISOString().slice(0,10)}.csv`; a.click()
+                    setTimeout(() => URL.revokeObjectURL(url), 10000)
+                  }} style={{ fontSize: 9, padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, background: 'transparent', border: '1px solid #334155', color: '#94a3b8', textAlign: 'left' }}>⬇ Temp CSV</button>
+                </div>
+              )
+            })()}
+            {!sidebarOpen && (
+              <SbBtn active={false} color="#94a3b8" onClick={() => setSidebarOpen(true)} title="Export CSVs">⬇</SbBtn>
+            )}
+
+            {/* Store count at bottom */}
+            {sidebarOpen && (
+              <div style={{ marginTop: 'auto', paddingTop: 8, fontSize: 9, color: '#475569', textAlign: 'center', borderTop: '1px solid #1e293b' }}>
+                {filteredStores.length}{filteredStores.length < stores.length ? `/${stores.length}` : ''} stores
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Status filter */}
-        <div style={{ display: 'flex', gap: 3 }}>
-          {([['all','All'],['ACTIVE','Active'],['UPCOMING_STORE','Upcoming']] as const).map(([v,l]) => (
-            <button key={v} onClick={() => setFilterStatus(v as any)} style={{
-              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: filterStatus === v ? '#06b6d422' : 'transparent',
-              border: `1px solid ${filterStatus === v ? '#06b6d4' : '#334155'}`,
-              color: filterStatus === v ? '#06b6d4' : '#475569',
-            }}>{l}</button>
-          ))}
-        </div>
-
-        {/* Zone multi-select dropdown */}
-        <ZoneDropdown
-          allKeys={allZones} selected={selectedZones} onToggle={toggleZone}
-          colorMap={ZONE_COLORS} label="Zone"
-        />
-
-        {/* Cluster multi-select dropdown */}
-        <ZoneDropdown
-          allKeys={allClusters} selected={selectedClusters} onToggle={toggleCluster}
-          colorMap={CLUSTER_COLORS} label="Cluster"
-        />
-
-        {/* State multi-select dropdown */}
-        <ZoneDropdown
-          allKeys={allStates} selected={selectedStates} onToggle={toggleState}
-          colorFn={hashColor} label="State"
-        />
-
-        {/* City multi-select dropdown */}
-        <ZoneDropdown
-          allKeys={allCities} selected={selectedCities} onToggle={toggleCity}
-          colorFn={hashColor} label="City"
-        />
-
-        {/* Boundary toggle + by selector */}
-        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <button onClick={() => setShowAllBounds(b => !b)} style={{
-            fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-            background: showAllBounds ? '#34d39922' : 'transparent',
-            border: `1px solid ${showAllBounds ? '#34d399' : '#334155'}`,
-            color: showAllBounds ? '#34d399' : '#475569',
-          }}>⬡ Boundary</button>
-          {(['zone','cluster','state','city'] as const).map(m => (
-            <button key={m} onClick={() => {
-              setBoundaryBy(m); setShowAllBounds(true)
-              // Auto-fit map to store locations
-              if (leafletMap.current && stores.length > 0) {
-                const L = (window as any).L
-                const bounds = L.latLngBounds(stores.map((s: any) => [s.lat, s.lon]))
-                leafletMap.current.fitBounds(bounds, { padding: [30, 30] })
-              }
-            }} style={{
-              fontSize: 9, padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: boundaryBy === m && showAllBounds ? '#34d39933' : 'transparent',
-              border: `1px solid ${boundaryBy === m && showAllBounds ? '#34d399' : '#1e293b'}`,
-              color: boundaryBy === m && showAllBounds ? '#34d399' : '#475569',
-            }}>{m[0].toUpperCase() + m.slice(1)}</button>
-          ))}
-        </div>
-
-        {/* Distance mode */}
-        <button onClick={() => { const next = !distMode; setDistMode(next); if (!next) { setDistPoints([]); setDistSearch('') } }} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: distMode ? '#ef444422' : 'transparent',
-          border: `1px solid ${distMode ? '#ef4444' : '#334155'}`,
-          color: distMode ? '#ef4444' : '#475569',
-        }}>📏 Distance</button>
-
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>
-          {filteredStores.length}{filteredStores.length < stores.length ? `/${stores.length}` : ''} stores
-        </span>
-
-        {/* Distance helpers */}
-        {(() => {
-          function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
-            const R = 6371, r = Math.PI / 180
-            const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r
-            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)**2
-            return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 10) / 10
-          }
-          const validStores = filteredStores.filter(s => s.lat && s.lon)
-          const date = new Date().toISOString().slice(0, 10)
-
-          function downloadMatrix() {
-            const labels = validStores.map(s => s.name || s.code)
-            const header = ['', ...labels].join(',')
-            const rows = validStores.map((a, i) =>
-              [labels[i], ...validStores.map(b => haversine(a.lat, a.lon, b.lat, b.lon))].join(',')
-            )
-            const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
-            const url = URL.createObjectURL(blob)
-            const el = document.createElement('a')
-            el.href = url; el.download = `store_distance_matrix_${date}.csv`; el.click()
-            setTimeout(() => URL.revokeObjectURL(url), 10000)
-          }
-
-          function downloadPairs() {
-            const header = 'Store A Code,Store A Name,Store B Code,Store B Name,Distance (km)'
-            const rows: string[] = []
-            for (let i = 0; i < stores.length; i++) {
-              for (let j = 0; j < stores.length; j++) {
-                const a = stores[i], b = stores[j]
-                const d = i === j ? 0 : (a.lat && a.lon && b.lat && b.lon) ? haversine(a.lat, a.lon, b.lat, b.lon) : ''
-                rows.push(`"${a.code}","${(a.name||'').replace(/"/g,'""')}","${b.code}","${(b.name||'').replace(/"/g,'""')}",${d}`)
-              }
-            }
-            const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
-            const url = URL.createObjectURL(blob)
-            const el = document.createElement('a')
-            el.href = url; el.download = `store_distance_pairs_${date}.csv`; el.click()
-            setTimeout(() => URL.revokeObjectURL(url), 10000)
-          }
-
-          return <>
-            <button onClick={downloadMatrix} style={{
-              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: 'transparent', border: '1px solid #334155', color: '#94a3b8', marginLeft: 4,
-            }}>⬇ Dist Matrix</button>
-            <button onClick={downloadPairs} style={{
-              fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-              background: 'transparent', border: '1px solid #334155', color: '#94a3b8',
-            }}>⬇ Dist Pairs</button>
-          </>
-        })()}
-
-        {/* Monthly temp CSV (10 years) */}
-        <button onClick={async () => {
-          setMLoading(true)
-          try {
-            let data: Record<string, Record<string, {min: number, max: number, predicted?: boolean}>> | null = null
-            // Poll until background fetch completes (backend returns loading:true while fetching)
-            for (let attempt = 0; attempt < 20; attempt++) {
-              const r = await http.get('/dashboard/store-monthly-temps?years=3&predict=1', { timeout: 30000 })
-              if (!r.data.success) break
-              if (r.data.data?.loading) {
-                await new Promise(res => setTimeout(res, 5000))
-                continue
-              }
-              data = r.data.data
-              break
-            }
-            if (!data) return
-            const months = Array.from(new Set(Object.values(data).flatMap(v => Object.keys(v)))).sort()
-            // Detect predicted months from any store's data
-            const predictedSet = new Set(
-              Object.values(data).flatMap(sd => Object.entries(sd).filter(([,v]) => v.predicted).map(([m]) => m))
-            )
-            const header = ['Store Code', 'Store Name', 'City', 'State', 'Zone', 'Cluster',
-              ...months.flatMap(m => predictedSet.has(m)
-                ? [`${m} Pred Min (°C)`, `${m} Pred Max (°C)`]
-                : [`${m} Min (°C)`, `${m} Max (°C)`])].join(',')
-            const rows = stores.map(s => {
-              const sd = data[String(s.code)] ?? {}
-              const esc = (v: any) => `"${String(v ?? '').replace(/"/g,'""')}"`
-              const mtemps = months.flatMap(m => sd[m] ? [sd[m].min, sd[m].max] : ['', ''])
-              return [esc(s.code), esc(s.name), esc(s.city), esc(s.state), esc(s.zone), esc(s.cluster), ...mtemps].join(',')
-            })
-            const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
-            const url = URL.createObjectURL(blob)
-            const el = document.createElement('a')
-            el.href = url; el.download = `store_monthly_temp_3yr+pred_${new Date().toISOString().slice(0,10)}.csv`; el.click()
-            setTimeout(() => URL.revokeObjectURL(url), 10000)
-          } catch { alert('Monthly temp fetch failed') } finally { setMLoading(false) }
-        }} disabled={mLoading} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: mLoading ? 'wait' : 'pointer', fontWeight: 600,
-          background: 'transparent', border: '1px solid #334155', color: mLoading ? '#475569' : '#94a3b8',
-        }}>{mLoading ? '⏳ Fetching...' : '⬇ Monthly Temp (3yr+Pred)'}</button>
-
-        {/* Temperature CSV download */}
-        <button onClick={() => {
-          const header = 'Store Code,Store Name,City,State,Zone,Cluster,Grade,Status,Current Temp (°C),High Temp (°C),Low Temp (°C)'
-          const rows = filteredStores.map(s => {
-            const td = (temps as any)[s.code]
-            const cur  = td != null ? (td.cur  ?? td) : ''
-            const tmax = td?.max ?? ''
-            const tmin = td?.min ?? ''
-            const esc  = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
-            return [esc(s.code), esc(s.name), esc(s.city), esc(s.state), esc(s.zone), esc(s.cluster), esc(s.grade), esc(s.status), cur, tmax, tmin].join(',')
-          })
-          const csv  = [header, ...rows].join('\n')
-          const blob = new Blob([csv], { type: 'text/csv' })
-          const url  = URL.createObjectURL(blob)
-          const a    = document.createElement('a')
-          const date = new Date().toISOString().slice(0, 10)
-          a.href = url; a.download = `store_temp_report_${date}.csv`; a.click()
-          setTimeout(() => URL.revokeObjectURL(url), 10000)
-        }} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
-          background: 'transparent', border: '1px solid #334155', color: '#94a3b8', marginLeft: 4,
-        }}>⬇ Temp CSV</button>
-      </div>
+        {/* ── Map column ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
       {/* Active filter chips */}
       {(selectedZones.size > 0 || selectedClusters.size > 0) && (
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', padding: '4px 8px', background: '#0a1220', borderBottom: '1px solid #1e293b' }}>
           <span style={{ fontSize: 9, color: '#475569', marginRight: 2 }}>Filter:</span>
           {Array.from(selectedZones).map(k => (
             <span key={k} onClick={() => toggleZone(k)} style={{
@@ -2198,7 +2194,7 @@ function onSearch(v){
       )}
 
       {/* Map */}
-      <div style={mapFullscreen ? { position: 'fixed', inset: 0, zIndex: 9900, background: '#0f172a', display: 'flex', flexDirection: 'column' } : { position: 'relative' }}>
+      <div style={mapFullscreen ? { position: 'fixed', inset: 0, zIndex: 9900, background: '#0f172a', display: 'flex', flexDirection: 'column' } : { position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Fullscreen toggle button */}
         <button onClick={() => setMapFullscreen(f => !f)}
           title={mapFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen map'}
@@ -2259,10 +2255,12 @@ function onSearch(v){
         )}
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#64748b' }}>Loading map…</div>}
         {!loading && mapErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', zIndex: 10, borderRadius: 6, fontSize: 13, color: '#f87171', flexDirection: 'column', gap: 8 }}>⚠ {mapErr}</div>}
-        <div ref={mapRef} style={mapFullscreen ? { flex: 1, minHeight: 0 } : { height: 520, borderRadius: 6, border: '1px solid #334155', zIndex: 0 }} />
+        <div ref={mapRef} style={mapFullscreen ? { flex: 1, minHeight: 0 } : { flex: 1, borderRadius: '0 6px 6px 0', border: '1px solid #334155', zIndex: 0 }} />
         {distMode && distPoints.length === 0 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#fbbf24', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Map pe koi bhi store click karo (ya upar search/warehouse use karo)</div>}
         {distMode && distPoints.length === 1 && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: '#1e293bee', color: '#f87171', fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 20, pointerEvents: 'none', zIndex: 500, whiteSpace: 'nowrap' }}>Ab dusra point add karo (map click / search)</div>}
       </div>
+        </div>{/* end map column */}
+      </div>{/* end sidebar+map flex */}
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

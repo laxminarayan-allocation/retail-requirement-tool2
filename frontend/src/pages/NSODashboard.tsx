@@ -906,6 +906,9 @@ function StatusBadge({ status }: { status: string }) {
   return <span style={{ ...S.badge, background: bg, color, border: `1px solid ${border}` }}>{status}</span>
 }
 
+// ── Module-level navigation cache ──────────────────────────────────────────────
+let _nsoDataCache: NSOData | null = null
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function NSODashboard() {
   const { user, pageAccess } = useAuth()
@@ -935,7 +938,7 @@ export default function NSODashboard() {
   // viewers are locked to store tab
   const effectiveTab = (!showArticle && tab === 'article') ? 'store' : tab
   const [source, setSource]     = useState<'nso' | 'all'>('nso')
-  const [data, setData]         = useState<NSOData | null>(null)
+  const [data, setData]         = useState<NSOData | null>(_nsoDataCache)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [artSortCol, setArtSortCol] = useState('')
@@ -964,15 +967,15 @@ export default function NSODashboard() {
     if (selRegions.length)     params.region_type  = selRegions.join(',')
     if (selTags.length)        params.store_tag    = selTags.join(',')
     apiFetch<NSOData>('/nso/data', params)
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => { setData(d); _nsoDataCache = d; setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
   }
 
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 100
 
-  // Load article data only when user switches to article tab (lazy)
-  useEffect(() => { if (effectiveTab === 'article') load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Load article data only when user switches to article tab (lazy); skip if cached
+  useEffect(() => { if (effectiveTab === 'article' && !_nsoDataCache) load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-reload when any server-side filter or source changes (only if data already loaded)
   useEffect(() => {

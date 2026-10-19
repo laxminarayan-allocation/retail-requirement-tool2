@@ -2393,6 +2393,10 @@ function StoreListModal({ drill, onClose }: { drill: DrillState; onClose: () => 
   )
 }
 
+// ── Module-level navigation cache for allocation data ──────────────────────────
+let _allocCache: AllocSummary | null = null
+let _detailCache: DetailData | null = null
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, pageAccess } = useAuth()
@@ -2439,11 +2443,11 @@ export default function Dashboard() {
   const [lastFetch, setLastFetch] = useState<string>(cached ? 'cached' : '')
   const [pinned, setPinned] = useState<PinnedWidget[]>(getPinned)
   const [allocView, setAllocView] = useState<'all' | 'store' | 'mc'>('all')
-  const [alloc, setAlloc] = useState<AllocSummary | null>(null)
-  const [allocLoading, setAllocLoading] = useState(true)
+  const [alloc, setAlloc] = useState<AllocSummary | null>(_allocCache)
+  const [allocLoading, setAllocLoading] = useState(_allocCache === null)
   const [allocErr, setAllocErr] = useState<string | null>(null)
   // Detail view (All tab)
-  const [detail, setDetail] = useState<DetailData | null>(null)
+  const [detail, setDetail] = useState<DetailData | null>(_detailCache)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailPage, setDetailPage] = useState(0)
   const [selectedIcodes, setSelectedIcodes] = useState<string[]>([])
@@ -2486,7 +2490,7 @@ export default function Dashboard() {
     setAllocErr(null)
     try {
       const res = await http.get<{ success: boolean; data: AllocSummary; message?: string }>(ep, { timeout: 60_000 })
-      if (res.data.success) { setAlloc(res.data.data); setAllocErr(null) }
+      if (res.data.success) { setAlloc(res.data.data); _allocCache = res.data.data; setAllocErr(null) }
       else setAllocErr(res.data.message ?? 'Allocation data unavailable')
     } catch (e: unknown) {
       setAllocErr(e instanceof Error ? e.message : 'Allocation fetch failed')
@@ -2501,7 +2505,7 @@ export default function Dashboard() {
       const res = await http.get<{ success: boolean; data: DetailData; message?: string }>('/dashboard/allocation-detail', {
         params: { icodes: icodes.join(','), page, limit: 500 }, timeout: 60_000,
       })
-      if (res.data.success) { setDetail(res.data.data); setDetailPage(page) }
+      if (res.data.success) { setDetail(res.data.data); _detailCache = res.data.data; setDetailPage(page) }
       else setAllocErr(res.data.message ?? 'Detail load failed')
     } catch (e: unknown) {
       setAllocErr(e instanceof Error ? e.message : 'Detail fetch failed')
@@ -2524,7 +2528,7 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  useEffect(() => { load(); loadAlloc('all'); loadDetail([], 0) }, [load, loadAlloc, loadDetail])
+  useEffect(() => { load(); if (!_allocCache) loadAlloc('all'); if (!_detailCache) loadDetail([], 0) }, [load, loadAlloc, loadDetail])
 
   if (loading) {
     return <DashboardSkeleton />

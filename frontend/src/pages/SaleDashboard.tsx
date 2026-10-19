@@ -337,12 +337,16 @@ function SalePivot() {
   )
 }
 
+// ── Module-level navigation cache ──────────────────────────────────────────────
+let _sale8wCache: Summary | null = null
+let _sale2yCache: WSummary | null = null
+
 export default function SaleDashboard() {
   const [view, setView] = useState<'8week' | '2year' | 'pivot'>('8week')
 
   // ── 8-Week state ────────────────────────────────────────────────────────────
-  const [data,     setData]     = useState<Summary | null>(null)
-  const [loading,  setLoading]  = useState(true)
+  const [data,     setData]     = useState<Summary | null>(_sale8wCache)
+  const [loading,  setLoading]  = useState(_sale8wCache === null)
   const [error,    setError]    = useState('')
   const [search,   setSearch]   = useState('')
   const [sort,     setSort]     = useState<SortKey8>('yesterday_val')
@@ -351,7 +355,7 @@ export default function SaleDashboard() {
   const [selectedWeeks, setSelectedWeeks] = useState<Set<number>>(new Set([1]))
 
   // ── 2Y Weekly state ─────────────────────────────────────────────────────────
-  const [wData,    setWData]    = useState<WSummary | null>(null)
+  const [wData,    setWData]    = useState<WSummary | null>(_sale2yCache)
   const [wLoading, setWLoading] = useState(false)
   const [wError,   setWError]   = useState('')
   const [wSearch,  setWSearch]  = useState('')
@@ -360,10 +364,11 @@ export default function SaleDashboard() {
   const [wMode,    setWMode]    = useState<'val' | 'qty'>('val')
   const [wCollapsed, setWCollapsed] = useState<Set<string>>(new Set())
 
-  // Load 8-week data on mount
+  // Load 8-week data on mount; skip if cached
   useEffect(() => {
+    if (_sale8wCache) return
     http.get('/sale/store-summary')
-      .then(r => { if (r.data.success) setData(r.data.data); else setError(r.data.message || 'Load failed') })
+      .then(r => { if (r.data.success) { setData(r.data.data); _sale8wCache = r.data.data } else setError(r.data.message || 'Load failed') })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
   }, [])
@@ -375,7 +380,7 @@ export default function SaleDashboard() {
     http.get('/sale/weekly-summary')
       .then(r => {
         if (r.data.success) {
-          setWData(r.data.data)
+          setWData(r.data.data); _sale2yCache = r.data.data
           if (r.data.data?.months)
             setWCollapsed(new Set(r.data.data.months.map((m: MonthMeta) => m.key)))
         } else setWError(r.data.message || 'Load failed')

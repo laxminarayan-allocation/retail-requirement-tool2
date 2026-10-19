@@ -65,8 +65,9 @@ def _safe_oracle_stats() -> dict:
 
         t0 = time.perf_counter()
         # Both repositories load from parquet first — sub-10ms if parquet present
-        item_df  = item_repo._load()
-        store_df = store_repo.get_all_stores(active_only=True)
+        item_df       = item_repo._load()
+        store_df      = store_repo.get_all_stores(active_only=True)
+        all_stores_df = store_repo.get_all_stores(active_only=False)  # fetched once, reused below
         oracle_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         # Item stats
@@ -185,7 +186,6 @@ def _safe_oracle_stats() -> dict:
         zone_upcoming_dist: dict = {}
         try:
             if "zone" in store_df.columns:
-                all_stores_df = StoreRepository().get_all_stores(active_only=False)
                 if "zone" in all_stores_df.columns and "store_status" in all_stores_df.columns:
                     active_zone_df = all_stores_df[all_stores_df["store_status"].str.upper() == "ACTIVE"]
                     upcoming_zone_df = all_stores_df[all_stores_df["store_status"].str.upper() == "UPCOMING_STORE"]
@@ -240,9 +240,8 @@ def _safe_oracle_stats() -> dict:
                     closed_grade_dist = closed_df["store_grade"].fillna("—").value_counts().to_dict()
                 # Get zone from store_master (T_STORE_OPENING_DATE has no zone col)
                 try:
-                    _all_sm = StoreRepository().get_all_stores(active_only=False)
-                    if "zone" in _all_sm.columns and "store_status" in _all_sm.columns:
-                        _closed_sm = _all_sm[_all_sm["store_status"].str.upper().isin(["CLOSED", "IN-ACTIVE", "INACTIVE"])]
+                    if "zone" in all_stores_df.columns and "store_status" in all_stores_df.columns:
+                        _closed_sm = all_stores_df[all_stores_df["store_status"].str.upper().isin(["CLOSED", "IN-ACTIVE", "INACTIVE"])]
                         closed_zone_dist = {k: v for k, v in _closed_sm["zone"].fillna("").value_counts().to_dict().items()
                                             if str(k).strip() and str(k).strip() not in ("-", "—", "")}
                 except Exception:

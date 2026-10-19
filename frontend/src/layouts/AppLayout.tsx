@@ -406,25 +406,52 @@ export default function AppLayout() {
   const [pipelineRunning, setPipelineRunning] = useState(false)
   const [allocationRunning, setAllocationRunning] = useState(false)
   const [distributionRunning, setDistributionRunning] = useState(false)
+  const pipelineRunningRef = useRef(false)
+  const distributionRunningRef = useRef(false)
   useEffect(() => {
+    let timerId: ReturnType<typeof setTimeout>
+
     const poll = () => {
       const t = localStorage.getItem('ck_ss27_token') ?? ''
-      if (!t) return
-      // Option Listing pipeline
-      fetch('/api/option-listing/pipeline/status', { headers: { Authorization: `Bearer ${t}` } })
-        .then(r => r.json()).then(d => setPipelineRunning(d?.status === 'running')).catch(() => {})
-      // Allocation pipeline — check sessionStorage for active jobs
+      // Pause when tab is hidden or no token
+      if (!t || document.hidden) {
+        timerId = setTimeout(poll, 15000)
+        return
+      }
+
+      // Allocation — local sessionStorage, no network
       try {
         const jobs = JSON.parse(sessionStorage.getItem('ss27_active_jobs') ?? '[]')
         setAllocationRunning(Array.isArray(jobs) && jobs.length > 0)
       } catch { setAllocationRunning(false) }
-      // Distribution run — poll backend flag (works cross-tab and cross-device)
+
+      const anyRunning = pipelineRunningRef.current || distributionRunningRef.current
+      const interval = anyRunning ? 3000 : 15000
+
+      fetch('/api/option-listing/pipeline/status', { headers: { Authorization: `Bearer ${t}` } })
+        .then(r => r.json()).then(d => {
+          const v = d?.status === 'running'
+          pipelineRunningRef.current = v
+          setPipelineRunning(v)
+        }).catch(() => {})
+
       fetch('/api/distribution/status', { headers: { Authorization: `Bearer ${t}` } })
-        .then(r => r.json()).then(d => setDistributionRunning(d?.running === true)).catch(() => {})
+        .then(r => r.json()).then(d => {
+          const v = d?.running === true
+          distributionRunningRef.current = v
+          setDistributionRunning(v)
+        }).catch(() => {})
+
+      timerId = setTimeout(poll, interval)
     }
+
     poll()
-    const id = setInterval(poll, 3000)
-    return () => clearInterval(id)
+    const onVisibility = () => { if (!document.hidden) poll() }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearTimeout(timerId)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [])
   const realIsMobile = useIsMobile()
   const [viewMode, setViewModeState] = useState<ViewMode>(loadViewMode)

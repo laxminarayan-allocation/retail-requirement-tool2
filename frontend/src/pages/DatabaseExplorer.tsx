@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback, Fragment } from 'react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { api } from '@/api/client'
-import http from '@/api/http'
+import http, { getUserTimeout } from '@/api/http'
 import { useAuth } from '@/context/AuthContext'
 import { useDbRefresh } from '@/context/DbRefreshContext'
 import { DataGrid } from '@/components/DataGrid'
@@ -1101,7 +1101,7 @@ function DownloadedFilesPanel() {
   function loadList() {
     setLoading(true)
     setListError(null)
-    http.get('/database/output/list', { timeout: 60000 })
+    http.get('/database/output/list', { timeout: getUserTimeout(120_000) })
       .then(res => { if (res.data.success) setFiles(res.data.data.files ?? []) })
       .catch(err => {
         setFiles([])
@@ -1152,7 +1152,7 @@ function DownloadedFilesPanel() {
 
   function downloadCsv(owner: string, obj: string) {
     http.get(`/database/output/download/${encodeURIComponent(owner)}/${encodeURIComponent(obj)}`, {
-      responseType: 'blob', timeout: 60000,
+      responseType: 'blob', timeout: getUserTimeout(120_000),
     }).then(res => {
       const blobUrl = window.URL.createObjectURL(new Blob([res.data as BlobPart]))
       const a = document.createElement('a')

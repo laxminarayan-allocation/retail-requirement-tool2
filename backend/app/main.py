@@ -2,7 +2,7 @@
 Retail Requirement Tool — FastAPI application entry point.
 Phase 14: production hardening — security headers, global exception handler,
           readiness endpoint, structured logging, startup banner.
-"""
+"""  # reload trigger: distribution WMS fix 2026-10-19
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -144,6 +144,14 @@ async def lifespan(app: FastAPI):
 
         _th2.Thread(target=_dashboard_cache_loop, daemon=True, name="dashboard-cache-refresh").start()
         logger.info("Dashboard cache refresh thread started (every 2 hrs)")
+
+    # Auto-load any CSVs saved globally by the user (stock, req, store-priority)
+    try:
+        from app.api.routes.distribution import _autoload_saved_csvs
+        _autoload_saved_csvs()
+        logger.info("Saved CSV auto-load complete")
+    except Exception as _alc_exc:
+        logger.warning("Saved CSV auto-load error: %s", _alc_exc)
 
     yield
 

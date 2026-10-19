@@ -49,16 +49,105 @@ def _save_hold_rules(rules: list) -> None:
     _HOLD_RULES_FILE.parent.mkdir(parents=True, exist_ok=True)
     _HOLD_RULES_FILE.write_text(_json.dumps(rules, ensure_ascii=False, indent=2), encoding="utf-8")
 
+# ── Saved CSV persistence directory ──────────────────────────────────────────
+_SAVED_CSV_DIR = Path(__file__).resolve().parents[4] / "data" / "saved_csvs"
+_SAVED_CSV_DIR.mkdir(parents=True, exist_ok=True)
+
+def _saved_csv_path(slot: str) -> Path:
+    """Canonical path for a saved CSV slot (e.g. 'stock', 'req_mc', 'priority_override')."""
+    return _SAVED_CSV_DIR / f"{slot}.csv"
+
+
+def _autoload_saved_csvs() -> None:
+    """Called at startup. Re-loads any CSVs previously saved with save=True."""
+    import io as _io
+
+    # Stock CSV
+    p = _saved_csv_path("stock")
+    if p.exists():
+        try:
+            from fastapi import UploadFile
+            import asyncio
+            content = p.read_bytes()
+            # Re-use the same parsing logic inline
+            global _uploaded_stock_df, _uploaded_stock_meta
+            df = pd.read_csv(_io.BytesIO(content))
+            df.columns = [c.strip().upper() for c in df.columns]
+            bc_col = next((c for c in df.columns if c in ("BARCODE", "ICODE", "BAR_CODE")), None)
+            qty_candidates = [c for c in df.columns if any(k in c for k in ("GRC_QTY","MSA_QTY","WMS_QTY","ASN_QTY","QTY","STOCK","GRC_Q","WMS_Q"))]
+            if bc_col and qty_candidates:
+                qty_col = qty_candidates[0]
+                src_label = next((s for s, k in [("ASN","ASN"),("MSA","MSA"),("WMS","WMS"),("GRC","GRC"),("IST","IST"),("NOTEPAD","NOTEPAD")] if k in qty_col.upper()), "OTHER")
+                out = df[[bc_col, qty_col]].copy()
+                out.columns = ["icode","wh_q"]
+                out["icode"] = out["icode"].astype(str).str.strip()
+                out["wh_q"] = pd.to_numeric(out["wh_q"], errors="coerce").fillna(0).astype(int)
+                out["wh_source"] = src_label
+                out = out[out["icode"].str.len() > 0]
+                _uploaded_stock_df = out
+                _uploaded_stock_meta = {"filename": p.name, "rows": len(out), "qty_col": qty_col, "wh_source": src_label, "saved": True}
+                logger.info("Auto-loaded saved stock CSV: %d rows", len(out))
+        except Exception as exc:
+            logger.warning("Auto-load saved stock CSV failed: %s", exc)
+
+    # REQ CSVs — use the same specs dict (imported after route module loads)
+    for req_type, spec in _REQ_UPLOAD_SPECS.items():
+        p = _saved_csv_path(f"req_{req_type}")
+        if not p.exists():
+            continue
+        try:
+            content = p.read_bytes()
+            df = pd.read_csv(_io.BytesIO(content))
+            df.columns = [c.strip().upper() for c in df.columns]
+            df.rename(columns=spec["aliases"], inplace=True)
+            missing = [c for c in spec["required_cols"] if c not in df.columns]
+            if missing:
+                logger.warning("Auto-load req_%s: missing cols %s, skipping", req_type, missing)
+                continue
+            keep = list(dict.fromkeys([c for c in spec["required_cols"] if c in df.columns]))
+            out = df[keep].copy()
+            out.columns = [c.lower() for c in out.columns]
+            out[spec["val_col"]] = pd.to_numeric(out[spec["val_col"]], errors="coerce").fillna(0)
+            out = out[out[spec["val_col"]] > 0]
+            _uploaded_req[req_type] = {"df": out, "meta": {"filename": p.name, "rows": len(out), "label": spec["label"], "saved": True}}
+            logger.info("Auto-loaded saved REQ CSV [%s]: %d rows", req_type, len(out))
+        except Exception as exc:
+            logger.warning("Auto-load saved req_%s CSV failed: %s", req_type, exc)
+
+    # Store Priority CSVs
+    for priority_type, spec in _STORE_PRIORITY_SPECS.items():
+        p = _saved_csv_path(f"priority_{priority_type}")
+        if not p.exists():
+            continue
+        try:
+            content = p.read_bytes()
+            df = pd.read_csv(_io.BytesIO(content))
+            df.columns = [c.strip().upper() for c in df.columns]
+            missing = [c for c in spec["required_cols"] if c not in df.columns]
+            if missing:
+                logger.warning("Auto-load priority_%s: missing cols %s, skipping", priority_type, missing)
+                continue
+            df = df[spec["required_cols"]].copy()
+            df.columns = [c.lower() for c in df.columns]
+            df[spec["rank_col"]] = pd.to_numeric(df[spec["rank_col"]], errors="coerce").fillna(9999)
+            df = df.drop_duplicates(subset=spec["key_cols"])
+            _uploaded_store_priority[priority_type] = {"df": df, "meta": {"filename": p.name, "rows": len(df), "label": spec["label"], "saved": True}}
+            logger.info("Auto-loaded saved store priority CSV [%s]: %d rows", priority_type, len(df))
+        except Exception as exc:
+            logger.warning("Auto-load saved priority_%s CSV failed: %s", priority_type, exc)
+
+
 # ── Uploaded stock CSV (barcode-level qty override) ───────────────────────────
 _uploaded_stock_df: Optional[pd.DataFrame] = None
 _uploaded_stock_meta: dict = {}   # {filename, rows, qty_col}
 
 
 @router.post("/upload-stock-csv", response_model=APIResponse)
-async def upload_stock_csv(file: UploadFile = File(...)):
+async def upload_stock_csv(file: UploadFile = File(...), save: bool = False):
     """
     Accept a CSV with BARCODE + one qty column (GRC_QTY / MSA_QTY / WMS_QTY / ASN_QTY).
     Stores it in memory; subsequent /build-base calls use it as the stock source.
+    If save=True, persists the CSV to disk for auto-load on next server restart.
     """
     global _uploaded_stock_df, _uploaded_stock_meta
     try:
@@ -101,20 +190,31 @@ async def upload_stock_csv(file: UploadFile = File(...)):
         out["wh_source"] = src_label
         out = out[out["icode"].str.len() > 0]
 
+        if save:
+            p = _saved_csv_path("stock")
+            p.write_bytes(content)
+            logger.info("Saved stock CSV to %s", p)
+
         _uploaded_stock_df = out
-        _uploaded_stock_meta = {"filename": file.filename, "rows": len(out), "qty_col": qty_col, "wh_source": src_label}
-        return APIResponse.ok(data=_uploaded_stock_meta, message=f"Uploaded {len(out):,} barcode rows from '{qty_col}'")
+        _uploaded_stock_meta = {"filename": file.filename, "rows": len(out), "qty_col": qty_col,
+                                "wh_source": src_label, "saved": save}
+        return APIResponse.ok(data=_uploaded_stock_meta, message=f"Uploaded {len(out):,} barcode rows from '{qty_col}'" + (" — saved for next restart" if save else ""))
     except Exception as exc:
         logger.error("upload_stock_csv: %s", exc)
         return APIResponse.fail(message=str(exc))
 
 
 @router.delete("/upload-stock-csv", response_model=APIResponse)
-async def clear_stock_csv():
-    """Clear the uploaded stock CSV override."""
+async def clear_stock_csv(remove_saved: bool = False):
+    """Clear the uploaded stock CSV override. remove_saved=True also deletes the disk copy."""
     global _uploaded_stock_df, _uploaded_stock_meta
     _uploaded_stock_df = None
     _uploaded_stock_meta = {}
+    if remove_saved:
+        p = _saved_csv_path("stock")
+        if p.exists():
+            p.unlink()
+            logger.info("Removed saved stock CSV from disk")
     return APIResponse.ok(message="Uploaded stock CSV cleared.")
 
 
@@ -146,8 +246,8 @@ _STORE_PRIORITY_SPECS = {
 
 
 @router.post("/upload-store-priority/{priority_type}", response_model=APIResponse)
-async def upload_store_priority(priority_type: str, file: UploadFile = File(...)):
-    """Upload store priority CSV. priority_type: fill_rate | override"""
+async def upload_store_priority(priority_type: str, file: UploadFile = File(...), save: bool = False):
+    """Upload store priority CSV. priority_type: fill_rate | override. save=True persists to disk."""
     global _uploaded_store_priority
     spec = _STORE_PRIORITY_SPECS.get(priority_type)
     if spec is None:
@@ -163,18 +263,27 @@ async def upload_store_priority(priority_type: str, file: UploadFile = File(...)
         df.columns = [c.lower() for c in df.columns]
         df[spec["rank_col"]] = pd.to_numeric(df[spec["rank_col"]], errors="coerce").fillna(9999)
         df = df.drop_duplicates(subset=spec["key_cols"])
-        meta = {"filename": file.filename, "rows": len(df), "label": spec["label"]}
+        if save:
+            p = _saved_csv_path(f"priority_{priority_type}")
+            p.write_bytes(content)
+            logger.info("Saved store priority CSV [%s] to %s", priority_type, p)
+        meta = {"filename": file.filename, "rows": len(df), "label": spec["label"], "saved": save}
         _uploaded_store_priority[priority_type] = {"df": df, "meta": meta}
-        return APIResponse.ok(data=meta, message=f"Uploaded {len(df):,} rows for {spec['label']}")
+        return APIResponse.ok(data=meta, message=f"Uploaded {len(df):,} rows for {spec['label']}" + (" — saved for next restart" if save else ""))
     except Exception as exc:
         logger.error("upload_store_priority[%s]: %s", priority_type, exc)
         return APIResponse.fail(message=str(exc))
 
 
 @router.delete("/upload-store-priority/{priority_type}", response_model=APIResponse)
-async def clear_store_priority(priority_type: str):
+async def clear_store_priority(priority_type: str, remove_saved: bool = False):
     global _uploaded_store_priority
     _uploaded_store_priority.pop(priority_type, None)
+    if remove_saved:
+        p = _saved_csv_path(f"priority_{priority_type}")
+        if p.exists():
+            p.unlink()
+            logger.info("Removed saved store priority CSV [%s] from disk", priority_type)
     return APIResponse.ok(message=f"Cleared {priority_type} store priority CSV.")
 
 
@@ -357,8 +466,8 @@ _REQ_UPLOAD_SPECS = {
 
 
 @router.post("/upload-req-csv/{req_type}", response_model=APIResponse)
-async def upload_req_csv(req_type: str, file: UploadFile = File(...)):
-    """Upload a REQ CSV override. req_type: barcode | mc | art | mrp | size"""
+async def upload_req_csv(req_type: str, file: UploadFile = File(...), save: bool = False):
+    """Upload a REQ CSV override. req_type: barcode | mc | art | mrp | size. save=True persists to disk."""
     global _uploaded_req
     spec = _REQ_UPLOAD_SPECS.get(req_type)
     if spec is None:
@@ -380,18 +489,27 @@ async def upload_req_csv(req_type: str, file: UploadFile = File(...)):
         out[spec["val_col"]] = pd.to_numeric(out[spec["val_col"]], errors="coerce").fillna(0)
         # Drop all-zero rows
         out = out[out[spec["val_col"]] > 0]
-        meta = {"filename": file.filename, "rows": len(out), "label": spec["label"]}
+        if save:
+            p = _saved_csv_path(f"req_{req_type}")
+            p.write_bytes(content)
+            logger.info("Saved REQ CSV [%s] to %s", req_type, p)
+        meta = {"filename": file.filename, "rows": len(out), "label": spec["label"], "saved": save}
         _uploaded_req[req_type] = {"df": out, "meta": meta}
-        return APIResponse.ok(data=meta, message=f"Uploaded {len(out):,} rows for {spec['label']}")
+        return APIResponse.ok(data=meta, message=f"Uploaded {len(out):,} rows for {spec['label']}" + (" — saved for next restart" if save else ""))
     except Exception as exc:
         logger.error("upload_req_csv[%s]: %s", req_type, exc)
         return APIResponse.fail(message=str(exc))
 
 
 @router.delete("/upload-req-csv/{req_type}", response_model=APIResponse)
-async def clear_req_csv(req_type: str):
+async def clear_req_csv(req_type: str, remove_saved: bool = False):
     global _uploaded_req
     _uploaded_req.pop(req_type, None)
+    if remove_saved:
+        p = _saved_csv_path(f"req_{req_type}")
+        if p.exists():
+            p.unlink()
+            logger.info("Removed saved REQ CSV [%s] from disk", req_type)
     return APIResponse.ok(message=f"Cleared {req_type} REQ CSV.")
 
 
@@ -627,6 +745,7 @@ async def store_barcode_preview(
     stores: str = '',
     scopes: str = '',
     store_field_filters: str = '',
+    item_field_filters: str = '',
     min_qty: int = 10,
 ):
     try:
@@ -647,6 +766,20 @@ async def store_barcode_preview(
                             df_c = df_c[pd.to_numeric(df_c[qty_col], errors='coerce').fillna(0) >= min_qty]
                     if 'icode' in df_c.columns:
                         barcodes.update(df_c['icode'].dropna().astype(str).unique().tolist())
+        # Apply item field filters to barcode set (before cross-join)
+        iff = _j.loads(item_field_filters) if item_field_filters.strip() else {}
+        if iff and barcodes:
+            try:
+                im = _load(_IM_OWNER, _IM_OBJ)
+                if im is not None:
+                    im = im.copy(); im.columns = [c.lower() for c in im.columns]
+                    im_f = im[im['icode'].astype(str).isin(barcodes)].copy()
+                    for col, vals in iff.items():
+                        if vals and col in im_f.columns:
+                            im_f = im_f[im_f[col].astype(str).str.strip().isin([str(v).strip() for v in vals])]
+                    barcodes = set(im_f['icode'].astype(str).unique().tolist())
+            except Exception as _ife:
+                logger.warning("store_barcode_preview item_field_filters error: %s", _ife)
         total_barcodes = len(barcodes)
         store_list = list(_store_list_cache) if _store_list_cache else []
         if not store_list:
@@ -703,6 +836,7 @@ async def store_barcode_csv(
     stores: str = '',
     scopes: str = '',
     store_field_filters: str = '',
+    item_field_filters: str = '',
 ):
     import io as _io, json as _j
     try:
@@ -750,6 +884,15 @@ async def store_barcode_csv(
         if sel:
             sel_set = {s.strip() for s in sel}
             store_list = [s for s in store_list if s in sel_set]
+        # Item field filters — filter bc_df before cross-join
+        iff_csv = _j.loads(item_field_filters) if item_field_filters.strip() else {}
+        if iff_csv:
+            try:
+                for col, vals in iff_csv.items():
+                    if vals and col in bc_df.columns:
+                        bc_df = bc_df[bc_df[col].astype(str).str.strip().isin([str(v).strip() for v in vals])]
+            except Exception as _ife2:
+                logger.warning("store_barcode_csv item_field_filters error: %s", _ife2)
         sff = _j.loads(store_field_filters) if store_field_filters.strip() else {}
         store_meta_df = None
         if sff:
@@ -827,6 +970,44 @@ async def store_filter_meta():
         return APIResponse.ok(data=result)
     except Exception as exc:
         logger.error("store_filter_meta: %s", exc)
+        return APIResponse.fail(message=str(exc))
+
+
+_ITEM_FILTER_META_CACHE: dict = {}
+
+_ITEM_FILTER_FIELDS = {
+    "department":    "Department",
+    "display_type":  "Display Type",
+    "article_name":  "Article Name",
+    "cat2":          "Category 2",
+    "attribute1":    "Attribute 1",
+    "sz_grp":        "Size Group",
+    "brand":         "Brand",
+    "mrp":           "MRP",
+}
+
+@router.get("/item-filter-meta", response_model=APIResponse)
+async def item_filter_meta():
+    """Return unique values for each filterable item master field."""
+    global _ITEM_FILTER_META_CACHE
+    if _ITEM_FILTER_META_CACHE:
+        return APIResponse.ok(data=_ITEM_FILTER_META_CACHE)
+    try:
+        im = _load(_IM_OWNER, _IM_OBJ)
+        if im is None:
+            return APIResponse.fail(message="Item master not cached yet.")
+        im = im.copy()
+        im.columns = [c.lower() for c in im.columns]
+        result: dict = {"fields": {}}
+        for col, label in _ITEM_FILTER_FIELDS.items():
+            if col in im.columns:
+                vals = sorted(im[col].dropna().astype(str).str.strip().unique().tolist())
+                vals = [v for v in vals if v and v != "nan"]
+                result["fields"][col] = {"label": label, "values": vals}
+        _ITEM_FILTER_META_CACHE = result
+        return APIResponse.ok(data=result)
+    except Exception as exc:
+        logger.error("item_filter_meta: %s", exc)
         return APIResponse.fail(message=str(exc))
 
 
@@ -989,6 +1170,7 @@ async def build_distribution_base(
     scopes:              str = "",       # JSON array of {division, attribute1} for OR-filter
     stores:              str = "",       # JSON array of store_name strings to filter
     store_field_filters: str = "",       # JSON dict of {field: [values]} store master field filters
+    item_field_filters:  str = "",       # JSON dict of {field: [values]} item master field filters
     req_fallback:        str = "parquet",  # "parquet" | "zero" — for items not matched in REQ CSV
     min_qty:             int = 0,        # minimum wh_q per unique barcode (0 = no filter)
     priority_source:     str = "grc",   # grc | wms | max_req | none — which source barcodes go first
@@ -1080,11 +1262,29 @@ async def build_distribution_base(
                 base["wh_source"] = "GRC|WMS"
                 base.loc[(grc_q > 0) & (wms_q == 0), "wh_source"] = "GRC"
                 base.loc[(grc_q == 0) & (wms_q > 0), "wh_source"] = "WMS"
-                # For WMS-only rows, fill remaining GRC columns with values from wms df
-                wms_key_cols = [c for c in wms_full.columns if c not in ("icode", "store_name", "req", "wms_q")]
-                wms_fill = wms_full[["icode", "store_name"] + [c for c in wms_key_cols if c not in base.columns]]
-                if wms_fill.shape[1] > 2:
+                # For WMS-only rows, fill NaN GRC columns (like department, display_type)
+                # using matching columns from the WMS parquet.
+                # Note: these columns already EXIST in base (from the GRC side of the outer join)
+                # but are NaN for WMS-only rows, so we can't use "if c not in base.columns".
+                wms_key_cols = [c for c in wms_full.columns if c not in ("icode", "store_name", "req", "wms_q",
+                                                                          "wms_req", "wms_stock", "wh_q",
+                                                                          "wh_source", "dist_req")]
+                if wms_key_cols:
+                    wms_fill = wms_full[["icode", "store_name"] + wms_key_cols].copy()
+                    # Suffix _wms to avoid column conflicts on merge
+                    wms_fill = wms_fill.rename(columns={c: c + "_wms" for c in wms_key_cols})
                     base = base.merge(wms_fill, on=["icode", "store_name"], how="left")
+                    # For WMS-only rows (wms_stock > 0 & grc_q == 0), fill NaN GRC columns from WMS
+                    wms_only_idx = (base["wms_stock"] > 0) & (base.get("grc_q", pd.Series(0, index=base.index)) == 0)
+                    for c in wms_key_cols:
+                        if c in base.columns:
+                            base.loc[wms_only_idx & base[c].isna(), c] = base.loc[wms_only_idx & base[c].isna(), c + "_wms"]
+                        else:
+                            base[c] = np.nan
+                            base.loc[wms_only_idx, c] = base.loc[wms_only_idx, c + "_wms"]
+                    # Drop the _wms helper columns
+                    base.drop(columns=[c + "_wms" for c in wms_key_cols if c + "_wms" in base.columns],
+                              inplace=True)
                 logger.info("build-base BOTH (outer): %d rows (%d GRC-only, %d WMS-only, %d shared)",
                     len(base),
                     int((grc_q > 0).sum() - ((grc_q > 0) & (wms_q > 0)).sum()),
@@ -1096,7 +1296,12 @@ async def build_distribution_base(
         base.columns = [c.lower() for c in base.columns]
 
         # filter fnl_list = Y
+        # WMS-only rows (outer join) have fnl_list=NaN — treat as Y so they aren't filtered out
         if "fnl_list" in base.columns:
+            if "wh_source" in base.columns:
+                base["fnl_list"] = base["fnl_list"].fillna(
+                    base["wh_source"].apply(lambda s: "Y" if str(s).startswith("WMS") else "N")
+                )
             base = base[base["fnl_list"].astype(str).str.upper() == "Y"].copy()
 
         # ── min_qty filter: exclude barcodes whose unique wh_q < min_qty ─────────
@@ -1200,6 +1405,31 @@ async def build_distribution_base(
             # drop any existing extras from base to avoid _x/_y suffix conflict
             base = base.drop(columns=[c for c in extras if c in base.columns], errors="ignore")
             base = base.merge(im_sub, on="icode", how="left")
+
+        # ── 2b. Item master field filters (department/display_type/mrp/etc.) ──
+        if item_field_filters:
+            import json as _ijson
+            try:
+                iff_map = _ijson.loads(item_field_filters)  # {col: [values]}
+                if iff_map:
+                    im_full = _load(_IM_OWNER, _IM_OBJ)
+                    if im_full is not None:
+                        im_full = im_full.copy()
+                        im_full.columns = [c.lower() for c in im_full.columns]
+                        filter_cols = [c for c in iff_map if c in im_full.columns and iff_map[c]]
+                        if filter_cols:
+                            im_filt = im_full[["icode"] + filter_cols].drop_duplicates("icode").copy()
+                            im_filt = im_filt.rename(columns={c: c + "_if" for c in filter_cols})
+                            merged = base.merge(im_filt, on="icode", how="left")
+                            mask = pd.Series([True] * len(merged), index=merged.index)
+                            for col in filter_cols:
+                                vals = [str(v).strip() for v in iff_map[col] if str(v).strip()]
+                                if vals:
+                                    mask &= merged[col + "_if"].astype(str).str.strip().isin(vals)
+                            base = merged[mask].drop(columns=[c + "_if" for c in filter_cols]).copy()
+                            logger.info("item_field_filters: kept %d/%d rows", len(base), len(merged))
+            except Exception as _ife:
+                logger.warning("item_field_filters parse error: %s", _ife)
 
         # ── 3. MC REQ (sorting only) — dept + display_type + store_name ───────
         biz = biz_segment.upper()
@@ -1492,6 +1722,20 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
     art_r   = gcol("art_req")
     mrp_r   = gcol("mrp_req")
     bar_r   = gcol("dist_req")
+    # WMS-only barcodes have no MC data (department=NaN) — use dist_req as mc_req fallback
+    # so they pass the mc_req > 0 eligibility check in the distribution loop
+    wh_src  = base["wh_source"].fillna("").values if "wh_source" in base.columns else np.array([""] * n)
+    wms_only_mask = np.array([str(s) == "WMS" for s in wh_src])
+    wms_cnt = int(wms_only_mask.sum())
+    if wms_cnt > 0:
+        wms_bar_r  = bar_r[wms_only_mask]
+        wms_mc_pre = mc_r[wms_only_mask]
+        logger.info("WMS-only rows=%d  dist_req: min=%s max=%s mean=%s  mc_req_pre: min=%s max=%s",
+            wms_cnt, wms_bar_r.min(), wms_bar_r.max(), round(float(wms_bar_r.mean()), 2),
+            wms_mc_pre.min(), wms_mc_pre.max())
+    mc_r = np.where(wms_only_mask & (mc_r == 0), bar_r, mc_r)
+    if wms_cnt > 0:
+        logger.info("WMS-only mc_req_post: min=%s max=%s", mc_r[wms_only_mask].min(), mc_r[wms_only_mask].max())
     wh_q    = gcol(wh_col)
     opt_lvl = base["option_level"].fillna("").values if "option_level" in base.columns else np.array([""] * n)
     dept    = base["department"].fillna("").values   if "department"    in base.columns else np.array([""] * n)
@@ -1538,7 +1782,12 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
     wh_pool  = {}   # icode → remaining wh_stock
 
     for i in range(n):
-        k_mc  = (dept[i],   store_v[i])
+        # WMS-only barcodes have no department; give each its own mc_pool slot
+        # so they don't compete with each other over mc_pool[("", store)]
+        if wms_only_mask[i]:
+            k_mc = (icode_v[i], store_v[i])   # unique per barcode×store
+        else:
+            k_mc = (dept[i], store_v[i])
         k_art = (art_nm[i], store_v[i])
         k_bar = (icode_v[i], store_v[i])
         if k_mc  not in mc_pool:  mc_pool[k_mc]   = max(0.0, float(mc_r[i]))
@@ -1547,6 +1796,7 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
         if icode_v[i] not in wh_pool: wh_pool[icode_v[i]] = max(0.0, float(wh_q[i]))
 
     # Per-row eligibility (static: bar_req > 0 AND mc_req > 0)
+    # mc_r already patched for WMS-only rows above (fallback = dist_req)
     eligible0 = (bar_r > 0) & (mc_r > 0)
 
     # ── Round loop ─────────────────────────────────────────────────────────────
@@ -1570,7 +1820,9 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
             if wh_now <= 0:
                 continue
 
-            mc_rem  = mc_pool.get((dp, st), 0.0)
+            # WMS-only barcodes use per-barcode mc_pool key (no shared department pool)
+            mc_key  = (ic, st) if wms_only_mask[i] else (dp, st)
+            mc_rem  = mc_pool.get(mc_key, 0.0)
             art_rem = art_pool.get((an, st), 0.0)
             bar_rem = bar_pool.get((ic, st), 0.0)
 
@@ -1608,7 +1860,7 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
 
             round_alloc[i, rnd] = give
             wh_pool[ic]            = max(0.0, wh_pool.get(ic, 0.0)       - give)
-            mc_pool[(dp, st)]      = max(0.0, mc_pool.get((dp,st), 0.0)  - give)
+            mc_pool[mc_key]        = max(0.0, mc_pool.get(mc_key, 0.0)   - give)
             art_pool[(an, st)]     = max(0.0, art_pool.get((an,st), 0.0) - give)
             bar_pool[(ic, st)]     = max(0.0, bar_pool.get((ic,st), 0.0) - give)
 
@@ -1618,8 +1870,9 @@ def _run_distribution_loop_v2(base: pd.DataFrame, wh_col: str = "grc_q",
 
         # Snapshot MC balance after this round (per row)
         for i in range(n):
-            dp = dept[i]; st = store_v[i]
-            mc_snap[i, rnd] = mc_pool.get((dp, st), 0.0)
+            dp = dept[i]; st = store_v[i]; ic = icode_v[i]
+            mc_key_snap = (ic, st) if wms_only_mask[i] else (dp, st)
+            mc_snap[i, rnd] = mc_pool.get(mc_key_snap, 0.0)
 
     # ── Write columns ──────────────────────────────────────────────────────────
     for rnd in range(max_round):

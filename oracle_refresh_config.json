@@ -21,5 +21,18 @@
     "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data",
     "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs"
   ],
-  "schedules": []
+  "schedules": [
+    {
+      "id": "bcc6ede7-dbf2-4da1-8cf7-11de0be9800c",
+      "enabled": true,
+      "cron": "0 7 * * 1-6",
+      "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data\\01_dc-champs"
+    },
+    {
+      "id": "980af1f1-02b7-4799-a367-73c562689ce6",
+      "enabled": true,
+      "cron": "0 8 * * 1-6",
+      "folder": "\\\\10.0.0.25\\22-Allocation\\01-Allocation Data\\10.0.0.20 Refresh Data"
+    }
+  ]
 }

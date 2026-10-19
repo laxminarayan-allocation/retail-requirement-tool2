@@ -2,7 +2,7 @@
  * Distribution Model — replenishment distribution engine.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import http from '@/api/http'
+import http, { getUserTimeout } from '@/api/http'
 import StaleBanner from '@/components/StaleBanner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTheme } from '@/context/ThemeContext'
@@ -177,14 +177,58 @@ function DkCollapse({ title, badge, defaultOpen = true, children }: {
 }
 
 // ── Upload zone ────────────────────────────────────────────────────────────────
-function DkUploadZone({ label, hint, active, filename, rows, uploading, onUpload, onClear, inputRef }: {
+function DkUploadZone({ label, hint, active, filename, rows, uploading, saved, onUpload, onClear, onRemoveSaved, inputRef }: {
   label: string; hint: string; active?: boolean; filename?: string; rows?: number
-  uploading?: boolean; onUpload: (f: File) => void; onClear?: () => void
+  uploading?: boolean; saved?: boolean
+  onUpload: (f: File, saveForNext: boolean) => void; onClear?: () => void; onRemoveSaved?: () => void
   inputRef?: { current: HTMLInputElement | null }
 }) {
   const { tokens } = useTheme()
   const localRef = useRef<HTMLInputElement>(null)
   const ref: { current: HTMLInputElement | null } = inputRef ?? localRef
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+
+  const handleFileChosen = (f: File) => {
+    setPendingFile(f)
+  }
+
+  const confirmUpload = (saveForNext: boolean) => {
+    if (!pendingFile) return
+    onUpload(pendingFile, saveForNext)
+    setPendingFile(null)
+  }
+
+  if (pendingFile) {
+    return (
+      <div style={{
+        border: `1px solid #f59e0b`, borderRadius: 8, padding: '10px 14px',
+        background: '#2a1f0022',
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: tokens.textPrimary, marginBottom: 6 }}>
+          📂 {pendingFile.name}
+        </div>
+        <div style={{ fontSize: 12, color: tokens.textMuted, marginBottom: 8 }}>Save this file for next server restart?</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => confirmUpload(true)}
+            style={{ fontSize: 12, padding: '4px 12px', borderRadius: 5, border: '1px solid #22c55e66',
+              background: '#14532d33', color: '#4ade80', cursor: 'pointer' }}>
+            💾 Save for next time
+          </button>
+          <button onClick={() => confirmUpload(false)}
+            style={{ fontSize: 12, padding: '4px 12px', borderRadius: 5, border: `1px solid ${tokens.cardBorder}`,
+              background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>
+            Use once
+          </button>
+          <button onClick={() => setPendingFile(null)}
+            style={{ fontSize: 12, padding: '4px 8px', borderRadius: 5, border: 'none',
+              background: 'transparent', color: '#f87171', cursor: 'pointer' }}>
+            ✕
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       onClick={() => !active && ref.current?.click()}
@@ -200,15 +244,28 @@ function DkUploadZone({ label, hint, active, filename, rows, uploading, onUpload
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: tokens.textPrimary }}>{label}</div>
         {active && filename
-          ? <div style={{ fontSize: 11, color: '#4ade80', marginTop: 2 }}>{filename} · {rows?.toLocaleString('en-IN')} rows</div>
+          ? <div style={{ fontSize: 11, color: '#4ade80', marginTop: 2 }}>
+              {saved && <span style={{ marginRight: 6, padding: '1px 5px', borderRadius: 3, background: '#14532d44',
+                border: '1px solid #22c55e44', color: '#4ade80', fontSize: 10 }}>💾 Saved</span>}
+              {filename} · {rows?.toLocaleString('en-IN')} rows
+            </div>
           : <div style={{ fontSize: 10, color: tokens.textMuted, fontFamily: 'monospace', marginTop: 2 }}>{hint}</div>}
       </div>
       {active && onClear && (
-        <button onClick={e => { e.stopPropagation(); onClear() }}
-          style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440',
-            background: 'transparent', color: '#f87171', cursor: 'pointer', flexShrink: 0 }}>
-          Clear
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', flexShrink: 0 }}>
+          <button onClick={e => { e.stopPropagation(); onClear() }}
+            style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440',
+              background: 'transparent', color: '#f87171', cursor: 'pointer' }}>
+            Clear
+          </button>
+          {saved && onRemoveSaved && (
+            <button onClick={e => { e.stopPropagation(); onRemoveSaved() }}
+              style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, border: '1px solid #f59e0b44',
+                background: 'transparent', color: '#f59e0b', cursor: 'pointer' }}>
+              Remove Saved
+            </button>
+          )}
+        </div>
       )}
       {!active && (
         <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: tokens.cardBg, color: tokens.textMuted,
@@ -217,7 +274,7 @@ function DkUploadZone({ label, hint, active, filename, rows, uploading, onUpload
         </span>
       )}
       <input ref={ref} type="file" accept=".csv" hidden
-        onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = '' }} />
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChosen(f); e.target.value = '' }} />
     </div>
   )
 }
@@ -264,9 +321,17 @@ export default function DistributionModel() {
   const [fieldPickerOpen, setFieldPickerOpen] = useState(false)
   const fieldPickerRef = useRef<HTMLDivElement>(null)
 
+  // Item master field filters
+  const [itemFieldMeta, setItemFieldMeta] = useState<Record<string, StoreFieldMeta>>({})
+  const [activeItemFieldFilters, setActiveItemFieldFilters] = useState<Record<string, string[]>>(() => ssLoad('activeItemFieldFilters', {}))
+  const [addedItemFilterFields, setAddedItemFilterFields] = useState<string[]>(() => ssLoad('addedItemFilterFields', []))
+  const [itemFieldPickerOpen, setItemFieldPickerOpen] = useState(false)
+  const itemFieldPickerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     function onOut(e: MouseEvent) {
       if (fieldPickerRef.current && !fieldPickerRef.current.contains(e.target as Node)) setFieldPickerOpen(false)
+      if (itemFieldPickerRef.current && !itemFieldPickerRef.current.contains(e.target as Node)) setItemFieldPickerOpen(false)
     }
     document.addEventListener('mousedown', onOut)
     return () => document.removeEventListener('mousedown', onOut)
@@ -281,6 +346,8 @@ export default function DistributionModel() {
   useEffect(() => { ssSave({ selStores }) }, [selStores])
   useEffect(() => { ssSave({ activeFieldFilters }) }, [activeFieldFilters])
   useEffect(() => { ssSave({ addedFilterFields }) }, [addedFilterFields])
+  useEffect(() => { ssSave({ activeItemFieldFilters }) }, [activeItemFieldFilters])
+  useEffect(() => { ssSave({ addedItemFilterFields }) }, [addedItemFilterFields])
 
   const [divisionOptions,   setDivisionOptions]   = useState<string[]>([])
   const [attribute1Options, setAttribute1Options] = useState<string[]>([])
@@ -303,11 +370,14 @@ export default function DistributionModel() {
     http.get('/distribution/store-filter-meta').then(r => {
       setStoreFieldMeta(r.data?.data?.fields ?? {})
     }).catch(() => {})
+    http.get('/distribution/item-filter-meta').then(r => {
+      setItemFieldMeta(r.data?.data?.fields ?? {})
+    }).catch(() => {})
   }, [])
 
   // ── CSV Stock Upload ────────────────────────────────────────────────────────
   const [csvUploadActive, setCsvUploadActive] = useState(false)
-  const [csvUploadMeta,   setCsvUploadMeta]   = useState<{filename: string; rows: number; qty_col: string} | null>(null)
+  const [csvUploadMeta,   setCsvUploadMeta]   = useState<{filename: string; rows: number; qty_col: string; saved?: boolean} | null>(null)
   const [csvUploading,    setCsvUploading]    = useState(false)
   const [csvUploadMsg,    setCsvUploadMsg]    = useState<string | null>(null)
   const csvInputRef = useRef<HTMLInputElement>(null)
@@ -315,15 +385,15 @@ export default function DistributionModel() {
   useEffect(() => {
     http.get('/distribution/upload-stock-csv/status').then(r => {
       const d = r.data?.data
-      if (d?.active) { setCsvUploadActive(true); setCsvUploadMeta({ filename: d.filename, rows: d.rows, qty_col: d.qty_col }) }
+      if (d?.active) { setCsvUploadActive(true); setCsvUploadMeta({ filename: d.filename, rows: d.rows, qty_col: d.qty_col, saved: !!d.saved }) }
     }).catch(() => {})
   }, [])
 
-  const handleCsvUpload = async (file: File) => {
+  const handleCsvUpload = async (file: File, saveForNext: boolean) => {
     setCsvUploading(true); setCsvUploadMsg(null)
     try {
       const form = new FormData(); form.append('file', file)
-      const res = await http.post<{ success: boolean; data: { filename: string; rows: number; qty_col: string }; message: string }>('/distribution/upload-stock-csv', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const res = await http.post<{ success: boolean; data: { filename: string; rows: number; qty_col: string; saved?: boolean }; message: string }>(`/distribution/upload-stock-csv?save=${saveForNext}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
       if (res.data.success) {
         setCsvUploadActive(true); setCsvUploadMeta(res.data.data)
         setCsvUploadMsg(`✓ ${res.data.message}`)
@@ -332,8 +402,8 @@ export default function DistributionModel() {
     finally { setCsvUploading(false) }
   }
 
-  const clearCsvUpload = async () => {
-    await http.delete('/distribution/upload-stock-csv').catch(() => {})
+  const clearCsvUpload = async (removeSaved = false) => {
+    await http.delete(`/distribution/upload-stock-csv?remove_saved=${removeSaved}`).catch(() => {})
     setCsvUploadActive(false); setCsvUploadMeta(null); setCsvUploadMsg(null)
   }
 
@@ -343,7 +413,7 @@ export default function DistributionModel() {
     { key: 'fill_rate', label: 'Fill-Rate Priority', hint: 'DEPARTMENT, STORE_NAME, FILL_RATE_RANK' },
     { key: 'override',  label: 'Store Override Priority', hint: 'STORE_NAME, OVERRIDE_RANK' },
   ]
-  const [priorityMeta,      setPriorityMeta]      = useState<Partial<Record<PriorityCsvKey, {filename: string; rows: number}>>>({})
+  const [priorityMeta,      setPriorityMeta]      = useState<Partial<Record<PriorityCsvKey, {filename: string; rows: number; saved?: boolean}>>>({})
   const [priorityUploading, setPriorityUploading] = useState<Partial<Record<PriorityCsvKey, boolean>>>({})
   const [priorityMsg,       setPriorityMsg]       = useState<Partial<Record<PriorityCsvKey, string>>>({})
   const priorityRefs = useRef<Partial<Record<PriorityCsvKey, HTMLInputElement | null>>>({})
@@ -354,19 +424,19 @@ export default function DistributionModel() {
     }).catch(() => {})
   }, [])
 
-  const handlePriorityUpload = async (key: PriorityCsvKey, file: File) => {
+  const handlePriorityUpload = async (key: PriorityCsvKey, file: File, saveForNext: boolean) => {
     setPriorityUploading(p => ({ ...p, [key]: true })); setPriorityMsg(p => ({ ...p, [key]: undefined }))
     try {
       const form = new FormData(); form.append('file', file)
-      const res = await http.post<{ success: boolean; data: { filename: string; rows: number }; message: string }>(`/distribution/upload-store-priority/${key}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const res = await http.post<{ success: boolean; data: { filename: string; rows: number; saved?: boolean }; message: string }>(`/distribution/upload-store-priority/${key}?save=${saveForNext}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
       if (res.data.success) { setPriorityMeta(p => ({ ...p, [key]: res.data.data })); setPriorityMsg(p => ({ ...p, [key]: `✓ ${res.data.message}` })) }
       else { setPriorityMsg(p => ({ ...p, [key]: `✗ ${res.data.message}` })) }
     } catch (e: any) { setPriorityMsg(p => ({ ...p, [key]: `✗ ${(e as any)?.response?.data?.message ?? (e as any)?.message ?? 'Upload failed'}` })) }
     finally { setPriorityUploading(p => ({ ...p, [key]: false })) }
   }
 
-  const clearPriority = async (key: PriorityCsvKey) => {
-    await http.delete(`/distribution/upload-store-priority/${key}`).catch(() => {})
+  const clearPriority = async (key: PriorityCsvKey, removeSaved = false) => {
+    await http.delete(`/distribution/upload-store-priority/${key}?remove_saved=${removeSaved}`).catch(() => {})
     setPriorityMeta(p => { const n = { ...p }; delete n[key]; return n })
     setPriorityMsg(p => { const n = { ...p }; delete n[key]; return n })
   }
@@ -397,7 +467,7 @@ export default function DistributionModel() {
     { key: 'size', label: 'SIZE REQ', hint: 'DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4, STORE_NAME, SZ_REQ',
       oracleViews: [] },
   ]
-  const [reqCsvMeta,    setReqCsvMeta]    = useState<Partial<Record<ReqCsvKey, {filename: string; rows: number}>>>({})
+  const [reqCsvMeta,    setReqCsvMeta]    = useState<Partial<Record<ReqCsvKey, {filename: string; rows: number; saved?: boolean}>>>({})
   const [reqCsvUploading, setReqCsvUploading] = useState<Partial<Record<ReqCsvKey, boolean>>>({})
   const [reqCsvMsg,     setReqCsvMsg]     = useState<Partial<Record<ReqCsvKey, string>>>({})
   const reqCsvRefs = useRef<Partial<Record<ReqCsvKey, HTMLInputElement | null>>>({})
@@ -409,19 +479,19 @@ export default function DistributionModel() {
     }).catch(() => {})
   }, [])
 
-  const handleReqCsvUpload = async (key: ReqCsvKey, file: File) => {
+  const handleReqCsvUpload = async (key: ReqCsvKey, file: File, saveForNext: boolean) => {
     setReqCsvUploading(p => ({ ...p, [key]: true })); setReqCsvMsg(p => ({ ...p, [key]: undefined }))
     try {
       const form = new FormData(); form.append('file', file)
-      const res = await http.post<{ success: boolean; data: { filename: string; rows: number }; message: string }>(`/distribution/upload-req-csv/${key}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const res = await http.post<{ success: boolean; data: { filename: string; rows: number; saved?: boolean }; message: string }>(`/distribution/upload-req-csv/${key}?save=${saveForNext}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
       if (res.data.success) { setReqCsvMeta(p => ({ ...p, [key]: res.data.data })); setReqCsvMsg(p => ({ ...p, [key]: `✓ ${res.data.message}` })) }
       else { setReqCsvMsg(p => ({ ...p, [key]: `✗ ${res.data.message}` })) }
     } catch (e: any) { setReqCsvMsg(p => ({ ...p, [key]: `✗ ${e?.response?.data?.message ?? e?.message ?? 'Upload failed'}` })) }
     finally { setReqCsvUploading(p => ({ ...p, [key]: false })) }
   }
 
-  const clearReqCsv = async (key: ReqCsvKey) => {
-    await http.delete(`/distribution/upload-req-csv/${key}`).catch(() => {})
+  const clearReqCsv = async (key: ReqCsvKey, removeSaved = false) => {
+    await http.delete(`/distribution/upload-req-csv/${key}?remove_saved=${removeSaved}`).catch(() => {})
     setReqCsvMeta(p => { const n = { ...p }; delete n[key]; return n })
     setReqCsvMsg(p => { const n = { ...p }; delete n[key]; return n })
   }
@@ -628,6 +698,7 @@ export default function DistributionModel() {
         biz_segment: bizSegment,
         stores: JSON.stringify(selStores),
         store_field_filters: JSON.stringify(activeFieldFilters),
+        item_field_filters: JSON.stringify(Object.fromEntries(Object.entries(activeItemFieldFilters).filter(([, v]) => v.length > 0))),
         min_qty: String(minQty),
       })
       const res = await apiFetch('GET', `/distribution/store-barcode/preview?${params}`, undefined, 120000)
@@ -636,7 +707,7 @@ export default function DistributionModel() {
     } catch (e: unknown) {
       setSbMsg(`\u2717 ${e instanceof Error ? e.message : 'Failed'}`)
     } finally { setSbLoading(false) }
-  }, [reqSource, bizSegment, selStores, activeFieldFilters, minQty])
+  }, [reqSource, bizSegment, selStores, activeFieldFilters, activeItemFieldFilters, minQty])
 
   const fetchOlStatus = useCallback(async () => {
     try {
@@ -677,7 +748,7 @@ export default function DistributionModel() {
   useEffect(() => {
     const t = setTimeout(() => { fetchStoreBarcodePreview() }, 500)
     return () => clearTimeout(t)
-  }, [selStores, activeFieldFilters, reqSource, bizSegment, fetchStoreBarcodePreview])
+  }, [selStores, activeFieldFilters, activeItemFieldFilters, reqSource, bizSegment, fetchStoreBarcodePreview])
 
   useEffect(() => { ssSave({ applyOL }) }, [applyOL])
 
@@ -722,7 +793,9 @@ export default function DistributionModel() {
       if (selStores.length > 0) params.stores = JSON.stringify(selStores)
       const activeFF = Object.fromEntries(Object.entries(activeFieldFilters).filter(([, v]) => v.length > 0))
       if (Object.keys(activeFF).length > 0) params.store_field_filters = JSON.stringify(activeFF)
-      const d = await apiFetch<BaseResult>('POST', '/distribution/build-base', params)
+      const activeIFF = Object.fromEntries(Object.entries(activeItemFieldFilters).filter(([, v]) => v.length > 0))
+      if (Object.keys(activeIFF).length > 0) params.item_field_filters = JSON.stringify(activeIFF)
+      const d = await apiFetch<BaseResult>('POST', '/distribution/build-base', params, getUserTimeout(300_000))
       setBaseResult(d)
       setBaseCacheReady(true)
       setBaseMsg(`✓ Base built — ${d.rows.toLocaleString('en-IN')} rows · ${d.columns.length} cols · ${Math.round(d.elapsed_ms / 1000)}s`)
@@ -1183,7 +1256,12 @@ export default function DistributionModel() {
                 label={sourceMode === 'both' ? 'Upload Override CSV' : 'Upload Stock CSV'}
                 hint="BARCODE · GRC_QTY / WMS_QTY / MSA_QTY / ASN_QTY"
                 active={csvUploadActive} filename={csvUploadMeta?.filename} rows={csvUploadMeta?.rows}
-                uploading={csvUploading} onUpload={handleCsvUpload} onClear={clearCsvUpload} inputRef={csvInputRef}
+                saved={!!csvUploadMeta?.saved}
+                uploading={csvUploading}
+                onUpload={handleCsvUpload}
+                onClear={() => clearCsvUpload(false)}
+                onRemoveSaved={() => clearCsvUpload(true)}
+                inputRef={csvInputRef}
               />
               {csvUploadMsg && (
                 <div style={{ marginTop: 4, fontSize: 11, color: csvUploadMsg.startsWith('✓') ? '#4ade80' : '#f87171' }}>
@@ -1508,7 +1586,7 @@ export default function DistributionModel() {
             <button onClick={() => setFieldPickerOpen(o => !o)} style={{
               fontSize: 11, padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
               border: `1px solid ${tokens.cardBorder}`, background: 'transparent', color: tokens.textMuted }}>
-              + Add Field Filter
+              + Add Store Field Filter
             </button>
             {fieldPickerOpen && (
               <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 999, minWidth: 180,
@@ -1561,6 +1639,55 @@ export default function DistributionModel() {
             <div style={{ marginTop: 5, fontSize: 11, color: tokens.textMuted, marginLeft: 88 }}>
               Blank = include all. Within row = AND. Rows = OR combined.
             </div>
+          </div>
+
+          {/* ── Item Field Filters (department / article / mrp / cat2 / etc.) ── */}
+          {addedItemFilterFields.map(col => {
+            const meta = itemFieldMeta[col]
+            if (!meta) return null
+            const sel = activeItemFieldFilters[col] ?? []
+            return (
+              <div key={col} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: tokens.textMuted, minWidth: 80 }}>{meta.label}</span>
+                <MultiSelect label={meta.label} options={meta.values} selected={sel}
+                  onChange={v => setActiveItemFieldFilters(f => ({ ...f, [col]: v }))} width={220} />
+                {sel.length > 0 && (
+                  <button onClick={() => setActiveItemFieldFilters(f => ({ ...f, [col]: [] }))}
+                    style={{ fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '1px solid #ef444440', background: 'transparent', color: '#f87171', cursor: 'pointer' }}>Clear</button>
+                )}
+                <button onClick={() => {
+                  setAddedItemFilterFields(f => f.filter(k => k !== col))
+                  setActiveItemFieldFilters(f => { const n = { ...f }; delete n[col]; return n })
+                }} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5, border: '1px solid #52525240', background: 'transparent', color: tokens.textMuted, cursor: 'pointer' }}>✕</button>
+              </div>
+            )
+          })}
+          <div ref={itemFieldPickerRef} style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+            <button onClick={() => setItemFieldPickerOpen(o => !o)} style={{
+              fontSize: 11, padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
+              border: `1px solid ${tokens.cardBorder}`, background: 'transparent', color: tokens.textMuted }}>
+              + Add Item Field Filter
+            </button>
+            {itemFieldPickerOpen && (
+              <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 999, minWidth: 200,
+                background: tokens.cardBg, border: `1px solid ${tokens.cardBorder}`, borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.4)', padding: 6 }}>
+                {Object.entries(itemFieldMeta).length === 0 && (
+                  <div style={{ fontSize: 12, color: tokens.textMuted, padding: '6px 8px' }}>Loading fields…</div>
+                )}
+                {Object.entries(itemFieldMeta).map(([col, meta]) => (
+                  <button key={col} onClick={() => {
+                    if (!addedItemFilterFields.includes(col)) setAddedItemFilterFields(f => [...f, col])
+                    setItemFieldPickerOpen(false)
+                  }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
+                    fontSize: 12, border: 'none', borderRadius: 5, cursor: 'pointer',
+                    background: addedItemFilterFields.includes(col) ? '#6366f115' : 'transparent',
+                    color: addedItemFilterFields.includes(col) ? '#818cf8' : tokens.textPrimary }}>
+                    {meta.label} {addedItemFilterFields.includes(col) ? '✓' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* -- Store Presets */}
@@ -1657,7 +1784,7 @@ export default function DistributionModel() {
                   <div style={{ flex: 1, fontSize: 12, color: tokens.textSecondary }}>
                     CSV: store metadata + barcode + qty + Item Master &mdash; {sbPreview.total_rows.toLocaleString('en-IN')} rows
                   </div>
-                  <a href={`/api/distribution/store-barcode/csv?req_source=${reqSource}&biz_segment=${bizSegment}&stores=${encodeURIComponent(JSON.stringify(selStores))}&store_field_filters=${encodeURIComponent(JSON.stringify(activeFieldFilters))}`}
+                  <a href={`/api/distribution/store-barcode/csv?req_source=${reqSource}&biz_segment=${bizSegment}&stores=${encodeURIComponent(JSON.stringify(selStores))}&store_field_filters=${encodeURIComponent(JSON.stringify(activeFieldFilters))}&item_field_filters=${encodeURIComponent(JSON.stringify(Object.fromEntries(Object.entries(activeItemFieldFilters).filter(([,v])=>v.length>0))))}`}
                     download
                     style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7,
                       border: 'none', background: '#7c3aed', color: '#fff',
@@ -1873,7 +2000,10 @@ export default function DistributionModel() {
                     <div key={spec.key}>
                       <DkUploadZone label={spec.label} hint={spec.hint} active={!!meta}
                         filename={meta?.filename} rows={meta?.rows} uploading={uploading}
-                        onUpload={f => handleReqCsvUpload(spec.key, f)} onClear={() => clearReqCsv(spec.key)}
+                        saved={!!meta?.saved}
+                        onUpload={(f, sv) => handleReqCsvUpload(spec.key, f, sv)}
+                        onClear={() => clearReqCsv(spec.key, false)}
+                        onRemoveSaved={() => clearReqCsv(spec.key, true)}
                         inputRef={{ current: reqCsvRefs.current[spec.key] ?? null }} />
                       {spec.oracleViews.length > 0 && (
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4, paddingLeft: 2 }}>
@@ -2092,7 +2222,10 @@ export default function DistributionModel() {
                 <div key={spec.key}>
                   <DkUploadZone label={spec.label} hint={spec.hint} active={!!meta}
                     filename={meta?.filename} rows={meta?.rows} uploading={uploading}
-                    onUpload={f => handlePriorityUpload(spec.key, f)} onClear={() => clearPriority(spec.key)}
+                    saved={!!meta?.saved}
+                    onUpload={(f, sv) => handlePriorityUpload(spec.key, f, sv)}
+                    onClear={() => clearPriority(spec.key, false)}
+                    onRemoveSaved={() => clearPriority(spec.key, true)}
                     inputRef={{ current: priorityRefs.current[spec.key] ?? null }} />
                   {msg && <div style={{ marginTop: 3, fontSize: 11, color: msg.startsWith('✓') ? '#4ade80' : '#f87171' }}>{msg}</div>}
                 </div>
@@ -2535,9 +2668,115 @@ export default function DistributionModel() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* ── Division Summary + WH Source + Downloads (below table) ── */}
+                <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  {/* Division Summary */}
+                  <div style={{ flex: '1 1 200px', minWidth: 180, background: tokens.cardBg,
+                    border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textPrimary, marginBottom: 8 }}>🎨 Division Summary</div>
+                    {divSummaryLoading && <div style={{ fontSize: 12, color: tokens.textMuted }}>Loading…</div>}
+                    {!divSummaryLoading && (divSummary ?? []).length > 0 && (
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                        <thead>
+                          <tr>
+                            {(['Division', 'Total', 'Alloc>0', 'Zero'] as const).map(h => (
+                              <th key={h} style={{ padding: '4px 6px', textAlign: h === 'Division' ? 'left' : 'right',
+                                color: tokens.textMuted, fontWeight: 600, fontSize: 11,
+                                borderBottom: `1px solid ${tokens.cardBorder}` }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(divSummary ?? []).map(row => {
+                            const zero = row.rows_total - row.rows_nonzero
+                            return (
+                              <tr key={row.division}>
+                                <td style={{ padding: '5px 6px', color: tokens.textPrimary, fontWeight: 600 }}>{row.division}</td>
+                                <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary }}>{row.rows_total.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{row.rows_nonzero.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted }}>{zero.toLocaleString('en-IN')}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ borderTop: `1px solid ${tokens.cardBorder}` }}>
+                            <td style={{ padding: '5px 6px', color: tokens.textMuted, fontSize: 11 }}>Total</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textSecondary, fontWeight: 700 }}>{(divSummary ?? []).reduce((s, r) => s + r.rows_total, 0).toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>{(divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0).toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right', color: tokens.textMuted, fontWeight: 700 }}>{(divSummary ?? []).reduce((s, r) => s + (r.rows_total - r.rows_nonzero), 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    )}
+                    {!divSummaryLoading && (divSummary ?? []).length === 0 && (
+                      <div style={{ fontSize: 12, color: tokens.textMuted }}>No division data</div>
+                    )}
+                  </div>
+
+                  {/* WH Source Breakdown */}
+                  {(distResult.wh_source_breakdown ?? []).length > 0 && (
+                    <div style={{ flex: '1 1 180px', minWidth: 160, background: tokens.cardBg,
+                      border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: tokens.textPrimary, marginBottom: 8 }}>📦 WH Source Breakdown</div>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                        <thead>
+                          <tr>
+                            {(['Source', 'Stock', 'Allocated', 'Barcodes'] as const).map(h => (
+                              <th key={h} style={{ padding: '3px 6px', textAlign: h === 'Source' ? 'left' : 'right',
+                                color: tokens.textMuted, fontWeight: 600, fontSize: 11,
+                                borderBottom: `1px solid ${tokens.cardBorder}` }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(distResult.wh_source_breakdown ?? []).map(row => {
+                            const clr = row.wh_source === 'GRC' ? '#38bdf8' : row.wh_source === 'WMS' ? '#a78bfa' : '#4ade80'
+                            return (
+                              <tr key={row.wh_source}>
+                                <td style={{ padding: '4px 6px', fontWeight: 700, color: clr }}>{row.wh_source}</td>
+                                <td style={{ padding: '4px 6px', textAlign: 'right', color: tokens.textSecondary }}>{(row.stock ?? 0).toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '4px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 600 }}>{row.allocated.toLocaleString('en-IN')}</td>
+                                <td style={{ padding: '4px 6px', textAlign: 'right', color: tokens.textMuted }}>{row.barcodes.toLocaleString('en-IN')}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                      {distResult.rows > 0 && (() => {
+                        const totalNonzero = (divSummary ?? []).reduce((s, r) => s + r.rows_nonzero, 0)
+                        const pct = (divSummary ?? []).length > 0
+                          ? Math.round(totalNonzero / (divSummary ?? []).reduce((s, r) => s + r.rows_total, 0) * 100)
+                          : Math.round(distResult.stores_covered / distResult.rows * 100)
+                        return (
+                          <div style={{ marginTop: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: tokens.textMuted, marginBottom: 4 }}>
+                              <span>Alloc Coverage</span>
+                              <span style={{ color: pct >= 60 ? '#4ade80' : '#f87171', fontWeight: 700 }}>{pct}%</span>
+                            </div>
+                            <div style={{ height: 6, borderRadius: 3, background: tokens.cardBorder }}>
+                              <div style={{ height: '100%', borderRadius: 3, width: `${pct}%`, background: pct >= 60 ? '#4ade80' : '#f87171', transition: 'width 0.6s ease' }} />
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Download buttons */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'flex-end', alignSelf: 'flex-end' }}>
+                    <button onClick={exportCsv} disabled={csvLoading} style={{ ...S.btn('#0284c7', csvLoading), fontSize: 12, padding: '8px 18px', whiteSpace: 'nowrap' }}>
+                      {csvLoading ? '⏳ CSV…' : '⬇ Download CSV'}
+                    </button>
+                    <button onClick={exportDistribution} disabled={exportLoading} style={{ ...S.btn('#059669', exportLoading), fontSize: 12, padding: '8px 18px', whiteSpace: 'nowrap' }}>
+                      {exportLoading ? '⏳ Excel…' : '⬇ Download Excel'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div style={{ width: 300, flexShrink: 0, background: tokens.cardBg,
-                border: `1px solid ${tokens.cardBorder}`, borderRadius: 10, padding: '14px 16px' }}>
+              {/* Division Summary + WH Source Breakdown moved below table — see inner flex below */}
+              <div style={{ display: 'none' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: tokens.textPrimary, marginBottom: 10 }}>🎨 Division Summary</div>
                 {divSummaryLoading && <div style={{ fontSize: 12, color: tokens.textMuted }}>Loading…</div>}
                 {!divSummaryLoading && (divSummary ?? []).length > 0 && (

@@ -27,3 +27,4 @@ Thumbs.db
 
 # Git push helper (contains credentials)
 push_to_github.bat
+data/saved_csvs/

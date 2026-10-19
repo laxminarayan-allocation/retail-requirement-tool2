@@ -44,6 +44,13 @@ export default function DataStore() {
   const [allRunning, setAllRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Scheduler state
+  const [schedTime, setSchedTime] = useState<string | null>(null)
+  const [schedEdit, setSchedEdit] = useState(false)
+  const [schedInput, setSchedInput] = useState('')
+  const [schedSaving, setSchedSaving] = useState(false)
+  const [schedMsg, setSchedMsg] = useState<string | null>(null)
+
   async function fetchStatus() {
     try {
       const r = await fetch('/api/data-store/status', { headers: authHdr() })
@@ -56,8 +63,24 @@ export default function DataStore() {
   useEffect(() => {
     fetchStatus()
     intervalRef.current = setInterval(fetchStatus, 3000)
+    // Load scheduler time
+    fetch('/api/output/schedule', { headers: authHdr() })
+      .then(r => r.json()).then(d => { if (d.success) setSchedTime(d.data.time) })
+      .catch(() => {})
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [])
+
+  async function saveSchedule() {
+    if (!/^\d{2}:\d{2}$/.test(schedInput)) { setSchedMsg('HH:MM format mein daalo (e.g. 06:30)'); return }
+    setSchedSaving(true); setSchedMsg(null)
+    try {
+      const r = await fetch('/api/output/schedule', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHdr() }, body: JSON.stringify({ time: schedInput }) })
+      const d = await r.json()
+      if (d.success) { setSchedTime(d.data.time); setSchedEdit(false); setSchedMsg(null) }
+      else setSchedMsg(d.message ?? 'Save failed')
+    } catch { setSchedMsg('Save failed') }
+    finally { setSchedSaving(false) }
+  }
 
   async function downloadOne(key: string) {
     await fetch(`/api/data-store/download/${key}`, { method: 'POST', headers: authHdr() })
@@ -203,11 +226,58 @@ export default function DataStore() {
           </div>
         )}
 
-        {/* Architecture note */}
+        {/* Scheduler config */}
         <div style={{ marginTop: 20, background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+          borderRadius: 10, padding: '14px 18px', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 16 }}>⏰</span>
+            <span style={{ fontWeight: 700, color: T.textPrimary }}>Auto-Refresh Scheduler</span>
+            <span style={{ color: T.textMuted, fontSize: 11 }}>Daily IST</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {!schedEdit ? (
+                <>
+                  <span style={{ fontWeight: 800, fontSize: 20, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
+                    {schedTime ?? '—'}
+                  </span>
+                  <span style={{ fontSize: 11, color: T.textMuted }}>IST</span>
+                  <button onClick={() => { setSchedInput(schedTime ?? '06:30'); setSchedEdit(true); setSchedMsg(null) }}
+                    style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                      background: 'transparent', color: T.accent, cursor: 'pointer', fontWeight: 600 }}>
+                    ✎ Change
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input value={schedInput} onChange={e => setSchedInput(e.target.value)}
+                    placeholder="HH:MM" maxLength={5}
+                    style={{ width: 72, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.accent}`,
+                      background: '#0f172a', color: T.textPrimary, fontSize: 14, fontWeight: 700,
+                      textAlign: 'center', outline: 'none' }} />
+                  <button onClick={saveSchedule} disabled={schedSaving}
+                    style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, border: 'none',
+                      background: '#16a34a', color: '#fff', cursor: schedSaving ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                    {schedSaving ? '...' : 'Save'}
+                  </button>
+                  <button onClick={() => { setSchedEdit(false); setSchedMsg(null) }}
+                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: `1px solid ${T.cardBorder}`,
+                      background: 'transparent', color: T.textMuted, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          {schedMsg && <div style={{ fontSize: 11, color: '#f87171', marginTop: 6 }}>{schedMsg}</div>}
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>
+            Har roz is time pe sab sources automatic refresh honge. Data Store mein "daily" wale sources refresh honge.
+          </div>
+        </div>
+
+        {/* Architecture note */}
+        <div style={{ marginTop: 12, background: T.cardBg, border: `1px solid ${T.cardBorder}`,
           borderRadius: 10, padding: '14px 18px', fontSize: 12, color: T.textSecondary, lineHeight: 1.7 }}>
           <div style={{ fontWeight: 700, color: T.textPrimary, marginBottom: 6 }}>📐 How it works</div>
-          <div>All data is <strong>T−1</strong> (yesterday's Oracle data). Scheduler downloads at 9 AM IST daily → saves as compressed Parquet files → Reports read from local cache.</div>
+          <div>All data is <strong>T−1</strong> (yesterday's Oracle data). Scheduler downloads daily → saves as compressed Parquet files → Reports read from local cache.</div>
           <div style={{ marginTop: 6 }}>
             <span style={{ color: '#22c55e', fontWeight: 700 }}>Fresh</span> = downloaded within 26h &nbsp;·&nbsp;
             <span style={{ color: '#f59e0b', fontWeight: 700 }}>Stale</span> = older &nbsp;·&nbsp;

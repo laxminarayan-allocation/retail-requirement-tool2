@@ -2532,7 +2532,7 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  useEffect(() => { load(); if (!_allocCache) loadAlloc('all'); if (!_detailCache) loadDetail([], 0) }, [load, loadAlloc, loadDetail])
+  useEffect(() => { load(); if (!_allocCache) loadAlloc('all') }, [load, loadAlloc])
 
   if (loading) {
     return <DashboardSkeleton />

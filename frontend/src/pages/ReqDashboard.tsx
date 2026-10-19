@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react'
+﻿import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import http from '@/api/http'
 import NumFilterDropdown, { NumFilterIcon, useNumFilter } from '@/components/NumFilterDropdown'
 import StaleBanner from '@/components/StaleBanner'
@@ -132,7 +132,7 @@ function StoreSelect({ stores, value, onChange, accentColor = '#0ea5e9' }: {
         🏪 {pill} ▾
       </button>
       {nsoStores.length > 0 && (
-        <button onClick={() => onChange(nsoStores)} title="Select NSO stores only" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${JSON.stringify(value.sort()) === JSON.stringify(nsoStores.sort()) ? accentColor : '#334155'}`, background: 'var(--card-bg)', color: '#f59e0b', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>NSO</button>
+        <button onClick={() => onChange(nsoStores)} title="Select NSO stores only" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: `1px solid ${JSON.stringify([...value].sort()) === JSON.stringify([...nsoStores].sort()) ? accentColor : '#334155'}`, background: 'var(--card-bg)', color: '#f59e0b', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>NSO</button>
       )}
       {value.length > 0 && (
         <button onClick={() => onChange([])} title="All stores" style={{ height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer' }}>All</button>
@@ -463,8 +463,14 @@ export default function ReqDashboard() {
 
   // Sparky grouped rows for rendering subtotals
   const sparkRows = sparkData?.rows ?? []
-  const filteredSparkRows = numFilter.applyToRows(sparkRows as unknown as Record<string, unknown>[]) as unknown as SparkRow[]
-  const sparkDepts = Array.from(new Set(filteredSparkRows.map(r => r.department)))
+  const filteredSparkRows = useMemo(
+    () => numFilter.applyToRows(sparkRows as unknown as Record<string, unknown>[]) as unknown as SparkRow[],
+    [sparkRows, numFilter]
+  )
+  const sparkDepts = useMemo(
+    () => Array.from(new Set(filteredSparkRows.map(r => r.department))),
+    [filteredSparkRows]
+  )
 
   return (
     <div style={{ padding: '20px 24px', background: '#0a0f1e', minHeight: '100vh', color: 'var(--text-primary)' }}>

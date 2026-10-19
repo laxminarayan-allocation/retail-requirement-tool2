@@ -257,8 +257,17 @@ export default function FilterableTable({
 
   const activeFilters = Object.values(colFilters).filter(s => s.size > 0).length
 
+  const PAGE_SIZE = 500
+  const [page, setPage] = useState(0)
+  const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE))
+  const visibleRows = useMemo(() => displayed.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [displayed, page])
+
+  // Reset to page 0 when filters/sort change
+  const prevDisplayedLen = useRef(displayed.length)
+  if (prevDisplayedLen.current !== displayed.length) { prevDisplayedLen.current = displayed.length; if (page !== 0) setPage(0) }
+
   function clearAll() {
-    setGlobalQ(''); setColFilters({}); setSortCol(null); setSortDir(null)
+    setGlobalQ(''); setColFilters({}); setSortCol(null); setSortDir(null); setPage(0)
   }
 
   const sortIcon = (key: string) => {
@@ -357,7 +366,7 @@ export default function FilterableTable({
                   No matching rows
                 </td>
               </tr>
-            ) : displayed.map((row, i) => (
+            ) : visibleRows.map((row, i) => (
               <tr
                 key={i}
                 style={{
@@ -415,6 +424,17 @@ export default function FilterableTable({
           )}
         </table>
       </div>
+
+      {/* pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderTop: `1px solid ${T.borderMid}`, background: '#0d1525' }}>
+          <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+            style={{ padding: '2px 9px', background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 4, color: T.muted, fontSize: 10, cursor: page === 0 ? 'not-allowed' : 'pointer' }}>‹</button>
+          <span style={{ fontSize: 10, color: T.muted }}>Page {page + 1} / {totalPages} · rows {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, displayed.length)} of {displayed.length.toLocaleString()}</span>
+          <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+            style={{ padding: '2px 9px', background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 4, color: T.muted, fontSize: 10, cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}>›</button>
+        </div>
+      )}
 
       {/* filter dropdown portal */}
       {openFilter && filterAnchor && (

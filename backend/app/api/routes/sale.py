@@ -503,7 +503,8 @@ def sale_weekly_summary(refresh: bool = False):
         from app.core.parquet_cache import has_output, read_cache
 
         if not (has_output(*_CACHE_TY) and has_output(*_CACHE_LY)):
-            return APIResponse.ok(data={"loading": True, "message": "Cache not ready — trigger from Sale Dashboard first."})
+            _start_fetch_if_idle()
+            return APIResponse.ok(data={"loading": True, "fetching": True, "message": "Fetching from Oracle (~20s). Poll /api/sale/cache-status then retry."})
 
         df_ty = read_cache(*_CACHE_TY)
         df_ly = read_cache(*_CACHE_LY)

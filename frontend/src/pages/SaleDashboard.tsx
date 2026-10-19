@@ -373,20 +373,53 @@ export default function SaleDashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Load 2Y weekly data when tab switched
+  // Load 2Y weekly data when tab switched — with polling if Oracle fetch is in progress
   useEffect(() => {
     if (view !== '2year' || wData || wLoading) return
-    setWLoading(true)
-    http.get('/sale/weekly-summary')
-      .then(r => {
-        if (r.data.success) {
+    let cancelled = false
+    setWLoading(true); setWError('')
+
+    async function fetchWithPoll() {
+      try {
+        const r = await http.get('/sale/weekly-summary', { timeout: 30000 })
+        if (cancelled) return
+        if (r.data.success && r.data.data?.rows) {
           setWData(r.data.data); _sale2yCache = r.data.data
           if (r.data.data?.months)
             setWCollapsed(new Set(r.data.data.months.map((m: MonthMeta) => m.key)))
-        } else setWError(r.data.message || 'Load failed')
-      })
-      .catch(e => setWError(String(e)))
-      .finally(() => setWLoading(false))
+          setWLoading(false)
+          return
+        }
+        // Cache not ready — poll cache-status then retry
+        if (r.data.data?.loading) {
+          const poll = setInterval(async () => {
+            if (cancelled) { clearInterval(poll); return }
+            try {
+              const st = await http.get('/sale/cache-status')
+              if (!st.data.data?.ready) return  // still fetching
+              clearInterval(poll)
+              if (cancelled) return
+              const r2 = await http.get('/sale/weekly-summary', { timeout: 60000 })
+              if (cancelled) return
+              if (r2.data.success && r2.data.data?.rows) {
+                setWData(r2.data.data); _sale2yCache = r2.data.data
+                if (r2.data.data?.months)
+                  setWCollapsed(new Set(r2.data.data.months.map((m: MonthMeta) => m.key)))
+              } else {
+                setWError(r2.data.message || 'Load failed after fetch')
+              }
+            } catch (e) { clearInterval(poll); setWError(String(e)) }
+            finally { if (!cancelled) setWLoading(false) }
+          }, 3000)
+          return
+        }
+        setWError(r.data.message || 'Load failed')
+      } catch (e) { setWError(String(e)) }
+      finally { if (!cancelled) setWLoading(false) }
+    }
+
+    fetchWithPoll()
+    return () => { cancelled = true }
   }, [view])
 
   // ── 8-Week helpers ──────────────────────────────────────────────────────────

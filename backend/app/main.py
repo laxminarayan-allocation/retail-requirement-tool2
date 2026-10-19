@@ -145,6 +145,20 @@ async def lifespan(app: FastAPI):
         _th2.Thread(target=_dashboard_cache_loop, daemon=True, name="dashboard-cache-refresh").start()
         logger.info("Dashboard cache refresh thread started (every 2 hrs)")
 
+        # Layer 4: Store monthly temps — pre-fetch at startup so map button is instant
+        import threading as _th3
+        def _monthly_temps_startup():
+            import time as _t
+            _t.sleep(15)  # let other warmups settle first
+            try:
+                from app.api.routes.dashboard import _do_monthly_fetch
+                logger.info("monthly-temps startup pre-fetch starting...")
+                _do_monthly_fetch(years=3, predict=1)
+            except Exception as exc:
+                logger.warning("monthly-temps startup pre-fetch failed: %s", exc)
+        _th3.Thread(target=_monthly_temps_startup, daemon=True, name="monthly-temps-startup").start()
+        logger.info("Monthly temps startup pre-fetch thread started")
+
     # Auto-load any CSVs saved globally by the user (stock, req, store-priority)
     try:
         from app.api.routes.distribution import _autoload_saved_csvs

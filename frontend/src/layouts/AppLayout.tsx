@@ -836,7 +836,10 @@ export default function AppLayout() {
             }}>
               {ROLE_LABEL[user.role] || user.role}
             </span>
-            <button style={{ background: 'none', border: `1px solid ${tokens.sidebarBorder}`, borderRadius: 4, color: tokens.textSecondary, fontSize: 11, padding: '4px 8px', cursor: 'pointer', textAlign: 'left', width: '100%' }} onClick={handleSignout}>Sign out</button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <a href="/my-profile" style={{ background: 'none', border: `1px solid ${tokens.sidebarBorder}`, borderRadius: 4, color: tokens.textSecondary, fontSize: 11, padding: '4px 8px', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }} title="My Profile">👤</a>
+              <button style={{ background: 'none', border: `1px solid ${tokens.sidebarBorder}`, borderRadius: 4, color: tokens.textSecondary, fontSize: 11, padding: '4px 8px', cursor: 'pointer' }} onClick={handleSignout}>Sign out</button>
+            </div>
           </div>
           {/* Role upgrade request — button only; opens modal */}
           {upgradeTarget && (

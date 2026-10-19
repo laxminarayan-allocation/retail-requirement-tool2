@@ -29,6 +29,7 @@ import PrdSwap from '@/pages/PrdSwap'
 import ResultsJourney from '@/pages/ResultsJourney'
 import RunLogs from '@/pages/RunLogs'
 import DeployAgent from '@/pages/DeployAgent'
+import MyProfile from '@/pages/MyProfile'
 import { OracleRefreshProvider } from '@/context/OracleRefreshContext'
 import { DbRefreshProvider } from '@/context/DbRefreshContext'
 import { ZoomProvider } from '@/context/ZoomContext'
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="results-journey" element={<ResultsJourney />} />
             <Route path="run-logs" element={<RunLogs />} />
             <Route path="run-deploy" element={<DeployAgent />} />
+            <Route path="my-profile" element={<MyProfile />} />
           </Route>
         </Routes>
       </BrowserRouter>

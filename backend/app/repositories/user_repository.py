@@ -72,6 +72,17 @@ def set_user_active(user_id: str, is_active: bool) -> None:
         conn.execute("UPDATE users SET is_active = ? WHERE id = ?", (int(is_active), user_id))
 
 
+def update_user_profile(user_id: str, fields: dict) -> None:
+    allowed = {"full_name", "display_name", "designation", "department", "dob", "contact_no", "whatsapp_no"}
+    safe = {k: v for k, v in fields.items() if k in allowed}
+    if not safe:
+        return
+    sets = ", ".join(f"{k} = ?" for k in safe)
+    vals = list(safe.values()) + [user_id]
+    with get_sqlite() as conn:
+        conn.execute(f"UPDATE users SET {sets} WHERE id = ?", vals)
+
+
 def set_session_limits(user_id: str, max_desktop: int, max_mobile: int, action: str) -> None:
     with get_sqlite() as conn:
         conn.execute(
@@ -84,8 +95,9 @@ def list_users(limit: int = 100, offset: int = 0):
     with get_sqlite() as conn:
         total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         rows = conn.execute(
-            "SELECT id, email, full_name, role, is_active, created_at, last_login_at, temp_admin_expires_at, "
-            "max_desktop_sessions, max_mobile_sessions, session_limit_action "
+            "SELECT id, email, full_name, display_name, role, is_active, created_at, last_login_at, "
+            "temp_admin_expires_at, max_desktop_sessions, max_mobile_sessions, session_limit_action, "
+            "designation, department, dob, contact_no, whatsapp_no "
             "FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()

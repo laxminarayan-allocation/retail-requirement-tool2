@@ -12,7 +12,9 @@ type User = {
   id: string; email: string; full_name: string; role: string;
   is_active: number; created_at: string; last_login_at: string;
   temp_admin_expires_at: string | null;
-  max_desktop_sessions?: number; max_mobile_sessions?: number; session_limit_action?: string
+  max_desktop_sessions?: number; max_mobile_sessions?: number; session_limit_action?: string;
+  display_name?: string; designation?: string; department?: string;
+  dob?: string; contact_no?: string; whatsapp_no?: string;
 }
 type Log = {
   id: string; user_email: string; action: string;
@@ -293,6 +295,40 @@ export default function AdminPanel() {
   // Per-user page access
   const [expandedPageUser, setExpandedPageUser] = useState<string | null>(null)
   const [userPageAccess, setUserPageAccess] = useState<Record<string, Record<string, boolean>>>({})
+
+  // Edit profile modal (admin)
+  const [editProfileUser, setEditProfileUser] = useState<User | null>(null)
+  const [editProfileForm, setEditProfileForm] = useState<Partial<User>>({})
+  const [editProfileSaving, setEditProfileSaving] = useState(false)
+  const [editProfileMsg, setEditProfileMsg] = useState('')
+
+  const openEditProfile = (u: User) => {
+    setEditProfileUser(u)
+    setEditProfileForm({
+      full_name: u.full_name, display_name: u.display_name ?? '',
+      designation: u.designation ?? '', department: u.department ?? '',
+      dob: u.dob ?? '', contact_no: u.contact_no ?? '', whatsapp_no: u.whatsapp_no ?? '',
+    })
+    setEditProfileMsg('')
+  }
+
+  const saveEditProfile = async () => {
+    if (!editProfileUser) return
+    setEditProfileSaving(true); setEditProfileMsg('')
+    try {
+      const res = await http.patch<{ success: boolean; message: string }>(
+        `/auth/users/${editProfileUser.id}/profile`, editProfileForm
+      )
+      if (res.data.success) {
+        setUsers(us => us.map(u => u.id === editProfileUser.id ? { ...u, ...editProfileForm } : u))
+        setEditProfileMsg('✓ Saved')
+        setTimeout(() => setEditProfileUser(null), 800)
+      } else {
+        setEditProfileMsg('✗ ' + res.data.message)
+      }
+    } catch { setEditProfileMsg('✗ Error saving') }
+    finally { setEditProfileSaving(false) }
+  }
   const [pageAccessSaving, setPageAccessSaving] = useState(false)
   // Live sessions (admin)
   const [liveSessions, setLiveSessions] = useState<any[]>([])
@@ -643,14 +679,19 @@ export default function AdminPanel() {
           ? <div style={S.empty}>{loading ? 'Loading…' : 'No users.'}</div>
           : (
             <div style={S.tblWrap}>
-            <table style={{ ...S.table, minWidth: 760 }}>
+            <table style={{ ...S.table, minWidth: 1100 }}>
               <thead>
                 <tr>
                   <th style={S.th}>User</th>
                   <th style={S.th}>Role</th>
                   <th style={S.th}>Status</th>
-                  <th style={S.th}>Last login</th>
-                  <th style={S.th}>Change role</th>
+                  <th style={S.th}>Designation</th>
+                  <th style={S.th}>Department</th>
+                  <th style={S.th}>DOB</th>
+                  <th style={S.th}>Contact</th>
+                  <th style={S.th}>Created On</th>
+                  <th style={S.th}>Last Login</th>
+                  <th style={S.th}>Change Role</th>
                   <th style={S.th}>Active</th>
                   <th style={S.th}>Sessions</th>
                   <th style={S.th}>Page Access</th>
@@ -667,14 +708,22 @@ export default function AdminPanel() {
                         <td style={S.td}>
                           <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{u.full_name}</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{u.email}</div>
-                          {(['viewer', 'planner'] as const).includes(u.role as any) && (
+                          <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' as const }}>
+                            {(['viewer', 'planner'] as const).includes(u.role as any) && (
+                              <button
+                                onClick={() => setPreviewRole(previewRole === u.role as any ? null : u.role as any)}
+                                style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, border: '1px solid', background: previewRole === u.role ? '#d97706' : 'transparent', color: previewRole === u.role ? '#fff' : '#d97706', borderColor: '#d97706' }}
+                              >
+                                {previewRole === u.role ? '👁 Previewing' : '👁 View As'}
+                              </button>
+                            )}
                             <button
-                              onClick={() => setPreviewRole(previewRole === u.role as any ? null : u.role as any)}
-                              style={{ marginTop: 4, fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, border: '1px solid', background: previewRole === u.role ? '#d97706' : 'transparent', color: previewRole === u.role ? '#fff' : '#d97706', borderColor: '#d97706' }}
+                              onClick={() => openEditProfile(u)}
+                              style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', border: '1px solid #3b82f680', background: 'transparent', color: '#60a5fa' }}
                             >
-                              {previewRole === u.role ? '👁 Previewing' : '👁 View As'}
+                              ✏ Edit
                             </button>
-                          )}
+                          </div>
                         </td>
                         <td style={S.td}>
                           <span style={S.badge(u.role)}>{ROLE_LABEL[u.role] || u.role}</span>
@@ -687,6 +736,26 @@ export default function AdminPanel() {
                         <td style={S.td}>
                           <span style={{ color: u.is_active ? '#34d399' : '#f87171', fontSize: 11 }}>
                             {u.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{u.designation || '—'}</span>
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{u.department || '—'}</span>
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{u.dob || '—'}</span>
+                        </td>
+                        <td style={S.td}>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.contact_no || '—'}</div>
+                          {u.whatsapp_no && u.whatsapp_no !== u.contact_no && (
+                            <div style={{ fontSize: 11, color: '#4ade80' }}>WA: {u.whatsapp_no}</div>
+                          )}
+                        </td>
+                        <td style={S.td}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                            {u.created_at ? u.created_at.slice(0, 10) : '—'}
                           </span>
                         </td>
                         <td style={S.td}>
@@ -1082,6 +1151,54 @@ export default function AdminPanel() {
 
       {/* ── Access Matrix ── */}
       {tab === 'access' && <AccessMatrix />}
+
+      {/* ── Edit Profile Modal (Admin) ── */}
+      {editProfileUser && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditProfileUser(null) }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }} />
+          <div style={{ position: 'relative', background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 24, width: 420, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <button onClick={() => setEditProfileUser(null)} style={{ position: 'absolute', top: 12, right: 14, background: 'none', border: 'none', color: '#64748b', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>✏ Edit Profile</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+              {editProfileUser.full_name}
+              <span style={{ display: 'block', fontSize: 11, color: '#475569', marginTop: 2 }}>{editProfileUser.email}</span>
+            </div>
+            {[
+              { key: 'full_name', label: 'Full Name' },
+              { key: 'display_name', label: 'Display Name' },
+              { key: 'designation', label: 'Designation' },
+              { key: 'department', label: 'Department' },
+              { key: 'dob', label: 'Date of Birth (YYYY-MM-DD)' },
+              { key: 'contact_no', label: 'Contact No' },
+              { key: 'whatsapp_no', label: 'WhatsApp No' },
+            ].map(({ key, label }) => (
+              <div key={key} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>{label}</div>
+                <input
+                  type="text"
+                  value={(editProfileForm as any)[key] ?? ''}
+                  onChange={e => setEditProfileForm(f => ({ ...f, [key]: e.target.value }))}
+                  style={{ width: '100%', fontSize: 13, background: '#1e293b', border: '1px solid #334155', color: '#f1f5f9', borderRadius: 6, padding: '7px 10px', boxSizing: 'border-box' as const, outline: 'none', fontFamily: 'inherit' }}
+                />
+              </div>
+            ))}
+            {editProfileMsg && (
+              <div style={{ fontSize: 12, color: editProfileMsg.startsWith('✓') ? '#34d399' : '#f87171', marginBottom: 10, padding: '6px 10px', background: editProfileMsg.startsWith('✓') ? 'rgba(52,211,153,.08)' : 'rgba(248,113,113,.08)', borderRadius: 5, border: `1px solid ${editProfileMsg.startsWith('✓') ? 'rgba(52,211,153,.3)' : 'rgba(248,113,113,.3)'}` }}>
+                {editProfileMsg}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button onClick={() => setEditProfileUser(null)} style={{ fontSize: 12, padding: '6px 14px', background: 'none', color: '#64748b', border: '1px solid #334155', borderRadius: 6, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={saveEditProfile} disabled={editProfileSaving} style={{ fontSize: 12, padding: '6px 16px', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, opacity: editProfileSaving ? 0.6 : 1 }}>
+                {editProfileSaving ? 'Saving…' : 'Save Profile'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Password Reset Modal */}
       {resetModal && (

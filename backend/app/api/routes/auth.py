@@ -16,7 +16,7 @@ from app.core.security import hash_password, verify_password, create_token
 from app.models.response_models import APIResponse
 from app.repositories.user_repository import (
     create_user, get_user_by_email, get_user_by_id, update_last_login,
-    set_user_role, set_user_active, set_session_limits,
+    set_user_role, set_user_active, set_session_limits, update_user_profile,
     create_role_request, get_pending_request_for_user, list_role_requests, review_role_request,
     log_action, list_logs, list_users, ROLE_LEVEL,
     get_user_page_access, set_user_page_access, delete_user_page_access,
@@ -673,6 +673,60 @@ async def admin_set_active(user_id: str, request: Request, is_active: bool = Tru
         return APIResponse.fail(message="Cannot deactivate the primary admin account.")
     set_user_active(user_id, is_active)
     return APIResponse.ok(message=f"User {'activated' if is_active else 'deactivated'}.")
+
+
+@router.patch("/users/{user_id}/profile", response_model=APIResponse)
+async def admin_update_profile(user_id: str, request: Request):
+    """Admin updates any user's profile fields (designation, department, dob, contact_no, whatsapp_no, full_name, display_name)."""
+    if not _is_admin(request):
+        return APIResponse.fail(message="Admin access required.")
+    user = get_user_by_id(user_id)
+    if not user:
+        return APIResponse.fail(message="User not found.")
+    try:
+        body = await request.json()
+    except Exception:
+        return APIResponse.fail(message="Invalid JSON body.")
+    allowed = {"full_name", "display_name", "designation", "department", "dob", "contact_no", "whatsapp_no"}
+    fields = {k: v for k, v in body.items() if k in allowed}
+    if not fields:
+        return APIResponse.fail(message="No valid fields to update.")
+    update_user_profile(user_id, fields)
+    return APIResponse.ok(message="Profile updated.")
+
+
+@router.patch("/me/profile", response_model=APIResponse)
+async def update_my_profile(request: Request):
+    """Logged-in user updates their own profile fields."""
+    token_user = getattr(request.state, "user", None)
+    if not token_user:
+        return APIResponse.fail(message="Not authenticated.")
+    try:
+        body = await request.json()
+    except Exception:
+        return APIResponse.fail(message="Invalid JSON body.")
+    allowed = {"full_name", "display_name", "designation", "department", "dob", "contact_no", "whatsapp_no"}
+    fields = {k: v for k, v in body.items() if k in allowed}
+    if not fields:
+        return APIResponse.fail(message="No valid fields to update.")
+    user = get_user_by_email(token_user["email"])
+    if not user:
+        return APIResponse.fail(message="User not found.")
+    update_user_profile(user["id"], fields)
+    return APIResponse.ok(message="Profile updated.")
+
+
+@router.get("/me/profile", response_model=APIResponse)
+async def get_my_profile(request: Request):
+    """Returns the calling user's full profile."""
+    token_user = getattr(request.state, "user", None)
+    if not token_user:
+        return APIResponse.fail(message="Not authenticated.")
+    user = get_user_by_email(token_user["email"])
+    if not user:
+        return APIResponse.fail(message="User not found.")
+    safe = {k: v for k, v in user.items() if k not in ("password_hash", "hashed_password")}
+    return APIResponse.ok(data=safe)
 
 
 @router.get("/my-logs", response_model=APIResponse)

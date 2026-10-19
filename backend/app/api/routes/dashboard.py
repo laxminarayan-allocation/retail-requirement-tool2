@@ -1481,25 +1481,22 @@ async def store_temperatures():
 
 
 # ── Store monthly temps — Open-Meteo archive (24-hour cache) ─────────────────
-_monthly_cache: dict = {}   # stores at most one entry: {"key": str, "data": ..., "ts": float}
+_monthly_cache: dict = {}   # {"key": str, "data": ..., "ts": float}
 _MONTHLY_TTL = 86400  # 24 hours
+_monthly_fetching: bool = False
+_monthly_fetch_key: str = ""
+_monthly_lock = __import__("threading").Lock()
 
 
-@router.get("/store-monthly-temps", response_model=APIResponse)
-async def store_monthly_temps(years: int = 3, predict: int = 0):
-    """Fetch last N years of monthly min/max temp per store via Open-Meteo archive.
-    Returns {site_code: {YYYY-MM: {min, max}}}. Cached 24 hours."""
-    global _monthly_cache
+def _do_monthly_fetch(years: int, predict: int) -> None:
+    global _monthly_cache, _monthly_fetching, _monthly_fetch_key
+    import re as _re2
+    import urllib.request
+    import json as _json
+    import time as _time
+
     cache_key = f"{years}_{predict}"
-    if (_monthly_cache.get("key") == cache_key
-            and (time.time() - _monthly_cache.get("ts", 0)) < _MONTHLY_TTL):
-        return APIResponse.ok(data=_monthly_cache["data"])
-
     try:
-        import re as _re2
-        import urllib.request
-        import json as _json
-
         def _parse_coord(s):
             if pd.isna(s): return None
             m = _re2.search(r"([\d.]+)", str(s))
@@ -1508,10 +1505,10 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
 
         from app.core.parquet_cache import has_output, read_cache as _rc
         if not has_output("MISRETAIL", "T_STORE_OPENING_DATE"):
-            return APIResponse.ok(data={})
+            return
         df = _rc("MISRETAIL", "T_STORE_OPENING_DATE")
-        df["_lat"] = df["longitude"].apply(_parse_coord)   # col named "longitude" holds ° N (lat)
-        df["_lon"] = df["latitude"].apply(_parse_coord)    # col named "latitude" holds ° E (lon)
+        df["_lat"] = df["longitude"].apply(_parse_coord)
+        df["_lon"] = df["latitude"].apply(_parse_coord)
         valid = df.dropna(subset=["_lat", "_lon", "site_code"]).copy()
         valid = valid[valid["_lat"].between(8, 37) & valid["_lon"].between(68, 98)]
 
@@ -1520,19 +1517,17 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
         lons  = valid["_lon"].round(4).tolist()
 
         from datetime import date, timedelta
-        # Archive API has ~5 day lag; use end of last complete month to be safe
         today = date.today()
         first_of_month = today.replace(day=1)
-        end   = first_of_month - timedelta(days=1)   # last day of previous month
+        end   = first_of_month - timedelta(days=1)
         start = date(end.year - years, end.month, 1)
 
-        BATCH = 20
+        BATCH = 50  # Open-Meteo supports up to 100 locations per request
         result: dict = {}
-        import asyncio as _asyncio
 
         for b in range(0, len(codes), BATCH):
             if b > 0:
-                await _asyncio.sleep(10)  # Open-Meteo free tier: keep under 6 req/min
+                _time.sleep(11)  # stay under 6 req/min on free tier
             bc  = codes[b:b+BATCH]
             bla = lats[b:b+BATCH]
             blo = lons[b:b+BATCH]
@@ -1552,8 +1547,8 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
                     break
                 except Exception as _e:
                     if _attempt < 2:
-                        logger.warning("batch %d attempt %d failed: %s — retrying in 60s", b // BATCH, _attempt, _e)
-                        await _asyncio.sleep(60)
+                        logger.warning("monthly-temps batch %d attempt %d failed: %s", b // BATCH, _attempt, _e)
+                        _time.sleep(60)
                     else:
                         raise
             if isinstance(payload, dict):
@@ -1566,7 +1561,7 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
                 tmins  = daily.get("temperature_2m_min", [])
                 monthly: dict = {}
                 for d_str, tmax, tmin in zip(dates, tmaxs, tmins):
-                    ym = d_str[:7]  # YYYY-MM
+                    ym = d_str[:7]
                     if tmax is None or tmin is None:
                         continue
                     if ym not in monthly:
@@ -1580,11 +1575,11 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
 
         if predict:
             from datetime import date as _date
-            today = _date.today()
+            today2 = _date.today()
             for store_code, monthly in result.items():
-                for i in range(0, 12):  # i=0 = current month (not yet complete in archive)
-                    future_m = (today.month - 1 + i) % 12 + 1
-                    future_y = today.year + (today.month - 1 + i) // 12
+                for i in range(0, 12):
+                    future_m = (today2.month - 1 + i) % 12 + 1
+                    future_y = today2.year + (today2.month - 1 + i) // 12
                     future_ym = f"{future_y}-{future_m:02d}"
                     if future_ym in monthly:
                         continue
@@ -1594,19 +1589,47 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
                         if int(ym[5:7]) == future_m and not v.get("predicted")
                     ]
                     if hist_vals:
-                        avg_max = round(sum(x[0] for x in hist_vals) / len(hist_vals), 1)
-                        avg_min = round(sum(x[1] for x in hist_vals) / len(hist_vals), 1)
-                        monthly[future_ym] = {"max": avg_max, "min": avg_min, "predicted": True}
+                        monthly[future_ym] = {
+                            "max": round(sum(x[0] for x in hist_vals) / len(hist_vals), 1),
+                            "min": round(sum(x[1] for x in hist_vals) / len(hist_vals), 1),
+                            "predicted": True,
+                        }
 
-        _monthly_cache = {"key": cache_key, "data": result, "ts": time.time()}
-        return APIResponse.ok(data=result)
-
+        _monthly_cache = {"key": cache_key, "data": result, "ts": _time.time()}
+        logger.info("monthly-temps: fetched %d stores (%d batches)", len(result), -(-len(codes) // BATCH))
     except Exception as exc:
-        import traceback
-        logger.error("store-monthly-temps failed: %s\n%s", exc, traceback.format_exc())
-        if _monthly_cache.get("key") == cache_key:
-            return APIResponse.ok(data=_monthly_cache["data"])
-        return APIResponse.fail(f"store-monthly-temps error: {exc}")
+        logger.error("monthly-temps bg fetch failed: %s", exc)
+    finally:
+        with _monthly_lock:
+            _monthly_fetching = False
+
+
+@router.get("/store-monthly-temps", response_model=APIResponse)
+async def store_monthly_temps(years: int = 3, predict: int = 0):
+    """Fetch last N years of monthly min/max temp per store via Open-Meteo archive.
+    Runs in background thread on first load; returns cached data instantly thereafter."""
+    global _monthly_fetching, _monthly_fetch_key
+    cache_key = f"{years}_{predict}"
+
+    # Cache hit — instant return
+    if (_monthly_cache.get("key") == cache_key
+            and (time.time() - _monthly_cache.get("ts", 0)) < _MONTHLY_TTL):
+        return APIResponse.ok(data=_monthly_cache["data"])
+
+    # Start background fetch if not already running
+    with _monthly_lock:
+        if not _monthly_fetching or _monthly_fetch_key != cache_key:
+            _monthly_fetching = True
+            _monthly_fetch_key = cache_key
+            import threading as _threading
+            _threading.Thread(target=_do_monthly_fetch, args=(years, predict),
+                              daemon=True, name="monthly-temps-fetch").start()
+
+    # Return stale data if available, else loading signal
+    if _monthly_cache.get("data"):
+        return APIResponse.ok(data=_monthly_cache["data"])
+    return APIResponse.ok(data={"loading": True, "fetching": True,
+                                "message": "Fetching temperature data in background — retry in ~30s"})
 
 
 @router.get("/store-master-csv")

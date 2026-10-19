@@ -1983,9 +1983,19 @@ function onSearch(v){
         <button onClick={async () => {
           setMLoading(true)
           try {
-            const r = await http.get('/dashboard/store-monthly-temps?years=3&predict=1', { timeout: 120000 })
-            if (!r.data.success) return
-            const data: Record<string, Record<string, {min: number, max: number, predicted?: boolean}>> = r.data.data
+            let data: Record<string, Record<string, {min: number, max: number, predicted?: boolean}>> | null = null
+            // Poll until background fetch completes (backend returns loading:true while fetching)
+            for (let attempt = 0; attempt < 20; attempt++) {
+              const r = await http.get('/dashboard/store-monthly-temps?years=3&predict=1', { timeout: 30000 })
+              if (!r.data.success) break
+              if (r.data.data?.loading) {
+                await new Promise(res => setTimeout(res, 5000))
+                continue
+              }
+              data = r.data.data
+              break
+            }
+            if (!data) return
             const months = Array.from(new Set(Object.values(data).flatMap(v => Object.keys(v)))).sort()
             // Detect predicted months from any store's data
             const predictedSet = new Set(

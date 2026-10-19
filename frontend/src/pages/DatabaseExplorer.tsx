@@ -1101,7 +1101,7 @@ function DownloadedFilesPanel() {
   function loadList() {
     setLoading(true)
     setListError(null)
-    http.get('/database/output/list', { timeout: 10000 })
+    http.get('/database/output/list', { timeout: 60000 })
       .then(res => { if (res.data.success) setFiles(res.data.data.files ?? []) })
       .catch(err => {
         setFiles([])

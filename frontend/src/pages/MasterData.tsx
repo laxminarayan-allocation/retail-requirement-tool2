@@ -699,13 +699,18 @@ function DangerBtn({ onClick, children }: { onClick: () => void; children: React
   )
 }
 
+// ── Module-level navigation cache ──────────────────────────────────────────────
+let _mdStatuses: Record<string, TableStatus | null> | null = null
+let _mdKpis: Record<string, TableKpi | null> | null = null
+let _mdCustomTables: CustomTable[] | null = null
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function MasterData() {
-  const [statuses, setStatuses]   = useState<Record<string, TableStatus | null>>({})
-  const [statusLoading, setStatusLoading] = useState<Record<string, boolean>>({ sales: true, stock: true, mdq: true })
-  const [kpis, setKpis]           = useState<Record<string, TableKpi | null>>({})
-  const [customTables, setCustomTables] = useState<CustomTable[]>([])
+  const [statuses, setStatuses]   = useState<Record<string, TableStatus | null>>(_mdStatuses ?? {})
+  const [statusLoading, setStatusLoading] = useState<Record<string, boolean>>(_mdStatuses ? {} : { sales: true, stock: true, mdq: true })
+  const [kpis, setKpis]           = useState<Record<string, TableKpi | null>>(_mdKpis ?? {})
+  const [customTables, setCustomTables] = useState<CustomTable[]>(_mdCustomTables ?? [])
 
   const [vizKey, setVizKey]         = useState<TableKey | null>(null)
   const [wins, setWins]             = useState<Record<string, WinState>>({})
@@ -741,6 +746,7 @@ export default function MasterData() {
   }
 
   useEffect(() => {
+    if (_mdStatuses) return  // use module cache — skip all API calls on re-navigation
     // Load status only on mount — KPIs load lazily on first expand/click
     TABLE_KEYS.forEach(k => loadStatus(k))
     loadCustomTables()
@@ -759,7 +765,7 @@ export default function MasterData() {
     setStatusLoading(p => ({ ...p, [key]: true }))
     try {
       const res = await http.get(`/master/table/${key}/status`, { timeout: 8000 })
-      if (res.data.success) setStatuses(p => ({ ...p, [key]: res.data.data }))
+      if (res.data.success) { setStatuses(p => { const n = { ...p, [key]: res.data.data }; _mdStatuses = n; return n }) }
     } catch { /* ignore */ } finally {
       setStatusLoading(p => ({ ...p, [key]: false }))
     }
@@ -768,7 +774,7 @@ export default function MasterData() {
   async function loadKpi(key: TableKey) {
     try {
       const res = await http.get(`/master/table/${key}/kpi`, { timeout: 15000 })
-      if (res.data.success) setKpis(p => ({ ...p, [key]: res.data.data }))
+      if (res.data.success) { setKpis(p => { const n = { ...p, [key]: res.data.data }; _mdKpis = n; return n }) }
     } catch { /* ignore */ }
   }
 
@@ -777,7 +783,7 @@ export default function MasterData() {
       const res = await http.get('/master/custom', { timeout: 8000 })
       if (res.data.success) {
         const tables: CustomTable[] = res.data.data.tables
-        setCustomTables(tables)
+        setCustomTables(tables); _mdCustomTables = tables
         // Stagger custom status loads to avoid hammering backend all at once
         tables.forEach((t, i) => setTimeout(() => loadCustomStatus(t.id), i * 200))
       }

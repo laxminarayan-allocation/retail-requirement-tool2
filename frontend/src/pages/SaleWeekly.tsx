@@ -35,9 +35,11 @@ const wkLabel = (k: string) => k.split('-')[1] ?? k
 
 type SortKey = 'store_name' | 'total_val' | 'total_qty' | string
 
+let _saleWeeklyCache: Summary | null = null
+
 export default function SaleWeekly() {
-  const [data,     setData]     = useState<Summary | null>(null)
-  const [loading,  setLoading]  = useState(true)
+  const [data,     setData]     = useState<Summary | null>(_saleWeeklyCache)
+  const [loading,  setLoading]  = useState(_saleWeeklyCache === null)
   const [error,    setError]    = useState('')
   const [search,   setSearch]   = useState('')
   const [sort,     setSort]     = useState<SortKey>('total_val')
@@ -47,11 +49,12 @@ export default function SaleWeekly() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    if (_saleWeeklyCache) return  // use module cache
     http.get('/sale/weekly-summary')
       .then(r => {
         const d = r.data
         if (d.success) {
-          setData(d.data)
+          setData(d.data); _saleWeeklyCache = d.data
           // Default: collapse all months
           if (d.data?.months) {
             setCollapsed(new Set(d.data.months.map((m: MonthMeta) => m.key)))

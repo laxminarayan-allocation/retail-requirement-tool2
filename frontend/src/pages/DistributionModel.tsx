@@ -235,6 +235,12 @@ function ssSave(patch: Record<string, unknown>) {
   } catch {}
 }
 
+// ── Module-level navigation cache for dropdown options ─────────────────────────
+let _distDivisions: string[] | null = null
+let _distAttr1s: string[] | null = null
+let _distStores: string[] | null = null
+let _distStoreFieldMeta: Record<string, StoreFieldMeta> | null = null
+
 export default function DistributionModel() {
   const { tokens, theme } = useTheme()
   const isMobile = useIsMobile()
@@ -254,7 +260,7 @@ export default function DistributionModel() {
   const [selStores, setSelStores] = useState<string[]>(() => ssLoad('selStores', []))
 
   // Store master field filters: {col: label, values: string[]}
-  const [storeFieldMeta, setStoreFieldMeta] = useState<Record<string, StoreFieldMeta>>({})
+  const [storeFieldMeta, setStoreFieldMeta] = useState<Record<string, StoreFieldMeta>>(_distStoreFieldMeta ?? {})
   // activeFieldFilters: col → selected values[]
   const [activeFieldFilters, setActiveFieldFilters] = useState<Record<string, string[]>>(() => ssLoad('activeFieldFilters', {}))
   // which fields the user has added as filter rows
@@ -279,26 +285,28 @@ export default function DistributionModel() {
   useEffect(() => { ssSave({ activeFieldFilters }) }, [activeFieldFilters])
   useEffect(() => { ssSave({ addedFilterFields }) }, [addedFilterFields])
 
-  const [divisionOptions,   setDivisionOptions]   = useState<string[]>([])
-  const [attribute1Options, setAttribute1Options] = useState<string[]>([])
-  const [storeOptions,      setStoreOptions]      = useState<string[]>([])
+  const [divisionOptions,   setDivisionOptions]   = useState<string[]>(_distDivisions ?? [])
+  const [attribute1Options, setAttribute1Options] = useState<string[]>(_distAttr1s ?? [])
+  const [storeOptions,      setStoreOptions]      = useState<string[]>(_distStores ?? [])
 
   useEffect(() => {
-    http.get('/master/divisions').then(r => {
-      setDivisionOptions(r.data?.data?.divisions ?? [])
+    if (_distDivisions && _distAttr1s && _distStores && _distStoreFieldMeta) return  // use cache
+    if (!_distDivisions) http.get('/master/divisions').then(r => {
+      const v = r.data?.data?.divisions ?? []; setDivisionOptions(v); _distDivisions = v
     }).catch(() => {})
-    http.get('/req/filter_meta').then(r => {
+    if (!_distAttr1s) http.get('/req/filter_meta').then(r => {
       const vals: string[] = r.data?.data?.attribute1s ?? []
-      setAttribute1Options(vals.length > 0 ? vals : ['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER'])
+      const v = vals.length > 0 ? vals : ['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER']
+      setAttribute1Options(v); _distAttr1s = v
     }).catch(() => {
-      setAttribute1Options(['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER'])
+      const v = ['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER']
+      setAttribute1Options(v); _distAttr1s = v
     })
-    http.get('/distribution/store-list').then(r => {
-      const stores: string[] = r.data?.data?.stores ?? []
-      setStoreOptions(stores)
+    if (!_distStores) http.get('/distribution/store-list').then(r => {
+      const v: string[] = r.data?.data?.stores ?? []; setStoreOptions(v); _distStores = v
     }).catch(() => {})
-    http.get('/distribution/store-filter-meta').then(r => {
-      setStoreFieldMeta(r.data?.data?.fields ?? {})
+    if (!_distStoreFieldMeta) http.get('/distribution/store-filter-meta').then(r => {
+      const v = r.data?.data?.fields ?? {}; setStoreFieldMeta(v); _distStoreFieldMeta = v
     }).catch(() => {})
   }, [])
 

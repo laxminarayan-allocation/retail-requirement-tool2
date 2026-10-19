@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Any, List, Optional
 
+import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from app.core.parquet_cache import has_output, get_meta, read_cache
@@ -16,7 +17,6 @@ router = APIRouter(prefix="/req", tags=["req_dashboard"])
 
 def _pivot_response(df: "Any", page: int = 0, limit: int = 500) -> dict:
     """Slice a filtered DataFrame and return a standard paginated pivot payload."""
-    import pandas as pd
     total = len(df)
     start = page * limit
     chunk = df.iloc[start: start + limit]
@@ -160,7 +160,6 @@ def _fetch_sparky_to_parquet() -> None:
     try:
         from app.db.oracle import get_pool
         from app.core.parquet_cache import write_cache
-        import pandas as pd
 
         pool = get_pool()
         with pool.acquire() as conn:
@@ -185,7 +184,6 @@ def get_sparky_pivot(
 ):
     """Serve Sparky Req pivot from parquet cache (falls back to live Oracle if not cached)."""
     from app.core.parquet_cache import has_output, read_cache
-    import pandas as pd
 
     # serve from parquet if available
     if has_output(_SPARKY_PARQUET_OWNER, _SPARKY_PARQUET_OBJ):
@@ -301,7 +299,6 @@ def get_size_pivot(
     limit: int = Query(500, ge=1, le=5000),
 ):
     """Serve Size Req pivot from parquet cache (falls back to live Oracle if not cached)."""
-    import pandas as pd
 
     sw, sp = _store_where(store_names)
     if store_names:
@@ -419,7 +416,6 @@ def get_mrp_pivot(
     page: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=5000),
 ):
-    import pandas as pd
     sw, sp = _store_where(store_names)
     if store_names:
         try:
@@ -536,7 +532,6 @@ def get_art_pivot(
     page: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=5000),
 ):
-    import pandas as pd
     sw, sp = _store_where(store_names)
     if store_names:
         try:
@@ -652,7 +647,6 @@ def get_mc_pivot(
     page: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=5000),
 ):
-    import pandas as pd
     sw, sp = _store_where(store_names)
     if store_names:
         try:
@@ -711,7 +705,6 @@ _FILTER_META_PARQUET_OBJ   = "ITEM_MV_FILTER_META_V2"
 
 @router.get("/filter_meta")
 def get_filter_meta():
-    import pandas as pd
     if has_output(_FILTER_META_PARQUET_OWNER, _FILTER_META_PARQUET_OBJ):
         df = read_cache(_FILTER_META_PARQUET_OWNER, _FILTER_META_PARQUET_OBJ)
     else:
@@ -755,7 +748,6 @@ _STORE_NAMES_PARQUET_OBJ   = "V_STORE_NAMES"
 
 @router.get("/store_names")
 def get_store_names():
-    import pandas as pd
     if has_output(_STORE_NAMES_PARQUET_OWNER, _STORE_NAMES_PARQUET_OBJ):
         df = read_cache(_STORE_NAMES_PARQUET_OWNER, _STORE_NAMES_PARQUET_OBJ)
     else:
@@ -899,7 +891,6 @@ def get_barcode_pivot(
     page: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=5000),
 ):
-    import pandas as pd
     sw, sp = _store_where(store_names)
     if store_names:
         try:
@@ -987,7 +978,6 @@ def get_option_pivot(
     page: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=5000),
 ):
-    import pandas as pd
     sw, sp = _store_where(store_names)
     if store_names:
         try:
@@ -1067,7 +1057,6 @@ def get_list_pivot(
     page: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=5000),
 ):
-    import pandas as pd
     sw, sp = _store_where(store_names)
     if store_names:
         try:

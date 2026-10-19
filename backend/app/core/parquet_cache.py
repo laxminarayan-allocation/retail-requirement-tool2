@@ -12,12 +12,22 @@ import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
+from typing import Tuple
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 logger = logging.getLogger(__name__)
+
+# ── In-process read cache ──────────────────────────────────────────────────────
+# Key: (owner_upper, obj_upper)  Value: (mtime_float, DataFrame)
+# Invalidated automatically when the parquet file is rewritten (mtime changes).
+# Max 30 entries to cap memory usage.
+_READ_CACHE: dict[Tuple[str, str], Tuple[float, pd.DataFrame]] = {}
+_READ_CACHE_LOCK = Lock()
+_READ_CACHE_MAX = 30
 
 OUTPUT_DIR = Path(__file__).parent.parent.parent / "data" / "output"
 
@@ -50,12 +60,33 @@ def has_output(owner: str, obj: str) -> bool:
 
 def read_cache(owner: str, obj: str) -> pd.DataFrame | None:
     pp = _pq_path(owner, obj)
-    if pp.exists():
-        try:
-            return pq.read_table(pp).to_pandas()
-        except Exception as exc:
-            logger.warning("Parquet read failed %s.%s: %s", owner, obj, exc)
-    return None
+    if not pp.exists():
+        return None
+    try:
+        mtime = pp.stat().st_mtime
+    except OSError:
+        return None
+
+    key = (owner.upper(), obj.upper())
+    with _READ_CACHE_LOCK:
+        entry = _READ_CACHE.get(key)
+        if entry is not None and entry[0] == mtime:
+            return entry[1]  # cache hit — same file on disk
+
+    # Cache miss or file changed — read from disk
+    try:
+        df = pq.read_table(pp).to_pandas()
+    except Exception as exc:
+        logger.warning("Parquet read failed %s.%s: %s", owner, obj, exc)
+        return None
+
+    with _READ_CACHE_LOCK:
+        if len(_READ_CACHE) >= _READ_CACHE_MAX:
+            # Evict oldest entry (first inserted)
+            _READ_CACHE.pop(next(iter(_READ_CACHE)))
+        _READ_CACHE[key] = (mtime, df)
+
+    return df
 
 
 def write_cache(owner: str, obj: str, df: pd.DataFrame, sql_text: str | None = None) -> dict:
@@ -87,6 +118,12 @@ def write_cache(owner: str, obj: str, df: pd.DataFrame, sql_text: str | None = N
     mp.write_text(json.dumps(meta, indent=2))
     logger.info("Output written: %s.%s (%d rows, %.1f KB)",
                 owner, obj, len(df), meta["size_bytes"] / 1024)
+
+    # Evict in-process cache so next read picks up the new file
+    key = (owner.upper(), obj.upper())
+    with _READ_CACHE_LOCK:
+        _READ_CACHE.pop(key, None)
+
     return meta
 
 
@@ -96,6 +133,9 @@ def delete_cache(owner: str, obj: str) -> bool:
         if p.exists():
             p.unlink()
             deleted = True
+    key = (owner.upper(), obj.upper())
+    with _READ_CACHE_LOCK:
+        _READ_CACHE.pop(key, None)
     return deleted
 
 

@@ -237,6 +237,15 @@ export default function ReqDashboard() {
   const [listFilter, setListFilter] = useState({ dept: [] as string[], display_type: [] as string[], article: '', store_names: [] as string[] })
   const listFetched = useRef(false)
 
+  // Stable refs so load callbacks don't recreate on every filter keystroke
+  const mrpFilterRef    = useRef(mrpFilter);    mrpFilterRef.current    = mrpFilter
+  const artFilterRef    = useRef(artFilter);    artFilterRef.current    = artFilter
+  const mcFilterRef     = useRef(mcFilter);     mcFilterRef.current     = mcFilter
+  const barcodeFilterRef = useRef(barcodeFilter); barcodeFilterRef.current = barcodeFilter
+  const optionFilterRef  = useRef(optionFilter);  optionFilterRef.current  = optionFilter
+  const listFilterRef   = useRef(listFilter);   listFilterRef.current   = listFilter
+  const sizeFilterRef   = useRef(sizeFilter);   sizeFilterRef.current   = sizeFilter
+
   const [invalidating, setInvalidating] = useState(false)
   const [invalidateMsg, setInvalidateMsg] = useState('')
   async function handleInvalidate() {
@@ -251,108 +260,114 @@ export default function ReqDashboard() {
   }
 
   const loadMrp = useCallback(async () => {
+    const f = mrpFilterRef.current
     setMrpLoading(true); setMrpError(null)
     try {
       const params = new URLSearchParams()
-      mrpFilter.dept.forEach(v => params.append('department', v))
-      mrpFilter.display_type.forEach(v => params.append('display_type', v))
-      if (mrpFilter.article)      params.set('article',      mrpFilter.article)
-      mrpFilter.division.forEach(v    => params.append('division',    v))
-      mrpFilter.attribute1.forEach(v  => params.append('attribute1',  v))
-      mrpFilter.store_names.forEach(v => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      f.display_type.forEach(v => params.append('display_type', v))
+      if (f.article)      params.set('article',      f.article)
+      f.division.forEach(v    => params.append('division',    v))
+      f.attribute1.forEach(v  => params.append('attribute1',  v))
+      f.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/mrp_pivot', { params })
       setMrpData(r.data.data)
     } catch (e: unknown) {
       setMrpError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load MRP data')
     }
     setMrpLoading(false)
-  }, [mrpFilter])
+  }, [])
 
   const loadArt = useCallback(async () => {
+    const f = artFilterRef.current
     setArtLoading(true); setArtError(null)
     try {
       const params = new URLSearchParams()
-      artFilter.dept.forEach(v => params.append('department', v))
-      artFilter.display_type.forEach(v => params.append('display_type', v))
-      if (artFilter.article)      params.set('article',      artFilter.article)
-      artFilter.division.forEach(v    => params.append('division',    v))
-      artFilter.attribute1.forEach(v  => params.append('attribute1',  v))
-      artFilter.store_names.forEach(v => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      f.display_type.forEach(v => params.append('display_type', v))
+      if (f.article)      params.set('article',      f.article)
+      f.division.forEach(v    => params.append('division',    v))
+      f.attribute1.forEach(v  => params.append('attribute1',  v))
+      f.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/art_pivot', { params })
       setArtData(r.data.data)
     } catch (e: unknown) {
       setArtError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Article Req data')
     }
     setArtLoading(false)
-  }, [artFilter])
+  }, [])
 
   const loadMc = useCallback(async () => {
+    const f = mcFilterRef.current
     setMcLoading(true); setMcError(null)
     try {
       const params = new URLSearchParams()
-      mcFilter.dept.forEach(v => params.append('department', v))
-      mcFilter.display_type.forEach(v => params.append('display_type', v))
-      mcFilter.division.forEach(v    => params.append('division',    v))
-      mcFilter.attribute1.forEach(v  => params.append('attribute1',  v))
-      mcFilter.store_names.forEach(v => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      f.display_type.forEach(v => params.append('display_type', v))
+      f.division.forEach(v    => params.append('division',    v))
+      f.attribute1.forEach(v  => params.append('attribute1',  v))
+      f.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/mc_pivot', { params })
       setMcData(r.data.data)
     } catch (e: unknown) {
       setMcError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load MC Req data')
     }
     setMcLoading(false)
-  }, [mcFilter])
+  }, [])
 
   const loadBarcode = useCallback(async () => {
+    const f = barcodeFilterRef.current
     setBarcodeLoading(true); setBarcodeError(null)
     try {
       const params = new URLSearchParams()
-      barcodeFilter.dept.forEach(v => params.append('department', v))
-      barcodeFilter.display_type.forEach(v => params.append('display_type', v))
-      if (barcodeFilter.article)      params.set('article',      barcodeFilter.article)
-      barcodeFilter.division.forEach(v    => params.append('division',    v))
-      barcodeFilter.attribute1.forEach(v  => params.append('attribute1',  v))
-      barcodeFilter.store_names.forEach(v => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      f.display_type.forEach(v => params.append('display_type', v))
+      if (f.article)      params.set('article',      f.article)
+      f.division.forEach(v    => params.append('division',    v))
+      f.attribute1.forEach(v  => params.append('attribute1',  v))
+      f.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/barcode_pivot', { params })
       setBarcodeData(r.data.data)
     } catch (e: unknown) {
       setBarcodeError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Barcode data')
     }
     setBarcodeLoading(false)
-  }, [barcodeFilter])
+  }, [])
 
   const loadOption = useCallback(async () => {
+    const f = optionFilterRef.current
     setOptionLoading(true); setOptionError(null)
     try {
       const params = new URLSearchParams()
-      optionFilter.dept.forEach(v => params.append('department', v))
-      optionFilter.display_type.forEach(v => params.append('display_type', v))
-      optionFilter.division.forEach(v    => params.append('division',    v))
-      optionFilter.attribute1.forEach(v  => params.append('attribute1',  v))
-      optionFilter.store_names.forEach(v => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      f.display_type.forEach(v => params.append('display_type', v))
+      f.division.forEach(v    => params.append('division',    v))
+      f.attribute1.forEach(v  => params.append('attribute1',  v))
+      f.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/option_pivot', { params })
       setOptionData(r.data.data)
     } catch (e: unknown) {
       setOptionError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load Option data')
     }
     setOptionLoading(false)
-  }, [optionFilter])
+  }, [])
 
   const loadList = useCallback(async () => {
+    const f = listFilterRef.current
     setListLoading(true); setListError(null)
     try {
       const params = new URLSearchParams()
-      listFilter.dept.forEach(v => params.append('department', v))
-      listFilter.display_type.forEach(v => params.append('display_type', v))
-      if (listFilter.article)      params.set('article',      listFilter.article)
-      listFilter.store_names.forEach(v => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      f.display_type.forEach(v => params.append('display_type', v))
+      if (f.article)      params.set('article',      f.article)
+      f.store_names.forEach(v => params.append('store_names', v))
       const r = await http.get('/req/list_pivot', { params })
       setListData(r.data.data)
     } catch (e: unknown) {
       setListError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load List data')
     }
     setListLoading(false)
-  }, [listFilter])
+  }, [])
 
   useEffect(() => { if (activeTab === 'mrp'     && !mrpFetched.current)     { mrpFetched.current     = true; loadMrp()     } }, [activeTab, loadMrp])
   useEffect(() => { if (activeTab === 'art'     && !artFetched.current)     { artFetched.current     = true; loadArt()     } }, [activeTab, loadArt])
@@ -362,16 +377,17 @@ export default function ReqDashboard() {
   useEffect(() => { if (activeTab === 'list'    && !listFetched.current)    { listFetched.current    = true; loadList()    } }, [activeTab, loadList])
 
   const loadSize = useCallback(async () => {
+    const f = sizeFilterRef.current
     setSizeLoading(true)
     setSizeError(null)
     try {
       const params = new URLSearchParams()
-      sizeFilter.dept.forEach(v => params.append('department', v))
-      if (sizeFilter.article) params.set('article',    sizeFilter.article)
-      if (sizeFilter.cat4)    params.set('cat4',       sizeFilter.cat4)
-      sizeFilter.division.forEach(v     => params.append('division',    v))
-      sizeFilter.attribute1.forEach(v   => params.append('attribute1',  v))
-      sizeFilter.store_names.forEach(v  => params.append('store_names', v))
+      f.dept.forEach(v => params.append('department', v))
+      if (f.article) params.set('article',    f.article)
+      if (f.cat4)    params.set('cat4',       f.cat4)
+      f.division.forEach(v     => params.append('division',    v))
+      f.attribute1.forEach(v   => params.append('attribute1',  v))
+      f.store_names.forEach(v  => params.append('store_names', v))
       const r = await http.get('/req/size_pivot', { params })
       setSizeData(r.data.data)
     } catch (e: unknown) {
@@ -379,7 +395,7 @@ export default function ReqDashboard() {
       setSizeError(msg)
     }
     setSizeLoading(false)
-  }, [sizeFilter])
+  }, [])
 
   useEffect(() => {
     if (activeTab === 'size' && !sizeFetched.current) {

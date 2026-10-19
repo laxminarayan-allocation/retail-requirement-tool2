@@ -31,23 +31,38 @@ function getPinned(): PinnedWidget[] {
 interface PinnedCardData { field: string; func: string; value: number | string | null; total_rows: number }
 interface PinnedPivotData { row_col: string; value_col: string; func: string; rows: Record<string, unknown>[]; total_groups: number }
 
+// Module-level cache: key = "id|mode|field|func|pivotRow|pivotValue|pivotFunc"
+const _pinnedCache = new Map<string, PinnedCardData | PinnedPivotData>()
+
+function pinnedCacheKey(w: PinnedWidget) {
+  return `${w.id}|${w.mode}|${w.cardField ?? ''}|${w.cardFunc ?? ''}|${w.pivotRow ?? ''}|${w.pivotValue ?? ''}|${w.pivotFunc ?? ''}`
+}
+
 function PinnedTile({ w, onRemove }: { w: PinnedWidget; onRemove: () => void }) {
-  const [cardData, setCardData] = useState<PinnedCardData | null>(null)
-  const [pivotData, setPivotData] = useState<PinnedPivotData | null>(null)
+  const cacheKey = pinnedCacheKey(w)
+  const cached = _pinnedCache.get(cacheKey)
+  const [cardData, setCardData] = useState<PinnedCardData | null>(
+    w.mode === 'card' ? (cached as PinnedCardData | undefined) ?? null : null
+  )
+  const [pivotData, setPivotData] = useState<PinnedPivotData | null>(
+    w.mode === 'pivot' ? (cached as PinnedPivotData | undefined) ?? null : null
+  )
   const [err, setErr] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!cached)
 
   useEffect(() => {
+    const key = pinnedCacheKey(w)
+    if (_pinnedCache.has(key)) return  // already cached
     const base = w.isCustom ? `/master/custom/${w.id}` : `/master/table/${w.id}`
     setLoading(true); setErr('')
     if (w.mode === 'card' && w.cardField) {
       http.get(`${base}/aggregate`, { params: { field: w.cardField, func: w.cardFunc ?? 'SUM' } })
-        .then(r => { if (r.data.success) setCardData(r.data.data); else setErr(r.data.message || 'Error') })
+        .then(r => { if (r.data.success) { _pinnedCache.set(key, r.data.data); setCardData(r.data.data) } else setErr(r.data.message || 'Error') })
         .catch(() => setErr('Failed'))
         .finally(() => setLoading(false))
     } else if (w.mode === 'pivot' && w.pivotRow && w.pivotValue) {
       http.get(`${base}/pivot`, { params: { row_col: w.pivotRow, value_col: w.pivotValue, func: w.pivotFunc ?? 'SUM' } })
-        .then(r => { if (r.data.success) setPivotData(r.data.data); else setErr(r.data.message || 'Error') })
+        .then(r => { if (r.data.success) { _pinnedCache.set(key, r.data.data); setPivotData(r.data.data) } else setErr(r.data.message || 'Error') })
         .catch(() => setErr('Failed'))
         .finally(() => setLoading(false))
     } else { setLoading(false) }

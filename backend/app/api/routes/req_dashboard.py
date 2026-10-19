@@ -840,21 +840,34 @@ _OPTION_PARQUET_OBJ    = "V_OPTION_PIVOT"
 _LIST_PARQUET_OWNER    = "CK_A2166"
 _LIST_PARQUET_OBJ      = "V_LIST_PIVOT"
 
-# In-memory cache for pivot DataFrames (avoids re-reading parquet on every request)
+# In-memory pivot cache: key -> (mtime, DataFrame)
+# Auto-invalidated when the underlying parquet file changes (mtime differs).
 _pivot_mem_cache: dict = {}
 
 
 def _get_pivot_df(owner: str, obj: str):
-    """Return cached DataFrame or read from parquet (caches result in memory)."""
-    import pandas as pd
+    """Return cached DataFrame or read from parquet; invalidates when file is refreshed."""
+    from app.core.parquet_cache import _pq_path
     key = f"{owner}__{obj}"
-    if key in _pivot_mem_cache:
-        return _pivot_mem_cache[key]
-    if has_output(owner, obj):
-        df = read_cache(owner, obj)
-        _pivot_mem_cache[key] = df
-        return df
-    return None
+    pp = _pq_path(owner, obj)
+    if not pp.exists():
+        return None
+    try:
+        mtime = pp.stat().st_mtime
+    except OSError:
+        return None
+    cached = _pivot_mem_cache.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]  # cache hit
+    df = read_cache(owner, obj)
+    if df is not None:
+        _pivot_mem_cache[key] = (mtime, df)
+    return df
+
+
+def invalidate_pivot_cache():
+    """Clear all in-memory pivot caches (call after a parquet refresh)."""
+    _pivot_mem_cache.clear()
 
 
 def warm_req_pivots():
@@ -915,7 +928,6 @@ def get_barcode_pivot(
                         rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=cols)
                 _wc(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ, df)
-                _pivot_mem_cache[f"{_BARCODE_PARQUET_OWNER}__{_BARCODE_PARQUET_OBJ}"] = df
             except Exception as exc:
                 logger.exception("Barcode pivot live fetch error")
                 raise HTTPException(status_code=500, detail=str(exc))
@@ -1004,7 +1016,6 @@ def get_option_pivot(
                         rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=cols)
                 _wc(_OPTION_PARQUET_OWNER, _OPTION_PARQUET_OBJ, df)
-                _pivot_mem_cache[f"{_OPTION_PARQUET_OWNER}__{_OPTION_PARQUET_OBJ}"] = df
             except Exception as exc:
                 logger.exception("Option pivot live fetch error")
                 raise HTTPException(status_code=500, detail=str(exc))
@@ -1085,7 +1096,6 @@ def get_list_pivot(
                         rows = cur.fetchall()
                 df = pd.DataFrame(rows, columns=cols)
                 _wc(_LIST_PARQUET_OWNER, _LIST_PARQUET_OBJ, df)
-                _pivot_mem_cache[f"{_LIST_PARQUET_OWNER}__{_LIST_PARQUET_OBJ}"] = df
             except Exception as exc:
                 logger.exception("List pivot live fetch error")
                 raise HTTPException(status_code=500, detail=str(exc))

@@ -74,6 +74,14 @@ const PIVOT_DIMS = ['division','section','department','article_name','sitecode',
 const PIVOT_VALS = ['stock_qty','stock_v','mrp']
 const NUM_OPS: NumOp[] = ['=','≠','>','>=','<','<=','between']
 
+// ── Module-level page cache (survives navigation, cleared on explicit refresh) ─
+const _cache: {
+  rows: Row[]; columns: string[]; total: number; truncated: boolean
+  queryTime: number | null; fromCache: boolean
+  warehouse: string; itemCode: string; division: string
+} | null = { rows: [], columns: [], total: 0, truncated: false, queryTime: null, fromCache: false, warehouse: '', itemCode: '', division: '' }
+let _cacheReady = false
+
 // ── Column resize ─────────────────────────────────────────────────────────────
 const DEFAULT_WIDTH = 130
 const MIN_WIDTH = 50
@@ -905,20 +913,20 @@ export default function WarehouseInventory() {
   const { user, pageAccess } = useAuth()
   const isViewer = user?.role === 'viewer'
   const showDataTable = ('warehouse#data' in pageAccess) ? pageAccess['warehouse#data'] : !isViewer
-  const [rows, setRows]         = useState<Row[]>([])
-  const [columns, setColumns]   = useState<string[]>([])
+  const [rows, setRows]         = useState<Row[]>(_cacheReady ? _cache!.rows : [])
+  const [columns, setColumns]   = useState<string[]>(_cacheReady ? _cache!.columns : [])
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
-  const [total, setTotal]       = useState(0)
-  const [truncated, setTruncated] = useState(false)
-  const [queryTime, setQueryTime] = useState<number | null>(null)
-  const [fromCache, setFromCache] = useState(false)
+  const [total, setTotal]       = useState(_cacheReady ? _cache!.total : 0)
+  const [truncated, setTruncated] = useState(_cacheReady ? _cache!.truncated : false)
+  const [queryTime, setQueryTime] = useState<number | null>(_cacheReady ? _cache!.queryTime : null)
+  const [fromCache, setFromCache] = useState(_cacheReady ? _cache!.fromCache : false)
   const [tab, setTab]           = useState<'data' | 'pivot'>('data')
   const effectiveTab = (!showDataTable && tab === 'data') ? 'pivot' : tab
   const [accessDenied, setAccessDenied] = useState(false)
-  const [warehouse, setWarehouse] = useState('')
-  const [itemCode, setItemCode]   = useState('')
-  const [division, setDivision]   = useState('')
+  const [warehouse, setWarehouse] = useState(_cacheReady ? _cache!.warehouse : '')
+  const [itemCode, setItemCode]   = useState(_cacheReady ? _cache!.itemCode : '')
+  const [division, setDivision]   = useState(_cacheReady ? _cache!.division : '')
   const fetchRef = useRef(0)
 
   async function fetchData(refresh = false) {
@@ -932,12 +940,19 @@ export default function WarehouseInventory() {
       const res = await http.get('/warehouse-inventory', { params })
       if (id !== fetchRef.current) return
       const d = res.data?.data ?? {}
-      setRows(d.rows ?? [])
-      setColumns(d.columns ?? [])
-      setTotal(d.total ?? 0)
-      setTruncated(d.truncated ?? false)
-      setQueryTime(d.query_s ?? null)
-      setFromCache(d.from_cache ?? false)
+      const newRows = d.rows ?? []
+      const newCols = d.columns ?? []
+      const newTotal = d.total ?? 0
+      const newTrunc = d.truncated ?? false
+      const newQT = d.query_s ?? null
+      const newFC = d.from_cache ?? false
+      setRows(newRows); setColumns(newCols); setTotal(newTotal)
+      setTruncated(newTrunc); setQueryTime(newQT); setFromCache(newFC)
+      // update module cache
+      Object.assign(_cache!, { rows: newRows, columns: newCols, total: newTotal,
+        truncated: newTrunc, queryTime: newQT, fromCache: newFC,
+        warehouse, itemCode, division })
+      _cacheReady = true
     } catch (e: any) {
       if (id !== fetchRef.current) return
       setError(e?.response?.data?.message || 'Data fetch failed')
@@ -947,6 +962,7 @@ export default function WarehouseInventory() {
   }
 
   useEffect(() => {
+    if (_cacheReady) return   // already have data — don't reload
     http.get('/auth/my-page-access').then(r => {
       const pa: Record<string, boolean> = r.data?.data?.page_access ?? {}
       if (pa['/warehouse'] === false) { setAccessDenied(true); return }

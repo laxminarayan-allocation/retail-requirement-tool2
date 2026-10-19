@@ -99,6 +99,10 @@ async def lifespan(app: FastAPI):
     from app.core.distribution_auto_scheduler import start_scheduler as dist_auto_start
     dist_auto_start()
 
+    # Source backup: weekly auto-backup of all Python source files
+    from app.core.source_backup import start_scheduler as source_backup_start
+    source_backup_start()
+
     # DB Explorer: start configurable auto-refresh scheduler
     from app.core.db_scheduler import start_scheduler as db_start_scheduler
     if settings.is_oracle_configured:

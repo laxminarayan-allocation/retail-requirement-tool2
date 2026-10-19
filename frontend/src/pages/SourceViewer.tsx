@@ -57,6 +57,14 @@ function highlight(code: string): string {
     .replace(/\b(\d+)\b/g, '<span style="color:#38bdf8">$1</span>')
 }
 
+interface BackupInfo { filename: string; size_kb: number; created_at: string }
+interface BackupStatus { last_backup_at: string | null; last_backup_file: string | null; next_backup_at: string | null; backups: BackupInfo[] }
+
+function fmtDt(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
 export default function SourceViewer() {
   const [files, setFiles] = useState<SourceFile[]>([])
   const [selected, setSelected] = useState<string>('')
@@ -65,6 +73,45 @@ export default function SourceViewer() {
   const [lines, setLines] = useState<number>(0)
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
+
+  // Backup state
+  const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null)
+  const [backupRunning, setBackupRunning] = useState(false)
+  const [backupMsg, setBackupMsg] = useState<string | null>(null)
+  const [showBackups, setShowBackups] = useState(false)
+
+  const loadBackupStatus = () => {
+    http.get('/system/source/backup/status').then(r => {
+      if (r.data.success) setBackupStatus(r.data.data)
+    }).catch(() => {})
+  }
+
+  useEffect(() => { loadBackupStatus() }, [])
+
+  const runBackup = async () => {
+    setBackupRunning(true); setBackupMsg(null)
+    try {
+      await http.post('/system/source/backup/run')
+      setBackupMsg('Backup started… refresh in a moment')
+      setTimeout(() => { loadBackupStatus(); setBackupMsg(null) }, 4000)
+    } catch { setBackupMsg('✗ Backup failed') }
+    finally { setBackupRunning(false) }
+  }
+
+  const downloadBackup = (filename: string) => {
+    const token = localStorage.getItem('ck_ss27_token') ?? ''
+    const a = document.createElement('a')
+    a.href = `/api/system/source/backup/download?filename=${encodeURIComponent(filename)}`
+    // Add auth via fetch + blob since FileResponse needs auth header
+    fetch(a.href, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url; link.download = filename
+        link.click(); URL.revokeObjectURL(url)
+      })
+  }
 
   useEffect(() => {
     http.get('/system/source/files').then(r => {
@@ -152,7 +199,54 @@ export default function SourceViewer() {
           >
             Copy
           </button>
+          <button
+            onClick={() => setShowBackups(v => !v)}
+            style={{ fontSize: 11, padding: '3px 10px', background: showBackups ? '#7c3aed22' : 'transparent', border: '1px solid #7c3aed88', borderRadius: 4, color: '#a78bfa', cursor: 'pointer', fontWeight: 600 }}
+          >
+            🗜 Backups
+          </button>
         </div>
+
+        {/* Backup Panel */}
+        {showBackups && (
+          <div style={{ padding: '10px 16px', background: '#0f172a', borderBottom: '1px solid var(--card-border)', fontSize: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ fontWeight: 700, color: '#a78bfa' }}>🗜 Source Backups</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                Last: <b style={{ color: 'var(--text-primary)' }}>{fmtDt(backupStatus?.last_backup_at ?? null)}</b>
+              </span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                Next (weekly): <b style={{ color: 'var(--text-primary)' }}>{fmtDt(backupStatus?.next_backup_at ?? null)}</b>
+              </span>
+              <button onClick={runBackup} disabled={backupRunning}
+                style={{ marginLeft: 'auto', fontSize: 11, padding: '4px 14px', borderRadius: 6, border: 'none',
+                  background: backupRunning ? '#334155' : '#7c3aed', color: '#fff', fontWeight: 700,
+                  cursor: backupRunning ? 'not-allowed' : 'pointer' }}>
+                {backupRunning ? '...' : '⬇ Backup Now'}
+              </button>
+            </div>
+            {backupMsg && <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 6 }}>{backupMsg}</div>}
+            {(backupStatus?.backups ?? []).length === 0
+              ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No backups yet — click "Backup Now"</div>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
+                  {(backupStatus?.backups ?? []).map(b => (
+                    <div key={b.filename} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px', background: '#1e293b', borderRadius: 6 }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-primary)', flex: 1 }}>{b.filename}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{b.size_kb} KB</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtDt(b.created_at)}</span>
+                      <button onClick={() => downloadBackup(b.filename)}
+                        style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: '1px solid #475569',
+                          background: 'transparent', color: '#38bdf8', cursor: 'pointer', fontWeight: 600 }}>
+                        ⬇ Download
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </div>
+        )}
 
         {/* Code area */}
         <div style={{ flex: 1, overflow: 'auto', fontFamily: 'Consolas, monospace', fontSize: 12, lineHeight: 1.6 }}>

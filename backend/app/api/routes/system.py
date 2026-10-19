@@ -16,6 +16,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
+from fastapi.responses import FileResponse
 
 from app.models.response_models import APIResponse
 
@@ -401,3 +402,32 @@ def source_read(file: str):
         "content": content,
         "lines": len(lines),
     })
+
+
+# ── Source Backup ──────────────────────────────────────────────────────────────
+
+@router.get("/source/backup/status", response_model=APIResponse)
+def source_backup_status():
+    """Return backup status + list of available zip backups."""
+    from app.core.source_backup import get_status
+    return APIResponse.ok(data=get_status())
+
+
+@router.post("/source/backup/run", response_model=APIResponse)
+def source_backup_run():
+    """Trigger a backup immediately (runs in background thread)."""
+    from app.core.source_backup import trigger_now
+    trigger_now()
+    return APIResponse.ok(message="Backup triggered — will complete shortly")
+
+
+@router.get("/source/backup/download")
+def source_backup_download(filename: str):
+    """Download a specific backup zip by filename."""
+    from app.core.source_backup import BACKUP_DIR
+    p = (BACKUP_DIR / filename).resolve()
+    # Security: ensure the file is inside BACKUP_DIR
+    if not str(p).startswith(str(BACKUP_DIR.resolve())) or not p.exists() or p.suffix != ".zip":
+        from fastapi import HTTPException
+        raise HTTPException(404, "Backup not found")
+    return FileResponse(str(p), media_type="application/zip", filename=filename)

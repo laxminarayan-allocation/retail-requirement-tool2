@@ -1,16 +1,11 @@
 """
 Parquet Data Store — Oracle → local .parquet cache layer.
 
-Every registered source has:
-  key        — unique slug
-  label      — human-readable name
-  table      — primary Oracle table (for display)
-  sql        — query to run against Oracle
-  filename   — saved as STORE_DIR/<filename>.parquet
-  schedule   — "daily" | "weekly" (informational; actual download is triggered externally)
+Storage is unified with parquet_cache (backend/data/output/).
+Each source is stored as DS__<KEY>.parquet via parquet_cache with owner="DS".
 
-Download writes atomically: writes to .tmp then renames to avoid serving a half-written file.
-Status returns freshness per file.
+Public API is unchanged; consumers (data_store, item_repository, store_repository,
+sale) do not need modification.  The old hardcoded D:\\DataStore path is gone.
 """
 
 from __future__ import annotations
@@ -18,15 +13,12 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# ── Storage directory ──────────────────────────────────────────────────────────
-STORE_DIR = Path(r"D:\Prewinter Color Option Listing New Repeat\DataStore")
+_DS_OWNER = "DS"
 
 # ── Source registry ────────────────────────────────────────────────────────────
 SOURCES: list[dict] = [
@@ -163,61 +155,46 @@ SOURCES: list[dict] = [
 
 SOURCE_MAP: dict[str, dict] = {s["key"]: s for s in SOURCES}
 
-# ── In-memory download state ───────────────────────────────────────────────────
+# ── In-memory download state (imported directly by data_store.py) ──────────────
 _dl_lock = threading.Lock()
 _dl_status: dict[str, dict] = {}   # key → {status, started_at, finished_at, rows, error}
 
 
-def _parquet_path(key: str) -> Path:
-    return STORE_DIR / f"{key}.parquet"
-
-
-def _meta_path(key: str) -> Path:
-    return STORE_DIR / f"{key}.meta"
-
-
-def _write_meta(key: str, rows: int) -> None:
-    meta = {
-        "downloaded_at": datetime.now(IST).isoformat(),
-        "rows": rows,
-    }
-    import json
-    _meta_path(key).write_text(json.dumps(meta), encoding="utf-8")
-
-
-def _read_meta(key: str) -> dict | None:
-    p = _meta_path(key)
-    if not p.exists():
-        return None
-    import json
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return None
+def _parquet_path(key: str):
+    """Physical path of the parquet file — delegates to unified parquet_cache output dir."""
+    from app.core.parquet_cache import _pq_path
+    return _pq_path(_DS_OWNER, key)
 
 
 def get_status() -> list[dict]:
     """Return checklist status for every registered source."""
-    STORE_DIR.mkdir(parents=True, exist_ok=True)
+    from app.core.parquet_cache import get_meta, _pq_path
+
     result = []
     now_ist = datetime.now(IST)
 
     for src in SOURCES:
         key = src["key"]
-        pq = _parquet_path(key)
-        meta = _read_meta(key)
+        pq_file = _pq_path(_DS_OWNER, key)
+        meta = get_meta(_DS_OWNER, key)
 
         with _dl_lock:
             dl = _dl_status.get(key, {})
 
         if meta:
-            downloaded_at = datetime.fromisoformat(meta["downloaded_at"])
-            age_hours = (now_ist - downloaded_at).total_seconds() / 3600
-            is_fresh = age_hours < 26   # within ~1 day
-            size_mb = round(pq.stat().st_size / 1_048_576, 2) if pq.exists() else 0
+            fetched_str = meta.get("fetched_at")
+            try:
+                fetched_dt = datetime.fromisoformat(fetched_str)
+                if fetched_dt.tzinfo is None:
+                    fetched_dt = fetched_dt.replace(tzinfo=timezone.utc)
+                age_hours = (now_ist - fetched_dt.astimezone(IST)).total_seconds() / 3600
+            except Exception:
+                age_hours = None
+            is_fresh = age_hours is not None and age_hours < 26
+            size_mb = round(pq_file.stat().st_size / 1_048_576, 2) if pq_file.exists() else 0
             file_status = "fresh" if is_fresh else "stale"
         else:
-            downloaded_at = None
+            fetched_str = None
             age_hours = None
             is_fresh = False
             size_mb = 0
@@ -228,9 +205,9 @@ def get_status() -> list[dict]:
             "label": src["label"],
             "table": src["table"],
             "schedule": src["schedule"],
-            "file_status": file_status,          # "fresh" | "stale" | "missing"
-            "download_status": dl.get("status"), # "running" | "done" | "failed" | None
-            "downloaded_at": meta["downloaded_at"] if meta else None,
+            "file_status": file_status,
+            "download_status": dl.get("status"),
+            "downloaded_at": fetched_str,
             "rows": meta["rows"] if meta else None,
             "size_mb": size_mb,
             "error": dl.get("error"),
@@ -240,12 +217,11 @@ def get_status() -> list[dict]:
 
 
 def download_source(key: str) -> None:
-    """Download one source from Oracle and save as parquet. Runs synchronously — call in a thread."""
+    """Download one source from Oracle and save via parquet_cache. Runs synchronously — call in a thread."""
     src = SOURCE_MAP.get(key)
     if not src:
         raise ValueError(f"Unknown source key: {key}")
 
-    STORE_DIR.mkdir(parents=True, exist_ok=True)
     started = datetime.now(IST).isoformat()
 
     with _dl_lock:
@@ -254,16 +230,14 @@ def download_source(key: str) -> None:
     try:
         import pandas as pd
         from app.db.oracle import get_pool
+        from app.core.parquet_cache import write_cache
 
         pool = get_pool()
         with pool.acquire() as conn:
             df = pd.read_sql(src["sql"].strip(), conn)
 
         rows = len(df)
-        tmp = _parquet_path(key).with_suffix(".tmp.parquet")
-        df.to_parquet(tmp, index=False, engine="pyarrow", compression="snappy")
-        tmp.replace(_parquet_path(key))  # replace() works on Windows even if dest exists
-        _write_meta(key, rows)
+        write_cache(_DS_OWNER, key, df)
 
         finished = datetime.now(IST).isoformat()
         with _dl_lock:
@@ -271,7 +245,7 @@ def download_source(key: str) -> None:
 
         logger.info("parquet_store: %s downloaded OK — %d rows", key, rows)
 
-        # Invalidate in-memory caches that depend on this parquet so stale data is never served
+        # Post-download cache invalidation hooks
         if key == "store_master":
             try:
                 from app.repositories.store_repository import invalidate_cache as _sr_inv
@@ -281,8 +255,8 @@ def download_source(key: str) -> None:
                 logger.warning("parquet_store: store_repository invalidate failed: %s", _e)
             try:
                 from app.api.routes.dashboard import _fetch_oracle_stats_fresh
-                import threading
-                threading.Thread(target=_fetch_oracle_stats_fresh, daemon=True).start()
+                import threading as _t
+                _t.Thread(target=_fetch_oracle_stats_fresh, daemon=True).start()
                 logger.info("parquet_store: dashboard oracle cache refresh triggered after store_master refresh")
             except Exception as _e:
                 logger.warning("parquet_store: dashboard cache refresh failed: %s", _e)
@@ -322,9 +296,9 @@ def download_all_async(keys: list[str] | None = None) -> None:
 
 
 def read_parquet(key: str):
-    """Read a cached parquet file as a pandas DataFrame. Raises if not downloaded."""
-    import pandas as pd
-    p = _parquet_path(key)
-    if not p.exists():
+    """Read a cached parquet file as a pandas DataFrame via parquet_cache (LRU-cached)."""
+    from app.core.parquet_cache import read_cache
+    df = read_cache(_DS_OWNER, key)
+    if df is None:
         raise FileNotFoundError(f"Parquet not downloaded yet for: {key}")
-    return pd.read_parquet(p, engine="pyarrow")
+    return df

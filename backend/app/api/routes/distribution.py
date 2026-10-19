@@ -30,6 +30,9 @@ router = APIRouter(prefix="/distribution", tags=["Distribution Model"])
 _last_dist_result: Optional[pd.DataFrame] = None
 _last_dist_params: dict = {}
 
+# Run status flag — set while /distribute is executing so the frontend can show a badge
+_distribution_running: bool = False
+
 # ── Uploaded stock CSV (barcode-level qty override) ───────────────────────────
 _uploaded_stock_df: Optional[pd.DataFrame] = None
 _uploaded_stock_meta: dict = {}   # {filename, rows, qty_col}
@@ -1768,6 +1771,12 @@ async def barcode_preview_csv(stock_source: str = "GRC", biz_segment: str = "BOT
         return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
+@router.get("/status")
+async def distribution_status():
+    """Return whether a distribution run is currently in progress."""
+    return {"running": _distribution_running}
+
+
 @router.post("/distribute", response_model=APIResponse)
 async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q", max_round: int = 10, min_qty: int = 0):
     """
@@ -1775,6 +1784,8 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
     Accepts optional JSON body (DistributeRequest) with hold_rules.
     Query params wh_col/max_round used as fallback when no body provided.
     """
+    global _distribution_running
+    _distribution_running = True
     _require_oracle()
     try:
         if not has_output("DIST", "BASE"):
@@ -1970,6 +1981,8 @@ async def run_distribution(body: DistributeRequest = None, wh_col: str = "wh_q",
     except Exception as exc:
         logger.exception("run_distribution error")
         return APIResponse.fail(message=str(exc))
+    finally:
+        _distribution_running = False
 
 
 def _get_export_df(wh_col: str, max_round: int) -> "pd.DataFrame":

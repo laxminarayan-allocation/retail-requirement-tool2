@@ -418,10 +418,9 @@ export default function AppLayout() {
         const jobs = JSON.parse(sessionStorage.getItem('ss27_active_jobs') ?? '[]')
         setAllocationRunning(Array.isArray(jobs) && jobs.length > 0)
       } catch { setAllocationRunning(false) }
-      // Distribution run
-      try {
-        setDistributionRunning(sessionStorage.getItem('ss27_distribution_running') === '1')
-      } catch { setDistributionRunning(false) }
+      // Distribution run — poll backend flag (works cross-tab and cross-device)
+      fetch('/api/distribution/status', { headers: { Authorization: `Bearer ${t}` } })
+        .then(r => r.json()).then(d => setDistributionRunning(d?.running === true)).catch(() => {})
     }
     poll()
     const id = setInterval(poll, 3000)

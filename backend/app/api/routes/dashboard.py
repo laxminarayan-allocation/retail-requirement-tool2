@@ -1481,8 +1481,7 @@ async def store_temperatures():
 
 
 # ── Store monthly temps — Open-Meteo archive (24-hour cache) ─────────────────
-_monthly_cache: dict = {}
-_monthly_cache_ts: float = 0.0
+_monthly_cache: dict = {}   # stores at most one entry: {"key": str, "data": ..., "ts": float}
 _MONTHLY_TTL = 86400  # 24 hours
 
 
@@ -1490,10 +1489,11 @@ _MONTHLY_TTL = 86400  # 24 hours
 async def store_monthly_temps(years: int = 3, predict: int = 0):
     """Fetch last N years of monthly min/max temp per store via Open-Meteo archive.
     Returns {site_code: {YYYY-MM: {min, max}}}. Cached 24 hours."""
-    global _monthly_cache, _monthly_cache_ts
+    global _monthly_cache
     cache_key = f"{years}_{predict}"
-    if _monthly_cache.get(cache_key) and (time.time() - _monthly_cache_ts) < _MONTHLY_TTL:
-        return APIResponse.ok(data=_monthly_cache[cache_key])
+    if (_monthly_cache.get("key") == cache_key
+            and (time.time() - _monthly_cache.get("ts", 0)) < _MONTHLY_TTL):
+        return APIResponse.ok(data=_monthly_cache["data"])
 
     try:
         import re as _re2
@@ -1598,15 +1598,14 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
                         avg_min = round(sum(x[1] for x in hist_vals) / len(hist_vals), 1)
                         monthly[future_ym] = {"max": avg_max, "min": avg_min, "predicted": True}
 
-        _monthly_cache[cache_key] = result
-        _monthly_cache_ts = time.time()
+        _monthly_cache = {"key": cache_key, "data": result, "ts": time.time()}
         return APIResponse.ok(data=result)
 
     except Exception as exc:
         import traceback
         logger.error("store-monthly-temps failed: %s\n%s", exc, traceback.format_exc())
-        if _monthly_cache.get(cache_key):
-            return APIResponse.ok(data=_monthly_cache[cache_key])
+        if _monthly_cache.get("key") == cache_key:
+            return APIResponse.ok(data=_monthly_cache["data"])
         return APIResponse.fail(f"store-monthly-temps error: {exc}")
 
 

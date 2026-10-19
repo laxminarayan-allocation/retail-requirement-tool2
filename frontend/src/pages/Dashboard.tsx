@@ -1046,11 +1046,14 @@ function ZoneDropdown({ allKeys, selected, onToggle, colorMap, colorFn, label }:
   )
 }
 
+let _mapStoresCache: MapStore[] | null = null
+let _mapTempsCache: Record<string, number> = {}
+
 function StoreMapCard() {
-  const [stores, setStores] = useState<MapStore[]>([])
-  const [loading, setLoading] = useState(true)
+  const [stores, setStores] = useState<MapStore[]>(_mapStoresCache ?? [])
+  const [loading, setLoading] = useState(_mapStoresCache === null)
   const [mapErr, setMapErr] = useState<string | null>(null)
-  const [temps, setTemps] = useState<Record<string, number>>({})
+  const [temps, setTemps] = useState<Record<string, number>>(_mapTempsCache)
   const [mLoading, setMLoading] = useState(false)
   const [colorBy, setColorBy] = useState<'zone' | 'cluster'>('zone')
   const [filterStatus, setFilterStatus] = useState<'all' | 'ACTIVE' | 'UPCOMING_STORE'>('all')
@@ -1405,9 +1408,10 @@ function onSearch(v){
   const distB = distPoints[1] ?? null
 
   useEffect(() => {
+    if (_mapStoresCache) return  // use module cache
     http.get('/dashboard/store-map-data')
       .then(r => {
-        if (r.data.success) setStores(r.data.data.stores ?? [])
+        if (r.data.success) { setStores(r.data.data.stores ?? []); _mapStoresCache = r.data.data.stores ?? [] }
         else console.warn('store-map-data:', r.data.message)
       })
       .catch(err => {
@@ -1418,7 +1422,7 @@ function onSearch(v){
     // Fetch temperatures in background (non-blocking)
     http.get('/dashboard/store-temperatures')
       .then(r => {
-        if (r.data.success) setTemps(r.data.data ?? {})
+        if (r.data.success) { setTemps(r.data.data ?? {}); _mapTempsCache = r.data.data ?? {} }
         else console.warn('store-temperatures:', r.data.message)
       })
       .catch(err => console.error('store-temperatures fetch failed:', err))

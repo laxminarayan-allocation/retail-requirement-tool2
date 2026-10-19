@@ -235,12 +235,6 @@ function ssSave(patch: Record<string, unknown>) {
   } catch {}
 }
 
-// ── Module-level navigation cache for dropdown options ─────────────────────────
-let _distDivisions: string[] | null = null
-let _distAttr1s: string[] | null = null
-let _distStores: string[] | null = null
-let _distStoreFieldMeta: Record<string, StoreFieldMeta> | null = null
-
 export default function DistributionModel() {
   const { tokens, theme } = useTheme()
   const isMobile = useIsMobile()
@@ -260,7 +254,7 @@ export default function DistributionModel() {
   const [selStores, setSelStores] = useState<string[]>(() => ssLoad('selStores', []))
 
   // Store master field filters: {col: label, values: string[]}
-  const [storeFieldMeta, setStoreFieldMeta] = useState<Record<string, StoreFieldMeta>>(_distStoreFieldMeta ?? {})
+  const [storeFieldMeta, setStoreFieldMeta] = useState<Record<string, StoreFieldMeta>>({})
   // activeFieldFilters: col → selected values[]
   const [activeFieldFilters, setActiveFieldFilters] = useState<Record<string, string[]>>(() => ssLoad('activeFieldFilters', {}))
   // which fields the user has added as filter rows
@@ -285,28 +279,26 @@ export default function DistributionModel() {
   useEffect(() => { ssSave({ activeFieldFilters }) }, [activeFieldFilters])
   useEffect(() => { ssSave({ addedFilterFields }) }, [addedFilterFields])
 
-  const [divisionOptions,   setDivisionOptions]   = useState<string[]>(_distDivisions ?? [])
-  const [attribute1Options, setAttribute1Options] = useState<string[]>(_distAttr1s ?? [])
-  const [storeOptions,      setStoreOptions]      = useState<string[]>(_distStores ?? [])
+  const [divisionOptions,   setDivisionOptions]   = useState<string[]>([])
+  const [attribute1Options, setAttribute1Options] = useState<string[]>([])
+  const [storeOptions,      setStoreOptions]      = useState<string[]>([])
 
   useEffect(() => {
-    if (_distDivisions && _distAttr1s && _distStores && _distStoreFieldMeta) return  // use cache
-    if (!_distDivisions) http.get('/master/divisions').then(r => {
-      const v = r.data?.data?.divisions ?? []; setDivisionOptions(v); _distDivisions = v
+    http.get('/master/divisions').then(r => {
+      setDivisionOptions(r.data?.data?.divisions ?? [])
     }).catch(() => {})
-    if (!_distAttr1s) http.get('/req/filter_meta').then(r => {
+    http.get('/req/filter_meta').then(r => {
       const vals: string[] = r.data?.data?.attribute1s ?? []
-      const v = vals.length > 0 ? vals : ['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER']
-      setAttribute1Options(v); _distAttr1s = v
+      setAttribute1Options(vals.length > 0 ? vals : ['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER'])
     }).catch(() => {
-      const v = ['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER']
-      setAttribute1Options(v); _distAttr1s = v
+      setAttribute1Options(['GM','HVY WINTER','LT WINTER','OCCASIONAL','PREWINTER','REGULAR','RETAIL','SUMMER'])
     })
-    if (!_distStores) http.get('/distribution/store-list').then(r => {
-      const v: string[] = r.data?.data?.stores ?? []; setStoreOptions(v); _distStores = v
+    http.get('/distribution/store-list').then(r => {
+      const stores: string[] = r.data?.data?.stores ?? []
+      setStoreOptions(stores)
     }).catch(() => {})
-    if (!_distStoreFieldMeta) http.get('/distribution/store-filter-meta').then(r => {
-      const v = r.data?.data?.fields ?? {}; setStoreFieldMeta(v); _distStoreFieldMeta = v
+    http.get('/distribution/store-filter-meta').then(r => {
+      setStoreFieldMeta(r.data?.data?.fields ?? {})
     }).catch(() => {})
   }, [])
 
@@ -462,6 +454,12 @@ export default function DistributionModel() {
   const [distLoading,   setDistLoading]   = useState(false)
   const [distResult,    setDistResult]    = useState<DistResult | null>(null)
   const [distMsg,       setDistMsg]       = useState<string | null>(null)
+  // Captured at run-time for Logic Sheet
+  const [runParams, setRunParams] = useState<{
+    reqSource: string; bizSegment: string; sortMode: string; minQty: number; maxRound: number
+    applyOL: boolean; holdRules: number
+    selStores: string[]; activeFieldFilters: Record<string, string[]>
+  } | null>(null)
   const [fetchError,    setFetchError]    = useState<string | null>(null)
 
   // ── Hold Rules ─────────────────────────────────────────────────────────────
@@ -745,6 +743,7 @@ export default function DistributionModel() {
 
   const runDistribution = async () => {
     setDistLoading(true); setDistMsg(null); setDistResult(null)
+    setRunParams({ reqSource, bizSegment, sortMode, minQty, maxRound, applyOL, holdRules: holdRules.length, selStores, activeFieldFilters })
     try {
       const res = await http.post<{ success: boolean; data: DistResult; message: string | null }>(
         `/distribution/distribute?min_qty=${minQty}`,
@@ -2653,6 +2652,54 @@ export default function DistributionModel() {
                   </div>
                 </div>
               )}
+
+              {/* Logic Sheet — Run Parameters */}
+              {runParams && (() => {
+                const DEFAULTS = { reqSource: 'GRC', bizSegment: 'APPS', sortMode: 'combined_req', minQty: 10, maxRound: 10, applyOL: false, holdRules: 0, selStores: 0, activeFieldFilters: 0 }
+                const rows: { label: string; def: string; used: string; changed: boolean }[] = [
+                  { label: 'WH Source',      def: DEFAULTS.reqSource,                   used: runParams.reqSource,                           changed: runParams.reqSource !== DEFAULTS.reqSource },
+                  { label: 'Segment',         def: DEFAULTS.bizSegment,                  used: runParams.bizSegment,                          changed: runParams.bizSegment !== DEFAULTS.bizSegment },
+                  { label: 'Sort Mode',       def: DEFAULTS.sortMode,                    used: runParams.sortMode,                            changed: runParams.sortMode !== DEFAULTS.sortMode },
+                  { label: 'Min Qty',         def: String(DEFAULTS.minQty),              used: String(runParams.minQty),                      changed: runParams.minQty !== DEFAULTS.minQty },
+                  { label: 'Max Rounds',      def: String(DEFAULTS.maxRound),            used: String(runParams.maxRound),                    changed: runParams.maxRound !== DEFAULTS.maxRound },
+                  { label: 'Option Listing',  def: 'Off',                                used: runParams.applyOL ? 'On' : 'Off',              changed: runParams.applyOL !== DEFAULTS.applyOL },
+                  { label: 'Hold Rules',      def: '0',                                  used: String(runParams.holdRules),                   changed: runParams.holdRules !== DEFAULTS.holdRules },
+                  { label: 'Store Filter',    def: 'All Stores',                         used: runParams.selStores.length > 0 ? `${runParams.selStores.length} selected` : 'All Stores', changed: runParams.selStores.length > 0 },
+                  { label: 'Field Filters',   def: 'None',                               used: Object.keys(runParams.activeFieldFilters).filter(k => (runParams.activeFieldFilters[k]?.length ?? 0) > 0).map(k => `${k}: ${runParams.activeFieldFilters[k].join(', ')}`).join(' | ') || 'None', changed: Object.values(runParams.activeFieldFilters).some(v => v.length > 0) },
+                ]
+                const changedCount = rows.filter(r => r.changed).length
+                return (
+                  <div style={{ marginBottom: 14, border: `1px solid ${DK.cardBorder}`, borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 14px', background: DK.cardBg, borderBottom: `1px solid ${DK.cardBorder}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: tokens.textPrimary }}>⚙ Run Logic Sheet</span>
+                      {changedCount > 0
+                        ? <span style={{ fontSize: 10, background: '#7c3aed', color: '#e9d5ff', padding: '1px 7px', borderRadius: 8, fontWeight: 600 }}>{changedCount} changed</span>
+                        : <span style={{ fontSize: 10, color: tokens.textMuted }}>All defaults</span>}
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: '#0f172a' }}>
+                          {['Parameter', 'Default', 'Used', ''].map(h => (
+                            <th key={h} style={{ padding: '5px 10px', textAlign: 'left', color: tokens.textMuted, fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: `1px solid ${DK.cardBorder}` }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={r.label} style={{ background: i % 2 === 0 ? 'transparent' : '#0f172a55' }}>
+                            <td style={{ padding: '5px 10px', color: tokens.textMuted, fontWeight: 600 }}>{r.label}</td>
+                            <td style={{ padding: '5px 10px', color: tokens.textSecondary }}>{r.def}</td>
+                            <td style={{ padding: '5px 10px', color: r.changed ? '#fbbf24' : tokens.textSecondary, fontWeight: r.changed ? 700 : 400 }}>{r.used}</td>
+                            <td style={{ padding: '5px 10px', textAlign: 'center' }}>
+                              {r.changed ? <span style={{ color: '#fbbf24', fontSize: 14 }}>✎</span> : <span style={{ color: '#374151' }}>–</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })()}
 
               {/* Preview + Download section */}
               <div style={{ border: `1px solid ${DK.cardBorder}`, borderRadius: 8, overflow: 'hidden' }}>

@@ -344,16 +344,37 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[3]   # retail_requirement_tool/
 _PROJECT_ROOT = _BACKEND_ROOT.parent                  # retail_requirement_tool/
 
 _SOURCE_FILES: dict[str, str] = {
-    "start":            "../start.py",
-    "dashboard":        "app/api/routes/dashboard.py",
-    "nso":              "app/api/routes/nso.py",
-    "sale":             "app/api/routes/sale.py",
-    "system":           "app/api/routes/system.py",
-    "store_repository": "app/repositories/store_repository.py",
-    "item_repository":  "app/repositories/item_repository.py",
-    "parquet_store":    "app/core/parquet_store.py",
-    "main":             "app/main.py",
-    "simulation":       "app/api/routes/pipeline.py",
+    # Entry points
+    "start":              "../start.py",
+    "main":               "app/main.py",
+    # Core / Infra
+    "system":             "app/api/routes/system.py",
+    "parquet_store":      "app/core/parquet_store.py",
+    "store_repository":   "app/repositories/store_repository.py",
+    "item_repository":    "app/repositories/item_repository.py",
+    # Routes — Data
+    "dashboard":          "app/api/routes/dashboard.py",
+    "nso":                "app/api/routes/nso.py",
+    "sale":               "app/api/routes/sale.py",
+    "req_dashboard":      "app/api/routes/req_dashboard.py",
+    "warehouse_inventory":"app/api/routes/warehouse_inventory.py",
+    "master_data":        "app/api/routes/master_data.py",
+    "results_journey":    "app/api/routes/results_journey.py",
+    "run_logs":           "app/api/routes/run_logs.py",
+    # Routes — Allocation
+    "simulation":         "app/api/routes/pipeline.py",
+    "distribution":       "app/api/routes/distribution.py",
+    "calculation":        "app/api/routes/calculation.py",
+    "pipeline":           "app/api/routes/pipeline.py",
+    "option_listing":     "app/api/routes/option_listing.py",
+    "factors":            "app/api/routes/factors.py",
+    "prd_swap":           "app/api/routes/prd_swap.py",
+    # Routes — Infra/Ops
+    "data_store":         "app/api/routes/data_store.py",
+    "oracle_refresh":     "app/api/routes/oracle_refresh.py",
+    "deploy":             "app/api/routes/deploy.py",
+    "database":           "app/api/routes/database.py",
+    "auth":               "app/api/routes/auth.py",
 }
 
 

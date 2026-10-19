@@ -4,15 +4,37 @@ import http from '@/api/http'
 interface SourceFile { key: string; path: string }
 
 const FILE_LABELS: Record<string, string> = {
-  dashboard:        'dashboard.py',
-  nso:              'nso.py',
-  sale:             'sale.py',
-  system:           'system.py',
-  store_repository: 'store_repository.py',
-  item_repository:  'item_repository.py',
-  parquet_store:    'parquet_store.py',
-  main:             'main.py',
-  simulation:       'simulation.py',
+  // Entry points
+  start:              'start.py',
+  main:               'main.py',
+  // Core / Infra
+  system:             'system.py',
+  parquet_store:      'parquet_store.py',
+  store_repository:   'store_repository.py',
+  item_repository:    'item_repository.py',
+  // Routes — Data
+  dashboard:          'dashboard.py',
+  nso:                'nso.py',
+  sale:               'sale.py',
+  req_dashboard:      'req_dashboard.py',
+  warehouse_inventory:'warehouse_inventory.py',
+  master_data:        'master_data.py',
+  results_journey:    'results_journey.py',
+  run_logs:           'run_logs.py',
+  // Routes — Allocation
+  simulation:         'simulation.py',
+  distribution:       'distribution.py',
+  calculation:        'calculation.py',
+  pipeline:           'pipeline.py',
+  option_listing:     'option_listing.py',
+  factors:            'factors.py',
+  prd_swap:           'prd_swap.py',
+  // Routes — Infra/Ops
+  data_store:         'data_store.py',
+  oracle_refresh:     'oracle_refresh.py',
+  deploy:             'deploy.py',
+  database:           'database.py',
+  auth:               'auth.py',
 }
 
 // Minimal Python syntax highlighter

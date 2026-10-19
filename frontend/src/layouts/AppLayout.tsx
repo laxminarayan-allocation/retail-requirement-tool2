@@ -405,6 +405,7 @@ export default function AppLayout() {
   const { downloadsRunning, dataStoreRunning } = useDbRefresh()
   const [pipelineRunning, setPipelineRunning] = useState(false)
   const [allocationRunning, setAllocationRunning] = useState(false)
+  const [distributionRunning, setDistributionRunning] = useState(false)
   useEffect(() => {
     const poll = () => {
       const t = localStorage.getItem('ck_ss27_token') ?? ''
@@ -417,6 +418,10 @@ export default function AppLayout() {
         const jobs = JSON.parse(sessionStorage.getItem('ss27_active_jobs') ?? '[]')
         setAllocationRunning(Array.isArray(jobs) && jobs.length > 0)
       } catch { setAllocationRunning(false) }
+      // Distribution run
+      try {
+        setDistributionRunning(sessionStorage.getItem('ss27_distribution_running') === '1')
+      } catch { setDistributionRunning(false) }
     }
     poll()
     const id = setInterval(poll, 3000)
@@ -760,6 +765,7 @@ export default function AppLayout() {
                         badge={
                           (item.to === '/option-listing' && pipelineRunning) ||
                           (item.to === '/allocation-pipeline' && allocationRunning) ||
+                          (item.to === '/distribution' && distributionRunning) ||
                           (item.to === '/data-store' && dataStoreRunning) ||
                           (item.to === '/oracle-refresh' && oracleRunning) ||
                           (item.to === '/database' && downloadsRunning)

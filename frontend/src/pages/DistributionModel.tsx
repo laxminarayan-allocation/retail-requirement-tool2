@@ -743,6 +743,7 @@ export default function DistributionModel() {
 
   const runDistribution = async () => {
     setDistLoading(true); setDistMsg(null); setDistResult(null)
+    try { sessionStorage.setItem('ss27_distribution_running', '1') } catch {}
     setRunParams({ reqSource, bizSegment, sortMode, minQty, maxRound, applyOL, holdRules: holdRules.length, selStores, activeFieldFilters })
     try {
       const res = await http.post<{ success: boolean; data: DistResult; message: string | null }>(
@@ -766,7 +767,7 @@ export default function DistributionModel() {
       } catch { setDivSummary([]) } finally { setDivSummaryLoading(false) }
     } catch (e: unknown) {
       setDistMsg(`✗ ${e instanceof Error ? e.message : 'Error'}`)
-    } finally { setDistLoading(false) }
+    } finally { setDistLoading(false); try { sessionStorage.removeItem('ss27_distribution_running') } catch {} }
   }
 
   // ── Large-export modal state ────────────────────────────────────────────────

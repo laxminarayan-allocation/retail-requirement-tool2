@@ -184,6 +184,12 @@ CREATE TABLE IF NOT EXISTS file_access_log (
 );
 CREATE INDEX IF NOT EXISTS idx_fal_key ON file_access_log(file_key);
 
+-- ── Performance indexes ────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_users_force_logout ON users(force_logout);
+CREATE INDEX IF NOT EXISTS idx_user_logs_email    ON user_logs(user_email);
+CREATE INDEX IF NOT EXISTS idx_notif_email        ON notifications(to_email, is_read);
+CREATE INDEX IF NOT EXISTS idx_run_status         ON run_history(status);
+
 -- ── SOP / Procedures / Data Structure ─────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS sop_documents (

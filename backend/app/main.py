@@ -191,7 +191,7 @@ def _run_inactivity_checker() -> None:
             if rows:
                 logger.info("Auto-logout: flagged %d inactive non-admin user(s) (idle ≥ 2 hrs)", rows)
         except Exception as exc:
-            logger.warning("Inactivity checker error: %s", exc)
+            logger.warning("Inactivity checker error: %s", exc, exc_info=True)
 
 
 def _log_startup_banner() -> None:

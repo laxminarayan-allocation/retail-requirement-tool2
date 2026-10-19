@@ -499,10 +499,12 @@ export default function AppLayout() {
   // Try WebRTC to get local hostname, fall back to stored device name
   useEffect(() => {
     if (typeof window === 'undefined') return
+    let pc: RTCPeerConnection | null = null
+    let timerId: ReturnType<typeof setTimeout> | null = null
     try {
-      const pc = new RTCPeerConnection({ iceServers: [] })
+      pc = new RTCPeerConnection({ iceServers: [] })
       pc.createDataChannel('')
-      pc.createOffer().then(offer => pc.setLocalDescription(offer)).catch(() => {})
+      pc.createOffer().then(offer => pc!.setLocalDescription(offer)).catch(() => {})
       pc.onicecandidate = e => {
         if (!e.candidate) return
         const match = e.candidate.candidate.match(/([a-zA-Z0-9_-]+\.local)/i)
@@ -513,10 +515,15 @@ export default function AppLayout() {
             setDeviceNameState(host)
           }
         }
-        pc.close()
+        try { pc?.close() } catch {}
+        pc = null
       }
-      setTimeout(() => { try { pc.close() } catch {} }, 3000)
+      timerId = setTimeout(() => { try { pc?.close() } catch {}; pc = null }, 3000)
     } catch {}
+    return () => {
+      if (timerId !== null) clearTimeout(timerId)
+      try { pc?.close() } catch {}
+    }
   }, [])
 
   useEffect(() => {

@@ -1528,11 +1528,11 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
 
         BATCH = 20
         result: dict = {}
-        import time as _time
+        import asyncio as _asyncio
 
         for b in range(0, len(codes), BATCH):
             if b > 0:
-                _time.sleep(10)  # Open-Meteo free tier: keep under 6 req/min
+                await _asyncio.sleep(10)  # Open-Meteo free tier: keep under 6 req/min
             bc  = codes[b:b+BATCH]
             bla = lats[b:b+BATCH]
             blo = lons[b:b+BATCH]
@@ -1553,7 +1553,7 @@ async def store_monthly_temps(years: int = 3, predict: int = 0):
                 except Exception as _e:
                     if _attempt < 2:
                         logger.warning("batch %d attempt %d failed: %s — retrying in 60s", b // BATCH, _attempt, _e)
-                        _time.sleep(60)
+                        await _asyncio.sleep(60)
                     else:
                         raise
             if isinstance(payload, dict):

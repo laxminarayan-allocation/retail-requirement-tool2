@@ -193,17 +193,15 @@ def _do_background_fetch() -> None:
         from app.core.parquet_cache import write_cache
         from app.repositories.base_repository import fetch_df
 
-        logger.info("SALE BG: fetching TY data from %s.%s", _OWNER, _TABLE_TY)
         t0 = time.perf_counter()
         with get_connection() as conn:
+            logger.info("SALE BG: fetching TY data from %s.%s", _OWNER, _TABLE_TY)
             df_ty = fetch_df(conn, _AGG_SQL.format(table=_TABLE_TY), label="SALE_TY")
-        logger.info("SALE BG: TY done — %d rows in %.0fs", len(df_ty), time.perf_counter() - t0)
-
-        logger.info("SALE BG: fetching LY data from %s.%s", _OWNER, _TABLE_LY)
-        t1 = time.perf_counter()
-        with get_connection() as conn:
+            logger.info("SALE BG: TY done — %d rows in %.0fs", len(df_ty), time.perf_counter() - t0)
+            t1 = time.perf_counter()
+            logger.info("SALE BG: fetching LY data from %s.%s", _OWNER, _TABLE_LY)
             df_ly = fetch_df(conn, _AGG_SQL.format(table=_TABLE_LY), label="SALE_LY")
-        logger.info("SALE BG: LY done — %d rows in %.0fs", len(df_ly), time.perf_counter() - t1)
+            logger.info("SALE BG: LY done — %d rows in %.0fs", len(df_ly), time.perf_counter() - t1)
 
         write_cache(*_CACHE_TY, df_ty)
         write_cache(*_CACHE_LY, df_ly)

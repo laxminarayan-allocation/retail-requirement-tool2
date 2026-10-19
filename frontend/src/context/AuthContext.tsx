@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import axios from 'axios'
 
 export type Role = 'admin' | 'temp_admin' | 'planner' | 'viewer' | 'pending'
@@ -58,6 +58,7 @@ function setAxiosToken(token: string | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, token: null, loading: true, pageAccess: {} })
   const [previewRole, setPreviewRole] = useState<Role | null>(null)
+  const refreshMeRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const applyToken = useCallback(async (token: string) => {
     const user = parseToken(token)
@@ -103,13 +104,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyToken])
 
+  // Keep ref in sync so the heartbeat effect never needs to re-run when refreshMe identity changes
+  refreshMeRef.current = refreshMe
+
   useEffect(() => {
     let timerId: ReturnType<typeof setTimeout>
 
     const schedule = () => {
       // 5-minute interval; skip entirely when tab is hidden
       timerId = setTimeout(async () => {
-        if (!document.hidden) await refreshMe()
+        if (!document.hidden) await refreshMeRef.current()
         schedule()
       }, 300_000)
     }
@@ -117,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onVisible = () => {
       // Tab came back into focus — refresh immediately then resume schedule
       clearTimeout(timerId)
-      refreshMe().finally(schedule)
+      refreshMeRef.current().finally(schedule)
     }
 
     schedule()
@@ -126,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(timerId)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [refreshMe])
+  }, [])
 
   // Intercept 401s globally — clear everything and force login page
   useEffect(() => {

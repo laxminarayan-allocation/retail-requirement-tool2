@@ -610,7 +610,7 @@ export default function DistributionModel() {
     setReqSrcPreviewLoading(true); setReqSrcMsg(null); setReqSrcPreview(null)
     try {
       const params = new URLSearchParams({ req_source: reqSource, biz_segment: bizSegment, mode })
-      const res = await apiFetch('GET', `/distribution/req-src-preview?${params}`)
+      const res = await apiFetch('GET', `/distribution/req-src-preview?${params}`, undefined, 120000)
       setReqSrcPreview(res as {oracle_total:number;csv_total:number;result_total:number;sample:Array<{icode:string;oracle:number;csv:number;result:number}>})
     } catch (e: unknown) {
       setReqSrcMsg(`✗ ${e instanceof Error ? e.message : 'Preview failed'}`)
@@ -627,7 +627,7 @@ export default function DistributionModel() {
         store_field_filters: JSON.stringify(activeFieldFilters),
         min_qty: String(minQty),
       })
-      const res = await apiFetch('GET', `/distribution/store-barcode/preview?${params}`)
+      const res = await apiFetch('GET', `/distribution/store-barcode/preview?${params}`, undefined, 120000)
       setSbPreview(res as {stores:number;barcodes:number;total_rows:number;sff_error?:string})
       setSbMsg(`\u2713 ${(res as {total_rows:number}).total_rows.toLocaleString('en-IN')} rows`)
     } catch (e: unknown) {
@@ -647,7 +647,7 @@ export default function DistributionModel() {
   const fetchBarcodePreview = useCallback(async () => {
     setBarcodePreviewLoading(true); setBarcodePreviewMsg(null)
     try {
-      const d = await apiFetch<{total: number; breakdown: {wh_source: string; count: number}[]}>('GET', '/distribution/barcode-preview', { stock_source: reqSource, biz_segment: bizSegment, min_qty: minQty })
+      const d = await apiFetch<{total: number; breakdown: {wh_source: string; count: number}[]}>('GET', '/distribution/barcode-preview', { stock_source: reqSource, biz_segment: bizSegment, min_qty: minQty }, 120000)
       setBarcodePreview(d)
       setBarcodePreviewMsg(`✓ ${d.total.toLocaleString('en-IN')} unique barcodes`)
     } catch (e: unknown) {

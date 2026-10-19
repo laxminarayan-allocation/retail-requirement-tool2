@@ -456,7 +456,7 @@ export default function DistributionModel() {
   const [distMsg,       setDistMsg]       = useState<string | null>(null)
   // Captured at run-time for Logic Sheet
   const [runParams, setRunParams] = useState<{
-    reqSource: string; bizSegment: string; sortMode: string; minQty: number; maxRound: number
+    reqSource: string; reqSrcApplied: string; bizSegment: string; sortMode: string; minQty: number; maxRound: number
     applyOL: boolean; holdRules: number
     selStores: string[]; activeFieldFilters: Record<string, string[]>
   } | null>(null)
@@ -744,7 +744,7 @@ export default function DistributionModel() {
   const runDistribution = async () => {
     setDistLoading(true); setDistMsg(null); setDistResult(null)
     try { sessionStorage.setItem('ss27_distribution_running', '1') } catch {}
-    setRunParams({ reqSource, bizSegment, sortMode, minQty, maxRound, applyOL, holdRules: holdRules.length, selStores, activeFieldFilters })
+    setRunParams({ reqSource, reqSrcApplied, bizSegment, sortMode, minQty, maxRound, applyOL, holdRules: holdRules.length, selStores, activeFieldFilters })
     try {
       const res = await http.post<{ success: boolean; data: DistResult; message: string | null }>(
         `/distribution/distribute?min_qty=${minQty}`,
@@ -2656,9 +2656,11 @@ export default function DistributionModel() {
 
               {/* Logic Sheet — Run Parameters */}
               {runParams && (() => {
-                const DEFAULTS = { reqSource: 'GRC', bizSegment: 'APPS', sortMode: 'combined_req', minQty: 10, maxRound: 10, applyOL: false, holdRules: 0, selStores: 0, activeFieldFilters: 0 }
+                const REQ_MODE_LABELS: Record<string, string> = { oracle: 'Oracle Only', csv: 'CSV Only', csv_priority: 'CSV Priority', max: 'Max (Both)', sum: 'Sum (Both)' }
+                const DEFAULTS = { reqSource: 'GRC', reqSrcApplied: 'oracle', bizSegment: 'APPS', sortMode: 'combined_req', minQty: 10, maxRound: 10, applyOL: false, holdRules: 0, selStores: 0, activeFieldFilters: 0 }
                 const rows: { label: string; def: string; used: string; changed: boolean }[] = [
                   { label: 'WH Source',      def: DEFAULTS.reqSource,                   used: runParams.reqSource,                           changed: runParams.reqSource !== DEFAULTS.reqSource },
+                  { label: 'REQ Mode',        def: REQ_MODE_LABELS[DEFAULTS.reqSrcApplied], used: REQ_MODE_LABELS[runParams.reqSrcApplied] ?? runParams.reqSrcApplied, changed: runParams.reqSrcApplied !== DEFAULTS.reqSrcApplied },
                   { label: 'Segment',         def: DEFAULTS.bizSegment,                  used: runParams.bizSegment,                          changed: runParams.bizSegment !== DEFAULTS.bizSegment },
                   { label: 'Sort Mode',       def: DEFAULTS.sortMode,                    used: runParams.sortMode,                            changed: runParams.sortMode !== DEFAULTS.sortMode },
                   { label: 'Min Qty',         def: String(DEFAULTS.minQty),              used: String(runParams.minQty),                      changed: runParams.minQty !== DEFAULTS.minQty },

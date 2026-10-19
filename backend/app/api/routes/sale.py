@@ -78,6 +78,9 @@ def _load_sale_pivot_df(refresh: bool = False) -> "pd.DataFrame":
     if not refresh and _SALE_DF_CACHE is not None and age < _SALE_DF_CACHE_TTL:
         return _SALE_DF_CACHE
 
+    # Release old DataFrame before allocating new one to avoid double RAM usage
+    _SALE_DF_CACHE = None
+
     from app.core.parquet_store import read_parquet
     from app.repositories.store_repository import StoreRepository
 

@@ -33,6 +33,22 @@ _last_dist_params: dict = {}
 # Run status flag — set while /distribute is executing so the frontend can show a badge
 _distribution_running: bool = False
 
+# ── Hold Rules persistence ────────────────────────────────────────────────────
+import json as _json
+_HOLD_RULES_FILE = Path(r"D:\Prewinter Color Option Listing New Repeat\DataStore") / "hold_rules.json"
+
+def _load_hold_rules() -> list:
+    try:
+        if _HOLD_RULES_FILE.exists():
+            return _json.loads(_HOLD_RULES_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+def _save_hold_rules(rules: list) -> None:
+    _HOLD_RULES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _HOLD_RULES_FILE.write_text(_json.dumps(rules, ensure_ascii=False, indent=2), encoding="utf-8")
+
 # ── Uploaded stock CSV (barcode-level qty override) ───────────────────────────
 _uploaded_stock_df: Optional[pd.DataFrame] = None
 _uploaded_stock_meta: dict = {}   # {filename, rows, qty_col}
@@ -1775,6 +1791,24 @@ async def barcode_preview_csv(stock_source: str = "GRC", biz_segment: str = "BOT
 async def distribution_status():
     """Return whether a distribution run is currently in progress."""
     return {"running": _distribution_running}
+
+
+@router.get("/hold-rules")
+async def get_hold_rules():
+    """Return globally saved hold rules."""
+    return APIResponse.ok(data=_load_hold_rules())
+
+
+@router.put("/hold-rules")
+async def put_hold_rules(request: Request):
+    """Persist hold rules globally (shared across all devices)."""
+    try:
+        body = await request.json()
+        rules = body if isinstance(body, list) else body.get("rules", [])
+        _save_hold_rules(rules)
+        return APIResponse.ok(data=rules, message=f"{len(rules)} hold rule(s) saved")
+    except Exception as exc:
+        return APIResponse.fail(message=str(exc))
 
 
 @router.post("/distribute", response_model=APIResponse)

@@ -472,6 +472,7 @@ export default function DistributionModel() {
   const [savedHoldRules, setSavedHoldRules] = useState<HoldRule[]>(
     () => { try { const v = JSON.parse(localStorage.getItem('ck_hold_rules_saved') ?? localStorage.getItem('ck_hold_rules') ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
   )
+  const [holdLoadedFromServer, setHoldLoadedFromServer] = useState(false)
   const [holdCsvMsg, setHoldCsvMsg] = useState<string|null>(null)
   const holdCsvRef = useRef<HTMLInputElement>(null)
   const [holdMode, setHoldMode] = useState<'skip'|'use_last'|'add_new'>(
@@ -512,15 +513,30 @@ export default function DistributionModel() {
     setTimeout(() => setInvalidateMsg(''), 4000)
   }
 
+  // Load hold rules from backend on mount (global, cross-device)
+  useEffect(() => {
+    http.get<{ success: boolean; data: HoldRule[] }>('/distribution/hold-rules')
+      .then(r => {
+        if (r.data.success && Array.isArray(r.data.data) && r.data.data.length > 0) {
+          setHoldRules(r.data.data)
+          setSavedHoldRules(r.data.data)
+        }
+        setHoldLoadedFromServer(true)
+      })
+      .catch(() => setHoldLoadedFromServer(true))
+  }, [])
+
   useEffect(() => {
     try { localStorage.setItem('ck_hold_rules', JSON.stringify(holdRules)) } catch {}
   }, [holdRules])
 
-  const saveHolds = () => {
+  const saveHolds = async () => {
     try {
+      // Save to backend (global) + localStorage (offline fallback)
+      await http.put('/distribution/hold-rules', holdRules)
       localStorage.setItem('ck_hold_rules_saved', JSON.stringify(holdRules))
       setSavedHoldRules([...holdRules])
-      setHoldCsvMsg(`✓ ${holdRules.length} hold${holdRules.length !== 1 ? 's' : ''} saved`)
+      setHoldCsvMsg(`✓ ${holdRules.length} hold${holdRules.length !== 1 ? 's' : ''} saved (global)`)
       setTimeout(() => setHoldCsvMsg(null), 3000)
     } catch { setHoldCsvMsg('✗ Save failed') }
   }

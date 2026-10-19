@@ -106,14 +106,20 @@ def _fetch_one(owner: str, obj: str) -> None:
 
 
 def refresh_daily_files() -> None:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     freq_map = get_freq_map()
     daily = [(k.split("__")[0], k.split("__")[1]) for k, v in freq_map.items() if v == "daily"]
     if not daily:
         logger.info("db_scheduler: no daily files configured")
         return
-    logger.info("db_scheduler: refreshing %d daily files", len(daily))
-    for owner, obj in daily:
-        _fetch_one(owner, obj)
+    logger.info("db_scheduler: refreshing %d daily files (parallel, max 3 workers)", len(daily))
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="db-refresh") as pool:
+        futures = {pool.submit(_fetch_one, owner, obj): f"{owner}.{obj}" for owner, obj in daily}
+        for fut in as_completed(futures):
+            label = futures[fut]
+            exc = fut.exception()
+            if exc:
+                logger.warning("db_scheduler: %s failed — %s", label, exc)
     logger.info("db_scheduler: daily refresh complete (%d files)", len(daily))
 
 

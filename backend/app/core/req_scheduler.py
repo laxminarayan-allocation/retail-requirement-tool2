@@ -74,9 +74,14 @@ def _fetch_one(owner: str, obj: str) -> None:
 
 
 def refresh_all() -> None:
-    logger.info("req_scheduler: starting daily refresh of %d views", len(REQ_VIEWS))
-    for v in REQ_VIEWS:
-        _fetch_one(v["owner"], v["obj"])
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    logger.info("req_scheduler: starting daily refresh of %d views (parallel, max 3 workers)", len(REQ_VIEWS))
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="req-refresh") as pool:
+        futures = {pool.submit(_fetch_one, v["owner"], v["obj"]): f"{v['owner']}.{v['obj']}" for v in REQ_VIEWS}
+        for fut in as_completed(futures):
+            exc = fut.exception()
+            if exc:
+                logger.warning("req_scheduler: %s failed — %s", futures[fut], exc)
     logger.info("req_scheduler: daily refresh complete")
 
 

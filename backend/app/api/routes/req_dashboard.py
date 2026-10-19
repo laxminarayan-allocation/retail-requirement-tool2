@@ -283,6 +283,44 @@ LEFT JOIN T_ITEM_META D ON A.DEPARTMENT = D.DEPARTMENT
 ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4
 """
 
+def _build_size_base_sql(store_where: str) -> str:
+    """Size SQL without T_WH_STK CTE — WH cols joined from parquet in pandas."""
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_SZ_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(MTD) MTD_SL_Q, SUM(LM) LM_SL_Q,
+        SUM(STK) TTL_STK_Q, SUM(ADJ_STK) ADJ_STK_Q,
+        SUM(SZ_PBS) SZ_PBS, SUM(SZ_REQ) SZ_REQ
+    FROM CK_A2166.V_SZ_REQ_APPS
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, CAT4
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, CAT4, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME, CAT4
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.ADJ_STK_Q,
+    A.SZ_PBS, A.SZ_REQ,
+    NVL(C.PPO_Q, 0) PPO_Q
+FROM T_SZ_BASE A
+LEFT JOIN T_PPO C
+    ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME AND A.CAT4=C.CAT4
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.CAT4
+"""
+
 _SIZE_PARQUET_OWNER = "CK_A2166"
 _SIZE_PARQUET_OBJ   = "V_SIZE_PIVOT"
 
@@ -301,17 +339,20 @@ def get_size_pivot(
     """Serve Size Req pivot from parquet cache (falls back to live Oracle if not cached)."""
 
     sw, sp = _store_where(store_names)
+
+    def _fetch_size(sql_fn, params=None):
+        from app.db.oracle import get_pool
+        pool = get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_fn, params or {})
+                cols = [c[0].lower() for c in cur.description]
+                rows = cur.fetchall()
+        return _merge_wh(pd.DataFrame(rows, columns=cols), ["department", "article_name", "cat4"])
+
     if store_names:
-        # Live query with store filter — bypass parquet
         try:
-            from app.db.oracle import get_pool
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_size_sql(sw), sp)
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_size(_build_size_base_sql(sw), sp)
         except Exception as exc:
             logger.exception("Size pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
@@ -319,15 +360,8 @@ def get_size_pivot(
         df = read_cache(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ)
     else:
         try:
-            from app.db.oracle import get_pool
             from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_size_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_size(_build_size_base_sql(""))
             _wc(_SIZE_PARQUET_OWNER, _SIZE_PARQUET_OBJ, df)
         except Exception as exc:
             logger.exception("Size pivot live fetch error")
@@ -401,6 +435,42 @@ LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
 ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.MRP, A.ARTICLE_NAME
 """
 
+def _build_mrp_base_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_MRP_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) REQ
+    FROM CK_A2166.V_MRP_REQ_APPS
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, MRP, ARTICLE_NAME
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.MRP, A.ARTICLE_NAME,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.REQ,
+    NVL(C.PPO_Q, 0) PPO_Q
+FROM T_MRP_BASE A
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.MRP, A.ARTICLE_NAME
+"""
+
 _MRP_PARQUET_OWNER = "CK_A2166"
 _MRP_PARQUET_OBJ   = "V_MRP_PIVOT"
 
@@ -417,16 +487,20 @@ def get_mrp_pivot(
     limit: int = Query(500, ge=1, le=5000),
 ):
     sw, sp = _store_where(store_names)
+
+    def _fetch_mrp(sql_fn, params=None):
+        from app.db.oracle import get_pool
+        pool = get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_fn, params or {})
+                cols = [c[0].lower() for c in cur.description]
+                rows = cur.fetchall()
+        return _merge_wh(pd.DataFrame(rows, columns=cols), ["department", "article_name"])
+
     if store_names:
         try:
-            from app.db.oracle import get_pool
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_mrp_sql(sw), sp)
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_mrp(_build_mrp_base_sql(sw), sp)
         except Exception as exc:
             logger.exception("MRP pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
@@ -434,15 +508,8 @@ def get_mrp_pivot(
         df = read_cache(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ)
     else:
         try:
-            from app.db.oracle import get_pool
             from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_mrp_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_mrp(_build_mrp_base_sql(""))
             _wc(_MRP_PARQUET_OWNER, _MRP_PARQUET_OBJ, df)
         except Exception as exc:
             logger.exception("MRP pivot live fetch error")
@@ -517,6 +584,46 @@ LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
 ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME
 """
 
+def _build_art_base_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_ART_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) REQ
+    FROM (
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_ART_REQ_APPS
+        UNION ALL
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_ART_REQ_GM
+    ) SRC
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.REQ,
+    NVL(C.PPO_Q, 0) PPO_Q
+FROM T_ART_BASE A
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME
+"""
+
 _ART_PARQUET_OWNER = "CK_A2166"
 _ART_PARQUET_OBJ   = "V_ART_PIVOT_V2"
 
@@ -533,16 +640,20 @@ def get_art_pivot(
     limit: int = Query(500, ge=1, le=5000),
 ):
     sw, sp = _store_where(store_names)
+
+    def _fetch_art(sql_fn, params=None):
+        from app.db.oracle import get_pool
+        pool = get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_fn, params or {})
+                cols = [c[0].lower() for c in cur.description]
+                rows = cur.fetchall()
+        return _merge_wh(pd.DataFrame(rows, columns=cols), ["department", "article_name"])
+
     if store_names:
         try:
-            from app.db.oracle import get_pool
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_art_sql(sw), sp)
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_art(_build_art_base_sql(sw), sp)
         except Exception as exc:
             logger.exception("Art pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
@@ -550,15 +661,8 @@ def get_art_pivot(
         df = read_cache(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ)
     else:
         try:
-            from app.db.oracle import get_pool
             from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_art_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_art(_build_art_base_sql(""))
             _wc(_ART_PARQUET_OWNER, _ART_PARQUET_OBJ, df)
         except Exception as exc:
             logger.exception("Art pivot live fetch error")
@@ -633,6 +737,46 @@ LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
 ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE
 """
 
+def _build_mc_base_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_MC_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) REQ
+    FROM (
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_MC_REQ_APPS_2
+        UNION ALL
+        SELECT STORE_NAME, DEPARTMENT, DISPLAY_TYPE, LM_SL_Q, MTD_SL_Q, TTL_STK_Q, TO_Q, PBS, REQ FROM CK_A2166.V_MC_REQ_GM
+    ) SRC
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE
+),
+T_PPO AS (
+    SELECT DEPARTMENT, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT
+),
+T_ITEM_META AS (
+    SELECT DISTINCT DEPARTMENT, DIVISION, ATTRIBUTE1
+    FROM SSRK.ITEM_MV
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE,
+    NVL(D.DIVISION,   'N/A') DIVISION,
+    NVL(D.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.REQ,
+    NVL(C.PPO_Q, 0) PPO_Q
+FROM T_MC_BASE A
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT
+LEFT JOIN T_ITEM_META D ON A.DEPARTMENT=D.DEPARTMENT
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE
+"""
+
 _MC_PARQUET_OWNER = "CK_A2166"
 _MC_PARQUET_OBJ   = "V_MC_PIVOT_V2"
 
@@ -648,16 +792,20 @@ def get_mc_pivot(
     limit: int = Query(500, ge=1, le=5000),
 ):
     sw, sp = _store_where(store_names)
+
+    def _fetch_mc(sql_fn, params=None):
+        from app.db.oracle import get_pool
+        pool = get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_fn, params or {})
+                cols = [c[0].lower() for c in cur.description]
+                rows = cur.fetchall()
+        return _merge_wh(pd.DataFrame(rows, columns=cols), ["department", "display_type"])
+
     if store_names:
         try:
-            from app.db.oracle import get_pool
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_mc_sql(sw), sp)
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_mc(_build_mc_base_sql(sw), sp)
         except Exception as exc:
             logger.exception("MC pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
@@ -665,15 +813,8 @@ def get_mc_pivot(
         df = read_cache(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ)
     else:
         try:
-            from app.db.oracle import get_pool
             from app.core.parquet_cache import write_cache as _wc
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_mc_sql(""))
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_mc(_build_mc_base_sql(""))
             _wc(_MC_PARQUET_OWNER, _MC_PARQUET_OBJ, df)
         except Exception as exc:
             logger.exception("MC pivot live fetch error")
@@ -825,6 +966,47 @@ LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
 ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP
 """
 
+def _build_barcode_base_sql(store_where: str) -> str:
+    sw = store_where if store_where else "WHERE STORE_NAME NOT LIKE '%-WH-%'"
+    sw_extra = "AND STORE_NAME NOT LIKE '%-WH-%'" if store_where else ""
+    return f"""
+WITH T_GRC_BASE AS (
+    SELECT DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP,
+        COUNT(DISTINCT STORE_NAME) STORE_CNT,
+        SUM(LM_SL_Q) LM_SL_Q, SUM(MTD_SL_Q) MTD_SL_Q,
+        SUM(TTL_STK_Q) TTL_STK_Q, SUM(TO_Q) TO_Q,
+        SUM(PBS) PBS, SUM(REQ) GRC_REQ,
+        MAX(DIVISION) DIVISION, MAX(ATTRIBUTE1) ATTRIBUTE1
+    FROM CK_A2166.V_BARCODE_REQ_APPS_GRC_V2
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, DISPLAY_TYPE, ARTICLE_NAME, MRP
+),
+T_WMS_BASE AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, MRP,
+        SUM(REQ) WMS_REQ
+    FROM CK_A2166.V_BARCODE_REQ_APPS_WMS_V2
+    {sw} {sw_extra}
+    GROUP BY DEPARTMENT, ARTICLE_NAME, MRP
+),
+T_PPO AS (
+    SELECT DEPARTMENT, ARTICLE_NAME, SUM(PPO_Q) PPO_Q
+    FROM MISRETAIL.T_ALLOCATION_FOR_ALL_DIVISION
+    GROUP BY DEPARTMENT, ARTICLE_NAME
+)
+SELECT
+    A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP,
+    NVL(A.DIVISION,   'N/A') DIVISION,
+    NVL(A.ATTRIBUTE1, 'N/A') ATTRIBUTE1,
+    A.STORE_CNT, A.LM_SL_Q, A.MTD_SL_Q, A.TTL_STK_Q, A.TO_Q,
+    A.PBS, A.GRC_REQ,
+    NVL(W.WMS_REQ,   0) WMS_REQ,
+    NVL(C.PPO_Q,     0) PPO_Q
+FROM T_GRC_BASE A
+LEFT JOIN T_WMS_BASE W ON A.DEPARTMENT=W.DEPARTMENT AND A.ARTICLE_NAME=W.ARTICLE_NAME AND A.MRP=W.MRP
+LEFT JOIN T_PPO C ON A.DEPARTMENT=C.DEPARTMENT AND A.ARTICLE_NAME=C.ARTICLE_NAME
+ORDER BY A.DEPARTMENT, A.DISPLAY_TYPE, A.ARTICLE_NAME, A.MRP
+"""
+
 _BARCODE_PARQUET_OWNER = "CK_A2166"
 _BARCODE_PARQUET_OBJ   = "V_BARCODE_PIVOT"
 _OPTION_PARQUET_OWNER  = "CK_A2166"
@@ -862,6 +1044,40 @@ def invalidate_pivot_cache():
     _pivot_mem_cache.clear()
 
 
+_WH_STOCK_COLS = ["grc_q", "msa_q", "alloc_q", "wms_q", "rest_dc_q"]
+
+
+def _wh_stock_agg(group_cols: list, cat2_filter: str = None) -> "Optional[pd.DataFrame]":
+    """Aggregate V_WH_STOCK parquet by group_cols. Returns None if not cached."""
+    wh = _get_pivot_df("CK_A2166", "V_WH_STOCK")
+    if wh is None:
+        return None
+    wh = wh.copy()
+    wh.columns = [c.lower() for c in wh.columns]
+    if cat2_filter and "cat2" in wh.columns:
+        wh = wh[wh["cat2"] == cat2_filter]
+    avail_group = [c for c in group_cols if c in wh.columns]
+    agg_cols = [c for c in _WH_STOCK_COLS if c in wh.columns]
+    if not avail_group or not agg_cols:
+        return None
+    return wh.groupby(avail_group)[agg_cols].sum().reset_index()
+
+
+def _merge_wh(df: pd.DataFrame, join_cols: list, cat2_filter: str = None) -> pd.DataFrame:
+    """Left-join aggregated WH_STOCK parquet to df; fill missing WH cols with 0."""
+    wh_agg = _wh_stock_agg(join_cols, cat2_filter)
+    if wh_agg is None:
+        for col in _WH_STOCK_COLS:
+            if col not in df.columns:
+                df[col] = 0
+        return df
+    wh_cols = [c for c in _WH_STOCK_COLS if c in wh_agg.columns]
+    merged = df.merge(wh_agg, on=join_cols, how="left", suffixes=("", "_wh"))
+    for col in wh_cols:
+        merged[col] = merged[col].fillna(0)
+    return merged
+
+
 def warm_req_pivots():
     """Pre-load barcode/option/list pivot parquets into memory. Call from startup warmup."""
     pairs = [
@@ -892,16 +1108,20 @@ def get_barcode_pivot(
     limit: int = Query(500, ge=1, le=5000),
 ):
     sw, sp = _store_where(store_names)
+
+    def _fetch_barcode(sql_fn, params=None):
+        from app.db.oracle import get_pool
+        pool = get_pool()
+        with pool.acquire() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_fn, params or {})
+                cols = [c[0].lower() for c in cur.description]
+                rows = cur.fetchall()
+        return _merge_wh(pd.DataFrame(rows, columns=cols), ["department", "article_name"])
+
     if store_names:
         try:
-            from app.db.oracle import get_pool
-            pool = get_pool()
-            with pool.acquire() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(_build_barcode_sql(sw), sp)
-                    cols = [c[0].lower() for c in cur.description]
-                    rows = cur.fetchall()
-            df = pd.DataFrame(rows, columns=cols)
+            df = _fetch_barcode(_build_barcode_base_sql(sw), sp)
         except Exception as exc:
             logger.exception("Barcode pivot store-filtered fetch error")
             raise HTTPException(status_code=500, detail=str(exc))
@@ -909,15 +1129,8 @@ def get_barcode_pivot(
         df = _get_pivot_df(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ)
         if df is None:
             try:
-                from app.db.oracle import get_pool
                 from app.core.parquet_cache import write_cache as _wc
-                pool = get_pool()
-                with pool.acquire() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(_build_barcode_sql(""))
-                        cols = [c[0].lower() for c in cur.description]
-                        rows = cur.fetchall()
-                df = pd.DataFrame(rows, columns=cols)
+                df = _fetch_barcode(_build_barcode_base_sql(""))
                 _wc(_BARCODE_PARQUET_OWNER, _BARCODE_PARQUET_OBJ, df)
             except Exception as exc:
                 logger.exception("Barcode pivot live fetch error")

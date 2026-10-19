@@ -113,6 +113,13 @@ class StoreRepository:
         logger.info("StoreRepository cache invalidated")
 
 
+def invalidate_cache() -> None:
+    """Module-level shortcut so parquet_store can invalidate without instantiating the class."""
+    global _CACHE
+    _CACHE = None
+    logger.info("StoreRepository cache invalidated (module-level)")
+
+
 def warm_store_cache() -> None:
     """Pre-load store master at startup so first zone click is instant."""
     try:

@@ -271,6 +271,22 @@ def download_source(key: str) -> None:
 
         logger.info("parquet_store: %s downloaded OK — %d rows", key, rows)
 
+        # Invalidate in-memory caches that depend on this parquet so stale data is never served
+        if key == "store_master":
+            try:
+                from app.repositories.store_repository import invalidate_cache as _sr_inv
+                _sr_inv()
+                logger.info("parquet_store: store_repository cache invalidated after store_master refresh")
+            except Exception as _e:
+                logger.warning("parquet_store: store_repository invalidate failed: %s", _e)
+            try:
+                from app.api.routes.dashboard import _fetch_oracle_stats_fresh
+                import threading
+                threading.Thread(target=_fetch_oracle_stats_fresh, daemon=True).start()
+                logger.info("parquet_store: dashboard oracle cache refresh triggered after store_master refresh")
+            except Exception as _e:
+                logger.warning("parquet_store: dashboard cache refresh failed: %s", _e)
+
     except Exception as exc:
         finished = datetime.now(IST).isoformat()
         with _dl_lock:

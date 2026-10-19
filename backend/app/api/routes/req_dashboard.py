@@ -13,6 +13,22 @@ from app.core.parquet_cache import has_output, get_meta, read_cache
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/req", tags=["req_dashboard"])
 
+
+def _pivot_response(df: "Any", page: int = 0, limit: int = 500) -> dict:
+    """Slice a filtered DataFrame and return a standard paginated pivot payload."""
+    import pandas as pd
+    total = len(df)
+    start = page * limit
+    chunk = df.iloc[start: start + limit]
+    return {
+        "columns": list(chunk.columns),
+        "rows": chunk.where(chunk.notna(), None).to_dict(orient="records"),
+        "total_rows": total,
+        "page": page,
+        "limit": limit,
+        "pages": max(1, -(-total // limit)),  # ceiling division
+    }
+
 # ── View registry ──────────────────────────────────────────────────────────────
 REQ_VIEWS: list[dict] = [
     {"group": "WH_STOCK",    "owner": "CK_A2166", "obj": "V_WH_STOCK"},
@@ -164,6 +180,8 @@ def get_sparky_pivot(
     department: List[str] = Query(default=[]),
     article: Optional[str] = Query(None),
     cat4: Optional[str] = Query(None),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     """Serve Sparky Req pivot from parquet cache (falls back to live Oracle if not cached)."""
     from app.core.parquet_cache import has_output, read_cache
@@ -199,12 +217,7 @@ def get_sparky_pivot(
     if cat4:
         df = df[df["cat4"].str.contains(cat4, case=False, na=False)]
 
-    payload = {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }
-    return {"success": True, "data": payload}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── Store filter helper ────────────────────────────────────────────────────────
@@ -284,6 +297,8 @@ def get_size_pivot(
     division:    List[str]     = Query(default=[]),
     attribute1:  List[str]     = Query(default=[]),
     store_names: List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     """Serve Size Req pivot from parquet cache (falls back to live Oracle if not cached)."""
     import pandas as pd
@@ -335,11 +350,7 @@ def get_size_pivot(
     if attribute1:
         df = df[df["attribute1"].isin(attribute1)]
 
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── MRP Req pivot ──────────────────────────────────────────────────────────────
@@ -405,6 +416,8 @@ def get_mrp_pivot(
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     import pandas as pd
     sw, sp = _store_where(store_names)
@@ -450,11 +463,7 @@ def get_mrp_pivot(
         df = df[df["division"].isin(division)]
     if attribute1:
         df = df[df["attribute1"].isin(attribute1)]
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── Article Req pivot ──────────────────────────────────────────────────────────
@@ -524,6 +533,8 @@ def get_art_pivot(
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     import pandas as pd
     sw, sp = _store_where(store_names)
@@ -569,11 +580,7 @@ def get_art_pivot(
         df = df[df["division"].isin(division)]
     if attribute1:
         df = df[df["attribute1"].isin(attribute1)]
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── MC Req pivot ───────────────────────────────────────────────────────────────
@@ -642,6 +649,8 @@ def get_mc_pivot(
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     import pandas as pd
     sw, sp = _store_where(store_names)
@@ -685,11 +694,7 @@ def get_mc_pivot(
         df = df[df["division"].isin(division)]
     if attribute1:
         df = df[df["attribute1"].isin(attribute1)]
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── Filter meta (DIVISION + ATTRIBUTE1 options) ────────────────────────────────
@@ -878,6 +883,8 @@ def get_barcode_pivot(
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     import pandas as pd
     sw, sp = _store_where(store_names)
@@ -924,11 +931,7 @@ def get_barcode_pivot(
         df = df[df["division"].isin(division)]
     if attribute1:
         df = df[df["attribute1"].isin(attribute1)]
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── Option Req pivot ───────────────────────────────────────────────────────────
@@ -969,6 +972,8 @@ def get_option_pivot(
     division:     List[str]     = Query(default=[]),
     attribute1:   List[str]     = Query(default=[]),
     store_names:  List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     import pandas as pd
     sw, sp = _store_where(store_names)
@@ -1013,11 +1018,7 @@ def get_option_pivot(
         df = df[df["division"].isin(division)]
     if attribute1:
         df = df[df["attribute1"].isin(attribute1)]
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}
 
 
 # ── List Req pivot ─────────────────────────────────────────────────────────────
@@ -1052,6 +1053,8 @@ def get_list_pivot(
     display_type: List[str]     = Query(default=[]),
     article:      Optional[str] = Query(None),
     store_names:  List[str]     = Query(default=[]),
+    page: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=5000),
 ):
     import pandas as pd
     sw, sp = _store_where(store_names)
@@ -1094,8 +1097,4 @@ def get_list_pivot(
         df = df[df["display_type"].isin(display_type)]
     if article:
         df = df[df["article_name"].str.contains(article, case=False, na=False)]
-    return {"success": True, "data": {
-        "columns": list(df.columns),
-        "rows": df.where(df.notna(), None).to_dict(orient="records"),
-        "total_rows": len(df),
-    }}
+    return {"success": True, "data": _pivot_response(df, page, limit)}

@@ -225,14 +225,14 @@ function BrowserCacheCard() {
 // ── User Preferences card ─────────────────────────────────────────────────────
 
 function UserPreferencesCard() {
-  const [timeout, setTimeoutVal] = useState(() => getUserTimeout(60_000))
+  const [selectedMs, setSelectedMs] = useState(() => getUserTimeout(60_000))
   const [saved, setSaved] = useState(false)
 
   function apply(ms: number) {
-    setTimeoutVal(ms)
+    setSelectedMs(ms)
     setUserTimeout(ms)
     setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    window.setTimeout(() => setSaved(false), 2000)
   }
 
   const labels: Record<number, string> = {
@@ -259,18 +259,18 @@ function UserPreferencesCard() {
           {TIMEOUT_OPTIONS.map(ms => (
             <button key={ms} onClick={() => apply(ms)} style={{
               padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              background: timeout === ms ? '#0e7490' : 'var(--content-bg)',
-              color: timeout === ms ? '#e0f2fe' : 'var(--text-secondary)',
-              border: `1.5px solid ${timeout === ms ? '#22d3ee' : 'var(--card-border)'}`,
+              background: selectedMs === ms ? '#0e7490' : 'var(--content-bg)',
+              color: selectedMs === ms ? '#e0f2fe' : 'var(--text-secondary)',
+              border: `1.5px solid ${selectedMs === ms ? '#22d3ee' : 'var(--card-border)'}`,
               transition: 'all .12s',
             }}>
               {labels[ms] ?? `${ms / 1000}s`}
-              {timeout === ms && <span style={{ marginLeft: 4, fontSize: 9 }}>✓</span>}
+              {selectedMs === ms && <span style={{ marginLeft: 4, fontSize: 9 }}>✓</span>}
             </button>
           ))}
         </div>
         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-          Current: <strong style={{ color: '#38bdf8' }}>{labels[timeout] ?? `${timeout / 1000}s`}</strong>
+          Current: <strong style={{ color: '#38bdf8' }}>{labels[selectedMs] ?? `${selectedMs / 1000}s`}</strong>
           {' '}· Browser mein save hota hai (localStorage)
         </div>
       </div>

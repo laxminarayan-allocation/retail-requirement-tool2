@@ -33,7 +33,7 @@ http.interceptors.response.use(
 // Key stored in localStorage: 'ck_api_timeout_ms'
 // Valid values: 30000, 60000, 120000, 300000 (30s, 1min, 2min, 5min)
 const TIMEOUT_KEY = 'ck_api_timeout_ms'
-const TIMEOUT_OPTIONS = [30_000, 60_000, 120_000, 300_000]
+export const TIMEOUT_OPTIONS = [30_000, 60_000, 120_000, 300_000]
 
 export function getUserTimeout(defaultMs = 60_000): number {
   try {
@@ -46,5 +46,4 @@ export function setUserTimeout(ms: number): void {
   try { localStorage.setItem(TIMEOUT_KEY, String(ms)) } catch {}
 }
 
-export { TIMEOUT_OPTIONS }
 export default http

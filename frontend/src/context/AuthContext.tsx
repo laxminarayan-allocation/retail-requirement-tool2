@@ -104,8 +104,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applyToken])
 
   useEffect(() => {
-    const id = setInterval(refreshMe, 30_000)
-    return () => clearInterval(id)
+    let timerId: ReturnType<typeof setTimeout>
+
+    const schedule = () => {
+      // 5-minute interval; skip entirely when tab is hidden
+      timerId = setTimeout(async () => {
+        if (!document.hidden) await refreshMe()
+        schedule()
+      }, 300_000)
+    }
+
+    const onVisible = () => {
+      // Tab came back into focus — refresh immediately then resume schedule
+      clearTimeout(timerId)
+      refreshMe().finally(schedule)
+    }
+
+    schedule()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearTimeout(timerId)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [refreshMe])
 
   // Intercept 401s globally — clear everything and force login page

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 import DataStore from './DataStore'
-import MasterData from './MasterData'
 import DatabaseExplorer from './DatabaseExplorer'
 
 type Tab = 'hub' | 'database'
@@ -59,21 +58,7 @@ export default function DataHub() {
         {tab === 'database' && <DatabaseExplorer />}
 
         {/* Data Hub — Parquet Store (top) + Master Data (bottom) on one page */}
-        {tab === 'hub' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            {/* Parquet Store — fixed portion at top */}
-            <div style={{
-              flex: '0 0 42%', overflow: 'hidden',
-              borderBottom: `2px solid ${T.cardBorder}`,
-            }}>
-              <DataStore />
-            </div>
-            {/* Master Data — fills remaining space */}
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <MasterData />
-            </div>
-          </div>
-        )}
+        {tab === 'hub' && <DataStore />}
       </div>
     </div>
   )

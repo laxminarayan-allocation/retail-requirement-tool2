@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 import DataStore from './DataStore'
+import MasterData from './MasterData'
 import DatabaseExplorer from './DatabaseExplorer'
 
-type Tab = 'downloads' | 'database'
+type Tab = 'hub' | 'database'
 
 const TABS: { key: Tab; icon: string; label: string }[] = [
-  { key: 'downloads', icon: '💾', label: 'Downloads'         },
-  { key: 'database',  icon: '🗄️', label: 'Database Explorer' },
+  { key: 'hub',      icon: '💾', label: 'Data Hub'          },
+  { key: 'database', icon: '🗄️', label: 'Database Explorer' },
 ]
 
 export default function DataHub() {
   const { tokens: T } = useTheme()
-  const [tab, setTab] = useState<Tab>('downloads')
+  const [tab, setTab] = useState<Tab>('hub')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
@@ -51,10 +52,28 @@ export default function DataHub() {
         })}
       </div>
 
-      {/* Tab content — unmount inactive tabs so polls don't run in background */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
-        {tab === 'downloads' && <DataStore />}
-        {tab === 'database'  && <DatabaseExplorer />}
+      {/* Tab content */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Database Explorer — unmount when not active */}
+        {tab === 'database' && <DatabaseExplorer />}
+
+        {/* Data Hub — Parquet Store (top) + Master Data (bottom) on one page */}
+        {tab === 'hub' && (
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            {/* Parquet Store — fixed portion at top */}
+            <div style={{
+              flex: '0 0 42%', overflow: 'hidden',
+              borderBottom: `2px solid ${T.cardBorder}`,
+            }}>
+              <DataStore />
+            </div>
+            {/* Master Data — fills remaining space */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <MasterData />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

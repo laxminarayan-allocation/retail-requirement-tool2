@@ -15,6 +15,7 @@ import { useDbRefresh } from '@/context/DbRefreshContext'
 import { DataGrid } from '@/components/DataGrid'
 import { Card } from '@/components/Card'
 import MasterData from '@/pages/MasterData'
+import DataStore from '@/pages/DataStore'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { SchemaRow, TableRow, ViewRow, ColumnRow } from '@/types/api'
 
@@ -1918,7 +1919,7 @@ export default function DatabaseExplorer() {
   const [selectedName, setSelectedName] = useState('')
   const [selectedType, setSelectedType] = useState<ObjType>('TABLE')
   const [mobilePanelTab, setMobilePanelTab] = useState(0)
-  const [mainTab, setMainTab] = useState<'explorer' | 'downloads' | 'masterdata'>('explorer')
+  const [mainTab, setMainTab] = useState<'explorer' | 'downloads' | 'masterdata' | 'datahub'>('explorer')
   const { downloadsRunning } = useDbRefresh()
 
   const handleObjectSelect = (name: string, type: ObjType) => {
@@ -1983,6 +1984,9 @@ export default function DatabaseExplorer() {
         <button style={TAB_STYLE(mainTab === 'masterdata')} onClick={() => setMainTab('masterdata')}>
           📂 Master Data
         </button>
+        <button style={TAB_STYLE(mainTab === 'datahub')} onClick={() => setMainTab('datahub')}>
+          💾 Data Hub
+        </button>
       </div>
 
       {/* Downloaded Files — always mounted so it loads once, hidden when not active */}
@@ -1994,6 +1998,13 @@ export default function DatabaseExplorer() {
       <div style={{ flex: '1 1 0', minHeight: 0, display: mainTab === 'masterdata' ? 'flex' : 'none', flexDirection: 'column', overflowY: 'auto' }}>
         <MasterData />
       </div>
+
+      {/* Data Hub (Parquet Store) — unmount when not active */}
+      {mainTab === 'datahub' && (
+        <div style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+          <DataStore />
+        </div>
+      )}
 
       {mainTab === 'explorer' && isMobile ? (
         // Mobile: tab switcher — Schema → Objects → Columns

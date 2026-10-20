@@ -23,7 +23,7 @@ function useIsMobile() {
 
 const NAV_ITEMS: { to: string; label: string; icon: string; minRole: Role; group?: string }[] = [
   { to: '/',            label: 'Dashboard',       icon: '📊', minRole: 'viewer'  },
-  { to: '/data-hub',   label: 'Data Hub',         icon: '🗄️', minRole: 'admin'   },
+  { to: '/database',   label: 'Database Explorer', icon: '🗄️', minRole: 'admin'   },
   { to: '/oracle-refresh', label: 'Oracle Refresh', icon: '🔄', minRole: 'admin'   },
   { to: '/req',          label: 'Requirements',      icon: '📝', minRole: 'planner' },
   { to: '/distribution', label: 'Distribution',      icon: '🔀', minRole: 'planner' },

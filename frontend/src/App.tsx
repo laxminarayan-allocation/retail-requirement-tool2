@@ -5,7 +5,7 @@ import { DisplayProvider } from '@/context/DisplayContext'
 import AppLayout from '@/layouts/AppLayout'
 import LoginPage from '@/pages/LoginPage'
 import Dashboard from '@/pages/Dashboard'
-import DatabaseExplorer from '@/pages/DatabaseExplorer'
+// DatabaseExplorer now rendered inside DataHub
 import Calculation from '@/pages/Calculation'
 import Results from '@/pages/Results'
 import Settings from '@/pages/Settings'
@@ -19,7 +19,8 @@ import DistributionModel from '@/pages/DistributionModel'
 import OptionListing from '@/pages/OptionListing'
 import OracleRefreshPage from '@/pages/OracleRefreshPage'
 import WarehouseInventory from '@/pages/WarehouseInventory'
-import DataStore from '@/pages/DataStore'
+// DataStore now rendered inside DataHub tabs
+import DataHub from '@/pages/DataHub'
 import SourceViewer from '@/pages/SourceViewer'
 import AllocationPipeline from '@/pages/AllocationPipeline'
 import FlowDocumentation from '@/pages/FlowDocumentation'
@@ -47,7 +48,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AppLayout />}>
             <Route index element={<Dashboard />} />
-            <Route path="database" element={<DatabaseExplorer />} />
+            <Route path="database" element={<Navigate to="/data-hub" replace />} />
+            <Route path="data-hub" element={<DataHub />} />
             <Route path="factors" element={<Navigate to="/calculation?tab=factors" replace />} />
             <Route path="calculation" element={<Calculation />} />
             <Route path="results" element={<Navigate to="/simulation?tab=results" replace />} />
@@ -65,7 +67,7 @@ export default function App() {
             <Route path="simulation" element={<Navigate to="/calculation?tab=simulation" replace />} />
             <Route path="option-listing" element={<OptionListing />} />
             <Route path="oracle-refresh" element={<OracleRefreshPage />} />
-            <Route path="data-store" element={<DataStore />} />
+            <Route path="data-store" element={<Navigate to="/data-hub" replace />} />
             <Route path="source" element={<SourceViewer />} />
             <Route path="allocation-pipeline" element={<AllocationPipeline />} />
             <Route path="flow-docs" element={<FlowDocumentation />} />

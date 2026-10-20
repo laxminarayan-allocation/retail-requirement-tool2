@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 import DataStore from './DataStore'
-import MasterData from './MasterData'
 import DatabaseExplorer from './DatabaseExplorer'
 
-type Tab = 'downloads' | 'master' | 'database'
+type Tab = 'downloads' | 'database'
 
 const TABS: { key: Tab; icon: string; label: string }[] = [
-  { key: 'downloads', icon: '💾', label: 'Downloads'       },
-  { key: 'master',    icon: '📋', label: 'Master Data'     },
+  { key: 'downloads', icon: '💾', label: 'Downloads'         },
   { key: 'database',  icon: '🗄️', label: 'Database Explorer' },
 ]
 
@@ -56,7 +54,6 @@ export default function DataHub() {
       {/* Tab content — unmount inactive tabs so polls don't run in background */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {tab === 'downloads' && <DataStore />}
-        {tab === 'master'    && <MasterData />}
         {tab === 'database'  && <DatabaseExplorer />}
       </div>
     </div>

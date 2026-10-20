@@ -273,9 +273,174 @@ function DataSourcesPanel() {
   )
 }
 
+// ── Server Control ────────────────────────────────────────────────────────────
+function ServerControl() {
+  const http = axios.create({ baseURL: '/api' })
+
+  const [health, setHealth]       = useState<any>(null)
+  const [ready, setReady]         = useState<any>(null)
+  const [deploy, setDeploy]       = useState<any>(null)
+  const [deployLog, setDeployLog] = useState<string[]>([])
+  const [history, setHistory]     = useState<any[]>([])
+  const [loading, setLoading]     = useState(false)
+  const [polling, setPolling]     = useState(false)
+
+  const refresh = useCallback(async () => {
+    try {
+      const [h, r, d, log, hist] = await Promise.all([
+        http.get('/health'),
+        http.get('/health/ready'),
+        http.get('/deploy/status'),
+        http.get('/deploy/log?lines=40'),
+        http.get('/deploy/history?limit=10'),
+      ])
+      setHealth(h.data?.data)
+      setReady(r.data?.data)
+      setDeploy(d.data?.data)
+      setDeployLog(log.data?.data?.lines ?? [])
+      setHistory(hist.data?.data?.rows ?? [])
+    } catch { /* server might be restarting */ }
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
+
+  // Poll while deploy is running
+  useEffect(() => {
+    if (!deploy?.running && !polling) return
+    if (!deploy?.running) { setPolling(false); return }
+    setPolling(true)
+    const id = setTimeout(refresh, 2000)
+    return () => clearTimeout(id)
+  }, [deploy?.running, polling, refresh])
+
+  async function triggerDeploy(buildFrontend = false) {
+    setLoading(true)
+    try {
+      await http.post(`/deploy/run${buildFrontend ? '?build_frontend=true' : ''}`)
+      setPolling(true)
+      await refresh()
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }
+
+  async function triggerRestart() {
+    setLoading(true)
+    try {
+      await http.post('/deploy/run')   // pull + touch main.py
+      setPolling(true)
+      await refresh()
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }
+
+  const isUp      = health?.status === 'ok'
+  const isReady   = ready?.ready === true
+  const oracleOk  = ready?.checks?.oracle?.ok
+  const sqliteOk  = ready?.checks?.sqlite?.ok
+  const running   = deploy?.running
+  const git       = deploy?.git
+  const behind    = git?.behind
+
+  const dot = (ok: boolean | undefined) => (
+    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+      background: ok === true ? '#22c55e' : ok === false ? '#ef4444' : '#64748b',
+      marginRight: 6, flexShrink: 0 }} />
+  )
+
+  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid #1e293b' }}>
+      <span style={{ fontSize: 11, color: '#64748b', width: 120, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, color: '#e2e8f0', flex: 1 }}>{children}</span>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 700 }}>
+
+      {/* Status Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+        {[
+          { label: 'API Server', ok: isUp,     val: isUp ? 'Online' : 'Offline' },
+          { label: 'DB Ready',   ok: isReady,   val: isReady ? 'Ready' : 'Degraded' },
+          { label: 'Oracle',     ok: oracleOk,  val: oracleOk ? `${ready?.checks?.oracle?.ms ?? '—'} ms` : (ready?.checks?.oracle?.error ?? 'Down') },
+        ].map(c => (
+          <div key={c.label} style={{ background: '#0f172a', border: `1px solid ${c.ok ? '#22c55e33' : '#ef444433'}`, borderRadius: 8, padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: '.06em', marginBottom: 6 }}>{c.label.toUpperCase()}</div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>{dot(c.ok)}<span style={{ fontSize: 13, fontWeight: 700, color: c.ok ? '#22c55e' : '#ef4444' }}>{c.val}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Git + Restart */}
+      <div style={{ background: '#0a1220', border: '1px solid #1e293b', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 10, letterSpacing: '.04em' }}>GIT STATUS</div>
+        {git ? <>
+          <Row label="Branch">{git.branch}</Row>
+          <Row label="Current SHA"><code style={{ fontFamily: 'monospace', color: '#7dd3fc' }}>{git.sha}</code></Row>
+          <Row label="Remote SHA"><code style={{ fontFamily: 'monospace', color: behind ? '#f97316' : '#64748b' }}>{git.remote_sha}</code></Row>
+          <Row label="Last Commit"><span style={{ color: '#94a3b8' }}>{git.last_commit}</span></Row>
+          <Row label="Sync Status">
+            {behind
+              ? <span style={{ color: '#f97316', fontWeight: 700 }}>⚠ Behind remote — Deploy to update</span>
+              : <span style={{ color: '#22c55e' }}>✓ Up to date</span>}
+          </Row>
+        </> : <div style={{ fontSize: 11, color: '#475569' }}>Loading…</div>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          <button onClick={() => triggerDeploy(false)} disabled={!!running || loading} style={{
+            fontSize: 11, fontWeight: 700, padding: '7px 16px', borderRadius: 6, cursor: running ? 'wait' : 'pointer',
+            background: running ? '#1e293b' : '#0284c7', border: 'none', color: running ? '#475569' : '#fff',
+          }}>{running ? '⏳ Deploying…' : '🚀 Git Pull + Restart'}</button>
+
+          <button onClick={() => triggerDeploy(true)} disabled={!!running || loading} style={{
+            fontSize: 11, fontWeight: 700, padding: '7px 16px', borderRadius: 6, cursor: running ? 'wait' : 'pointer',
+            background: 'transparent', border: '1px solid #334155', color: running ? '#475569' : '#94a3b8',
+          }}>{running ? '⏳' : '📦 Pull + Build Frontend'}</button>
+
+          <button onClick={refresh} style={{
+            fontSize: 11, fontWeight: 600, padding: '7px 12px', borderRadius: 6, cursor: 'pointer',
+            background: 'transparent', border: '1px solid #1e293b', color: '#475569',
+          }}>↻ Refresh</button>
+        </div>
+
+        {deploy?.last_status && !running && (
+          <div style={{ marginTop: 10, fontSize: 11, color: deploy.last_status === 'ok' ? '#22c55e' : '#ef4444' }}>
+            {deploy.last_status === 'ok' ? '✓' : '✗'} Last: {deploy.last_summary} · {deploy.last_finished?.slice(11,19)}
+          </div>
+        )}
+      </div>
+
+      {/* Deploy Log */}
+      {deployLog.length > 0 && (
+        <div style={{ background: '#050d1a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 8, letterSpacing: '.06em' }}>DEPLOY LOG</div>
+          <pre style={{ margin: 0, fontSize: 10, color: '#94a3b8', overflowX: 'auto', maxHeight: 200, overflowY: 'auto', lineHeight: 1.6 }}>
+            {deployLog.join('\n')}
+          </pre>
+        </div>
+      )}
+
+      {/* Deploy History */}
+      {history.length > 0 && (
+        <div style={{ background: '#0a1220', border: '1px solid #1e293b', borderRadius: 8, padding: '14px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 10, letterSpacing: '.04em' }}>HISTORY</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {history.map((h, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #1e293b', fontSize: 11 }}>
+                <span style={{ color: h.status === 'ok' ? '#22c55e' : '#ef4444', fontWeight: 700, width: 14 }}>{h.status === 'ok' ? '✓' : '✗'}</span>
+                <span style={{ color: '#475569', width: 70, flexShrink: 0 }}>{h.ts?.slice(11,19)}</span>
+                <span style={{ color: '#64748b', width: 80, flexShrink: 0 }}>{h.ts?.slice(0,10)}</span>
+                <span style={{ color: '#94a3b8', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.summary}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminPanel() {
   const { previewRole, setPreviewRole } = useAuth()
-  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access' | 'live' | 'datasources'>('requests')
+  const [tab, setTab] = useState<'requests' | 'users' | 'logs' | 'aichats' | 'access' | 'live' | 'datasources' | 'server'>('requests')
   const [requests, setRequests] = useState<RoleRequest[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [logs, setLogs] = useState<Log[]>([])
@@ -316,8 +481,8 @@ export default function AdminPanel() {
     if (!editProfileUser) return
     setEditProfileSaving(true); setEditProfileMsg('')
     try {
-      const res = await http.patch<{ success: boolean; message: string }>(
-        `/auth/users/${editProfileUser.id}/profile`, editProfileForm
+      const res = await axios.patch<{ success: boolean; message: string }>(
+        `/api/auth/users/${editProfileUser.id}/profile`, editProfileForm
       )
       if (res.data.success) {
         setUsers(us => us.map(u => u.id === editProfileUser.id ? { ...u, ...editProfileForm } : u))
@@ -553,6 +718,7 @@ export default function AdminPanel() {
         </button>
         <button style={S.tab(tab === 'access')} onClick={() => setTab('access')}>🛡️ Access Matrix</button>
         <button style={S.tab(tab === 'datasources')} onClick={() => setTab('datasources')}>📦 Data Sources</button>
+        <button style={S.tab(tab === 'server')} onClick={() => setTab('server')}>🖥 Server</button>
         <button style={S.tab(tab === 'live')} onClick={() => setTab('live')}>
           🟢 Live
           {liveSessions.length > 0 && (
@@ -1071,6 +1237,9 @@ export default function AdminPanel() {
             </div>
           )
       )}
+
+      {/* ── Server Control ── */}
+      {tab === 'server' && <ServerControl />}
 
       {/* ── Live Sessions ── */}
       {tab === 'live' && (

@@ -48,7 +48,13 @@ def update_config(enabled=None, hour=None, minute=None, days=None) -> dict:
             _config["minute"] = int(minute)
         if days is not None:
             _config["days"] = days
-        return {**_config}
+        cfg = {**_config}
+    # Immediately recalculate next_run_at so UI reflects the new time without waiting for loop cycle
+    wait = _seconds_until_target()
+    next_ist = (datetime.now(IST) + timedelta(seconds=wait)).strftime("%Y-%m-%d %H:%M IST (%a)")
+    with _sched_lock:
+        _status["next_run_at"] = next_ist
+    return cfg
 
 
 def trigger_now() -> None:

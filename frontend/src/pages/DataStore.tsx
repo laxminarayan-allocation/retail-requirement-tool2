@@ -112,7 +112,7 @@ export default function DataStore() {
   const showMigrationBanner = !loading && missingCount > 0 && missingCount >= sources.length - 1
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
       {/* Migration notice — shown when storage path changed and files need re-download */}
       {showMigrationBanner && (

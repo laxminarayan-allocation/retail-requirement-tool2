@@ -2001,7 +2001,7 @@ export default function DatabaseExplorer() {
 
       {/* Data Hub (Parquet Store) — unmount when not active */}
       {mainTab === 'datahub' && (
-        <div style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <DataStore />
         </div>
       )}

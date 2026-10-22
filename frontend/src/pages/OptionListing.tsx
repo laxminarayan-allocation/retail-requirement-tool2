@@ -1025,6 +1025,12 @@ function SchedulerTab({ tokens: T }: { tokens: any }) {
               onBlur={() => saveConfig({ hour: localHour, minute: localMinute })}
               style={{ width: 70, fontSize: 18, fontFamily: 'monospace', fontWeight: 700, padding: '6px 10px', borderRadius: 7, border: `1px solid ${T.cardBorder}`, background: T.bg, color: T.textPrimary, outline: 'none', textAlign: 'center' }} />
           </div>
+          <button onClick={() => saveConfig({ hour: localHour, minute: localMinute })} disabled={saving}
+            style={{ marginTop: 14, padding: '7px 18px', borderRadius: 7, border: 'none',
+              background: T.accent, color: '#fff', fontWeight: 700, fontSize: 13,
+              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+            {saving ? '…' : '💾 Save'}
+          </button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginLeft: 8 }}>
             <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600 }}>Configured</span>
             <span style={{ fontSize: 18, fontWeight: 800, color: T.accent, fontFamily: 'monospace' }}>{timeLabel}</span>

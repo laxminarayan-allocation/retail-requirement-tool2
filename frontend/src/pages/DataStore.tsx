@@ -64,7 +64,7 @@ export default function DataStore() {
     fetchStatus()
     intervalRef.current = setInterval(fetchStatus, 3000)
     // Load scheduler time
-    fetch('/api/output/schedule', { headers: authHdr() })
+    fetch('/api/database/output/schedule', { headers: authHdr() })
       .then(r => r.json()).then(d => { if (d.success) setSchedTime(d.data.time) })
       .catch(() => {})
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
@@ -74,7 +74,7 @@ export default function DataStore() {
     if (!/^\d{2}:\d{2}$/.test(schedInput)) { setSchedMsg('HH:MM format mein daalo (e.g. 06:30)'); return }
     setSchedSaving(true); setSchedMsg(null)
     try {
-      const r = await fetch('/api/output/schedule', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHdr() }, body: JSON.stringify({ time: schedInput }) })
+      const r = await fetch('/api/database/output/schedule', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHdr() }, body: JSON.stringify({ time: schedInput }) })
       const d = await r.json()
       if (d.success) { setSchedTime(d.data.time); setSchedEdit(false); setSchedMsg(null) }
       else setSchedMsg(d.message ?? 'Save failed')
@@ -108,8 +108,33 @@ export default function DataStore() {
     return { icon: '❌', color: '#ef4444' }
   }
 
+  // Show migration banner if all (or almost all) sources are missing — likely after storage path change
+  const showMigrationBanner = !loading && missingCount > 0 && missingCount >= sources.length - 1
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+
+      {/* Migration notice — shown when storage path changed and files need re-download */}
+      {showMigrationBanner && (
+        <div style={{
+          background: '#7c3aed18', borderBottom: '2px solid #7c3aed55',
+          padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 18 }}>⚡</span>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontWeight: 700, color: '#7c3aed', fontSize: 13 }}>System Update: Storage path changed — </span>
+            <span style={{ color: '#7c3aed', fontSize: 13 }}>
+              Files have moved to a new location. Click <b>Download All</b> once to restore all sources.
+            </span>
+          </div>
+          <button onClick={downloadAll} disabled={runningCount > 0}
+            style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#7c3aed',
+              color: '#fff', fontWeight: 700, fontSize: 12, cursor: runningCount > 0 ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+            {runningCount > 0 ? '⟳ Downloading…' : '⬇ Download All Now'}
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ padding: '18px 24px 14px', borderBottom: `1px solid ${T.cardBorder}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>

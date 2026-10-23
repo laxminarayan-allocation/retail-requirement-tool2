@@ -302,3 +302,29 @@ def read_parquet(key: str):
     if df is None:
         raise FileNotFoundError(f"Parquet not downloaded yet for: {key}")
     return df
+
+
+# ── Daily auto-refresh scheduler ─────────────────────────────────────────────
+
+def _store_scheduler_loop() -> None:
+    import logging as _log
+    logger = _log.getLogger(__name__)
+    from datetime import datetime as _dt, timedelta as _td
+    from app.core.db_scheduler import get_schedule_time
+
+    while True:
+        sched = get_schedule_time()
+        h, m = int(sched.split(":")[0]), int(sched.split(":")[1])
+        now = _dt.now()
+        target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if now >= target:
+            target += _td(days=1)
+        wait = (target - now).total_seconds()
+        logger.info("parquet_store scheduler: next auto-download in %.0fs at %s", wait, sched)
+        time.sleep(wait)
+        logger.info("parquet_store scheduler: starting daily auto-download (%d sources)", len(SOURCES))
+        download_all_async()
+
+
+def start_store_scheduler() -> None:
+    threading.Thread(target=_store_scheduler_loop, daemon=True, name="parquet-store-scheduler").start()

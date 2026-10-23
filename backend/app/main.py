@@ -108,6 +108,10 @@ async def lifespan(app: FastAPI):
     if settings.is_oracle_configured:
         db_start_scheduler()
 
+    # DataStore: start auto-download scheduler (parquet_store files)
+    from app.core.parquet_store import start_store_scheduler
+    start_store_scheduler()
+
         # Layer 2b: Master data caches — parquet-first, Oracle fallback
         # All T-1 data: load once at startup, never hit Oracle again intra-day
         def _warm_all_caches():

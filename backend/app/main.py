@@ -112,56 +112,56 @@ async def lifespan(app: FastAPI):
     from app.core.parquet_store import start_store_scheduler
     start_store_scheduler()
 
-        # Layer 2b: Master data caches — parquet-first, Oracle fallback
-        # All T-1 data: load once at startup, never hit Oracle again intra-day
-        def _warm_all_caches():
-            import time as _t
-            _t.sleep(3)  # let Oracle pool settle first
-            from app.repositories.store_repository import warm_store_cache
-            from app.repositories.item_repository import warm_item_cache
-            from app.repositories.stock_repository import warm_stock_cache
-            from app.repositories.sales_repository import warm_sales_cache
-            from app.repositories.pbs_repository import warm_pbs_cache
-            warm_store_cache()   # parquet → instant
-            warm_item_cache()    # parquet → instant
-            warm_stock_cache()   # Oracle (no parquet yet) — runs once
-            warm_sales_cache()   # Oracle (no parquet yet) — runs once
-            warm_pbs_cache()     # Oracle (no parquet yet) — runs once
+    # Layer 2b: Master data caches — parquet-first, Oracle fallback
+    # All T-1 data: load once at startup, never hit Oracle again intra-day
+    def _warm_all_caches():
+        import time as _t
+        _t.sleep(3)  # let Oracle pool settle first
+        from app.repositories.store_repository import warm_store_cache
+        from app.repositories.item_repository import warm_item_cache
+        from app.repositories.stock_repository import warm_stock_cache
+        from app.repositories.sales_repository import warm_sales_cache
+        from app.repositories.pbs_repository import warm_pbs_cache
+        warm_store_cache()   # parquet → instant
+        warm_item_cache()    # parquet → instant
+        warm_stock_cache()   # Oracle (no parquet yet) — runs once
+        warm_sales_cache()   # Oracle (no parquet yet) — runs once
+        warm_pbs_cache()     # Oracle (no parquet yet) — runs once
 
-        import threading as _th_warm
-        _th_warm.Thread(target=_warm_all_caches, daemon=True, name="master-cache-warmup").start()
-        logger.info("Master data cache warmup thread started (parquet-first)")
+    import threading as _th_warm
+    _th_warm.Thread(target=_warm_all_caches, daemon=True, name="master-cache-warmup").start()
+    logger.info("Master data cache warmup thread started (parquet-first)")
 
-        # Layer 3: Dashboard cache warm — refresh every 2 hours so viewers never wait
-        import threading as _th2
-        def _dashboard_cache_loop():
-            import time as _t
-            _t.sleep(5)   # brief pause then warm dashboard cache immediately
-            while True:
-                try:
-                    from app.api.routes.dashboard import _fetch_oracle_stats_fresh
-                    _fetch_oracle_stats_fresh()
-                    logger.info("dashboard-cache-refresh: oracle stats refreshed")
-                except Exception as exc:
-                    logger.warning("dashboard-cache-refresh: failed — %s", exc)
-                _t.sleep(2 * 3600)  # sleep 2 hours
-
-        _th2.Thread(target=_dashboard_cache_loop, daemon=True, name="dashboard-cache-refresh").start()
-        logger.info("Dashboard cache refresh thread started (every 2 hrs)")
-
-        # Layer 4: Store monthly temps — pre-fetch at startup so map button is instant
-        import threading as _th3
-        def _monthly_temps_startup():
-            import time as _t
-            _t.sleep(15)  # let other warmups settle first
+    # Layer 3: Dashboard cache warm — refresh every 2 hours so viewers never wait
+    import threading as _th2
+    def _dashboard_cache_loop():
+        import time as _t
+        _t.sleep(5)   # brief pause then warm dashboard cache immediately
+        while True:
             try:
-                from app.api.routes.dashboard import _do_monthly_fetch
-                logger.info("monthly-temps startup pre-fetch starting...")
-                _do_monthly_fetch(years=3, predict=1)
+                from app.api.routes.dashboard import _fetch_oracle_stats_fresh
+                _fetch_oracle_stats_fresh()
+                logger.info("dashboard-cache-refresh: oracle stats refreshed")
             except Exception as exc:
-                logger.warning("monthly-temps startup pre-fetch failed: %s", exc)
-        _th3.Thread(target=_monthly_temps_startup, daemon=True, name="monthly-temps-startup").start()
-        logger.info("Monthly temps startup pre-fetch thread started")
+                logger.warning("dashboard-cache-refresh: failed — %s", exc)
+            _t.sleep(2 * 3600)  # sleep 2 hours
+
+    _th2.Thread(target=_dashboard_cache_loop, daemon=True, name="dashboard-cache-refresh").start()
+    logger.info("Dashboard cache refresh thread started (every 2 hrs)")
+
+    # Layer 4: Store monthly temps — pre-fetch at startup so map button is instant
+    import threading as _th3
+    def _monthly_temps_startup():
+        import time as _t
+        _t.sleep(15)  # let other warmups settle first
+        try:
+            from app.api.routes.dashboard import _do_monthly_fetch
+            logger.info("monthly-temps startup pre-fetch starting...")
+            _do_monthly_fetch(years=3, predict=1)
+        except Exception as exc:
+            logger.warning("monthly-temps startup pre-fetch failed: %s", exc)
+    _th3.Thread(target=_monthly_temps_startup, daemon=True, name="monthly-temps-startup").start()
+    logger.info("Monthly temps startup pre-fetch thread started")
 
     # Auto-load any CSVs saved globally by the user (stock, req, store-priority)
     try:

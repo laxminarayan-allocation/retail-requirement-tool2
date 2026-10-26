@@ -326,5 +326,40 @@ def _store_scheduler_loop() -> None:
         download_all_async()
 
 
+def _is_catchup_needed() -> bool:
+    """Return True if today's scheduled window was missed (backend started after sched time) and files are stale."""
+    from datetime import datetime as _dt
+    from app.core.db_scheduler import get_schedule_time
+    sched = get_schedule_time()
+    h, m = int(sched.split(":")[0]), int(sched.split(":")[1])
+    now = _dt.now()
+    sched_today = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if now < sched_today:
+        return False  # not yet past today's window
+    # Check if any source is stale (older than 20h)
+    from app.core.parquet_cache import get_meta
+    for src in SOURCES:
+        meta = get_meta(_DS_OWNER, src["key"])
+        if not meta:
+            return True
+        try:
+            fetched_dt = datetime.fromisoformat(meta["fetched_at"])
+            if fetched_dt.tzinfo is None:
+                fetched_dt = fetched_dt.replace(tzinfo=timezone.utc)
+            age_h = (datetime.now(IST) - fetched_dt.astimezone(IST)).total_seconds() / 3600
+            if age_h > 20:
+                return True
+        except Exception:
+            return True
+    return False
+
+
 def start_store_scheduler() -> None:
-    threading.Thread(target=_store_scheduler_loop, daemon=True, name="parquet-store-scheduler").start()
+    def _start():
+        time.sleep(10)  # let Oracle pool settle first
+        if _is_catchup_needed():
+            logger.info("parquet_store scheduler: missed today's window — running catch-up download")
+            download_all_async()
+        threading.Thread(target=_store_scheduler_loop, daemon=True, name="parquet-store-scheduler").start()
+
+    threading.Thread(target=_start, daemon=True, name="parquet-store-init").start()

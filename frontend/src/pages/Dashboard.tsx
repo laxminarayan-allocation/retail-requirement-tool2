@@ -1291,7 +1291,14 @@ function render(){
     var icon=L.divIcon({className:"",iconAnchor:[7,7],html:html});
     var m=L.marker([s.lat,s.lon],{icon:icon}).addTo(leafMap);
     m.bindTooltip("<b>"+s.code+"</b> "+s.name+"<br>"+s.city+" · "+s.zone,{direction:"top",offset:[0,-8]});
-    m.on("click",function(){if(distMode)addPoint(s)});
+    var popHtml="<div style='font-size:12px;min-width:160px;line-height:1.7'>"
+      +"<div style='font-size:13px;font-weight:800;color:"+col+"'>"+s.name+" <span style='font-size:10px;color:#888'>#"+s.code+"</span></div>"
+      +"<div><span style='color:#888'>Zone:</span> <b>"+s.zone+"</b> &nbsp;·&nbsp; <span style='color:#888'>Cluster:</span> <b>"+(s.cluster||"-")+"</b></div>"
+      +"<div><span style='color:#888'>Grade:</span> "+(s.grade||"-")+" &nbsp;·&nbsp; <span style='color:#888'>City:</span> "+s.city+"</div>"
+      +(distMode?"<div style='margin-top:4px;font-size:10px;color:#fbbf24;font-weight:700'>📏 Click to add to route</div>":"")
+      +"</div>";
+    m.bindPopup(popHtml,{maxWidth:260});
+    m.on("click",function(){if(distMode)addPoint(s);});
     markers.push(m);
   });
   if(showBound)renderBoundaries(vis);
@@ -1532,34 +1539,37 @@ function onSearch(v){
         opacity: 1, fillOpacity: 1,
         dashArray: isUpcoming && !isA && !isB ? '5 3' : undefined,
       })
+      // Build popup content (always shown on click)
+      const td = temps[s.code] as any
+      const cur  = td != null ? (td.cur  ?? td) : null
+      const tmax = td?.max ?? null
+      const tmin = td?.min ?? null
+      const curColor = cur == null ? '#38bdf8' : cur >= 35 ? '#f87171' : cur >= 25 ? '#fbbf24' : '#38bdf8'
+      const tempBadge = cur != null
+        ? `<div style="margin-top:5px;display:flex;align-items:center;gap:6px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:4px 8px">
+             <span style="font-size:13px">🌡</span>
+             <span style="color:${curColor};font-weight:800;font-size:13px">${cur}°C</span>
+             <span style="color:#475569;font-size:11px">now</span>
+             ${tmax != null ? `<span style="color:#64748b;font-size:10px">↑<b style="color:#fca5a5">${tmax}°</b> ↓<b style="color:#93c5fd">${tmin}°</b></span>` : ''}
+           </div>`
+        : ''
+      const distHint = distMode
+        ? `<div style="margin-top:5px;font-size:10px;color:#fbbf24;font-weight:700">📏 Click to add to route</div>`
+        : ''
+      marker.bindPopup(
+        `<div style="font-size:12px;min-width:180px;line-height:1.7">
+          <div style="font-size:14px;font-weight:800;color:${col};margin-bottom:2px">${s.name || s.code} <span style="font-size:10px;color:#888;font-weight:400">#${s.code}</span></div>
+          <div><span style="color:#888">Zone:</span> <b>${s.zone}</b> &nbsp;·&nbsp; <span style="color:#888">Cluster:</span> <b>${s.cluster}</b></div>
+          <div><span style="color:#888">Grade:</span> ${s.grade} &nbsp;·&nbsp; ${isUpcoming ? '<span style="color:#f59e0b">⬡ Upcoming</span>' : '<span style="color:#16a34a">● Active</span>'}</div>
+          <div style="margin-top:2px;color:#555">📍 ${s.city}, ${s.state}</div>
+          ${tempBadge}${distHint}
+        </div>`,
+        { maxWidth: 280 }
+      )
       if (distMode) {
         marker.on('click', () => { if (onClickRef.current) onClickRef.current(s) })
-        const td = temps[s.code] as any
-        const tipTemp = td != null ? ` · 🌡${td.cur ?? td}°C` : ''
+        const tipTemp = cur != null ? ` · 🌡${cur}°C` : ''
         marker.bindTooltip(`${s.name || s.code} · ${s.city}${tipTemp}`, { direction: 'top', offset: [0,-6] })
-      } else {
-        const td = temps[s.code] as any
-        const cur  = td != null ? (td.cur  ?? td) : null
-        const tmax = td?.max ?? null
-        const tmin = td?.min ?? null
-        const curColor = cur == null ? '#38bdf8' : cur >= 35 ? '#f87171' : cur >= 25 ? '#fbbf24' : '#38bdf8'
-        const tempBadge = cur != null
-          ? `<div style="margin-top:5px;display:flex;align-items:center;gap:6px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:4px 8px">
-               <span style="font-size:13px">🌡</span>
-               <span style="color:${curColor};font-weight:800;font-size:13px">${cur}°C</span>
-               <span style="color:#475569;font-size:11px">now</span>
-               ${tmax != null ? `<span style="color:#64748b;font-size:10px">↑<b style="color:#fca5a5">${tmax}°</b> ↓<b style="color:#93c5fd">${tmin}°</b></span>` : ''}
-             </div>`
-          : ''
-        marker.bindPopup(
-          `<div style="font-size:12px;min-width:180px;line-height:1.7">
-            <div style="font-size:14px;font-weight:800;color:${col};margin-bottom:2px">${s.name || s.code} <span style="font-size:10px;color:#888;font-weight:400">#${s.code}</span></div>
-            <div><span style="color:#888">Zone:</span> <b>${s.zone}</b> &nbsp;·&nbsp; <span style="color:#888">Cluster:</span> <b>${s.cluster}</b></div>
-            <div><span style="color:#888">Grade:</span> ${s.grade} &nbsp;·&nbsp; ${isUpcoming ? '<span style="color:#f59e0b">⬡ Upcoming</span>' : '<span style="color:#16a34a">● Active</span>'}</div>
-            <div style="margin-top:2px;color:#555">📍 ${s.city}, ${s.state}</div>
-            ${tempBadge}
-          </div>`
-        )
       }
       marker.addTo(leafletMap.current)
       markersRef.current.push(marker)

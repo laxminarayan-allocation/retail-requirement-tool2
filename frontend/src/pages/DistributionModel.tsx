@@ -506,8 +506,8 @@ export default function DistributionModel() {
   const [sbPreview, setSbPreview] = useState<{stores:number;barcodes:number;total_rows:number;sff_error?:string}|null>(null)
   const [sbLoading, setSbLoading] = useState(false)
   const [sbMsg, setSbMsg] = useState<string|null>(null)
-  const [reqSrcMode, setReqSrcMode] = useState<'oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
-  const [reqSrcApplied, setReqSrcApplied] = useState<'oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
+  const [reqSrcMode, setReqSrcMode] = useState<'oracle'|'max_oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
+  const [reqSrcApplied, setReqSrcApplied] = useState<'oracle'|'max_oracle'|'csv'|'csv_priority'|'max'|'sum'>('oracle')
   const [reqSrcPreview, setReqSrcPreview] = useState<{oracle_total:number;csv_total:number;result_total:number;sample:Array<{icode:string;oracle:number;csv:number;result:number}>}|null>(null)
   const [reqSrcPreviewLoading, setReqSrcPreviewLoading] = useState(false)
   const [reqSrcMsg, setReqSrcMsg] = useState<string|null>(null)
@@ -787,7 +787,7 @@ export default function DistributionModel() {
   const buildBase = async () => {
     setBaseLoading(true); setBaseMsg(null); setBaseResult(null)
     try {
-      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback, min_qty: String(minQty), priority_source: prioritySource }
+      const params: Record<string, string> = { req_source: reqSource, biz_segment: bizSegment, sort_mode: sortMode, req_fallback: reqFallback, min_qty: String(minQty), priority_source: prioritySource, req_src_mode: reqSrcApplied }
       const activeScopes = scopes.filter(s => s.divisions.length > 0 || s.attribute1s.length > 0)
       if (activeScopes.length > 0) params.scopes = JSON.stringify(activeScopes)
       if (selStores.length > 0) params.stores = JSON.stringify(selStores)
@@ -1835,10 +1835,12 @@ export default function DistributionModel() {
                   )}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 14 }}>
                 {([
                   { key: 'oracle'       as const, icon: '🏛', title: 'Oracle Only',
-                    hint: 'Pull REQ directly from Oracle parquet', accent: '#22c55e', bg: accentBg('#0a1f0a', '#f0fdf4') },
+                    hint: 'Pull REQ directly from Oracle parquet (stock source)', accent: '#22c55e', bg: accentBg('#0a1f0a', '#f0fdf4') },
+                  { key: 'max_oracle'   as const, icon: '⚡', title: 'Max GRC+WMS',
+                    hint: 'max(GRC_req, WMS_req) from Oracle — takes higher REQ of both sources', accent: '#fb923c', bg: accentBg('#1a0d00', '#fff7ed') },
                   { key: 'csv'         as const, icon: '📄', title: 'CSV Only',
                     hint: 'Use uploaded CSV REQ; 0 for unmatched barcodes', accent: '#38bdf8', bg: accentBg('#082f49', '#f0f9ff') },
                   { key: 'csv_priority' as const, icon: '📌', title: 'CSV Priority',
@@ -2949,7 +2951,7 @@ export default function DistributionModel() {
 
               {/* Logic Sheet — Run Parameters */}
               {runParams && (() => {
-                const REQ_MODE_LABELS: Record<string, string> = { oracle: 'Oracle Only', csv: 'CSV Only', csv_priority: 'CSV Priority', max: 'Max (Both)', sum: 'Sum (Both)' }
+                const REQ_MODE_LABELS: Record<string, string> = { oracle: 'Oracle Only', max_oracle: 'Max GRC+WMS', csv: 'CSV Only', csv_priority: 'CSV Priority', max: 'Max (Both)', sum: 'Sum (Both)' }
                 const PRIORITY_SRC_LABELS: Record<string, string> = { grc: 'GRC First', wms: 'WMS First', max_req: 'Max REQ First', none: 'No Priority' }
                 const DEFAULTS = { reqSource: 'GRC', reqSrcApplied: 'oracle', bizSegment: 'APPS', sortMode: 'combined_req', prioritySource: 'grc', minQty: 10, maxRound: 10, applyOL: false, holdRules: 0, selStores: 0, activeFieldFilters: 0 }
                 const rows: { label: string; def: string; used: string; changed: boolean }[] = [

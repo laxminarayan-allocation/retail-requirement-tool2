@@ -969,10 +969,17 @@ async def store_barcode_csv(
         if not store_list:
             from fastapi.responses import Response
             return Response('No stores matched filters', media_type='text/plain', status_code=404)
-        stores_df = pd.DataFrame({'store_name': store_list})
+        # Cast store_name to str to avoid int64/object merge errors
+        stores_df = pd.DataFrame({'store_name': [str(s) for s in store_list]})
         if store_meta_df is not None and 'store_name' in store_meta_df.columns:
             meta_cols = [c for c in store_meta_df.columns if c != 'store_name']
+            store_meta_df = store_meta_df.copy()
+            store_meta_df['store_name'] = store_meta_df['store_name'].astype(str).str.strip()
             stores_df = stores_df.merge(store_meta_df[['store_name'] + meta_cols], on='store_name', how='left')
+        # Cast bc_df store_name to str too if it exists
+        if 'store_name' in bc_df.columns:
+            bc_df = bc_df.copy()
+            bc_df['store_name'] = bc_df['store_name'].astype(str).str.strip()
         stores_df['_key'] = 1; bc_df['_key'] = 1
         cross = stores_df.merge(bc_df, on='_key').drop(columns=['_key'])
         buf = _io.StringIO()

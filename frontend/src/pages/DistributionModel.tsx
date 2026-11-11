@@ -1799,7 +1799,10 @@ export default function DistributionModel() {
                           item_field_filters: JSON.stringify(Object.fromEntries(Object.entries(activeItemFieldFilters).filter(([,v])=>v.length>0))),
                           include_req: String(includeReq),
                         })
-                        const res = await fetch(`/api/distribution/store-barcode/csv?${params}`, { credentials: 'include' })
+                        const token = localStorage.getItem('ck_ss27_token') || ''
+                        const res = await fetch(`/api/distribution/store-barcode/csv?${params}`, {
+                          headers: { Authorization: `Bearer ${token}` }
+                        })
                         if (!res.ok) throw new Error(await res.text())
                         const blob = await res.blob()
                         const url = URL.createObjectURL(blob)

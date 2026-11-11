@@ -867,37 +867,62 @@ async def store_barcode_csv(
     scopes: str = '',
     store_field_filters: str = '',
     item_field_filters: str = '',
+    include_req: bool = False,  # join Oracle REQ onto output (req column per icode)
 ):
     import io as _io, json as _j
     try:
         src = req_source.upper()
-        frames = []
-        for obj, key in [(_vobj('barcode_grc'),'grc'),(_vobj('barcode_wms'),'wms')]:
-            if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
-                df = _load(_CK, obj)
-                if df is not None:
-                    df = df.copy(); df.columns = [c.lower() for c in df.columns]
-                    seg = biz_segment.upper()
-                    if seg != 'BOTH' and 'segment' in df.columns:
-                        df = df[df['segment'].str.upper() == seg]
-                    df['wh_source'] = key.upper(); frames.append(df)
-        if not frames:
-            from fastapi.responses import Response
-            return Response('No barcode data', media_type='text/plain', status_code=404)
-        if len(frames) == 1:
-            bc_df = frames[0]
+
+        # ── Barcode source: uploaded CSV (if present) or Oracle parquets ─────
+        if _uploaded_stock_df is not None:
+            bc_df = _uploaded_stock_df.copy()
+            bc_df.columns = [c.lower() for c in bc_df.columns]
+            bc_df["icode"] = bc_df["icode"].astype(str).str.strip()
+            bc_df = bc_df.drop_duplicates(subset=["icode"]).reset_index(drop=True)
+            # Optionally join Oracle REQ for barcodes that have it
+            if include_req:
+                for obj, lbl in [(_vobj('barcode_grc'), 'grc'), (_vobj('barcode_wms'), 'wms')]:
+                    _rdf = _load(_CK, obj)
+                    if _rdf is not None:
+                        _rdf = _rdf.copy(); _rdf.columns = [c.lower() for c in _rdf.columns]
+                        _rc = next((c for c in ['req','combined_req','dist_req'] if c in _rdf.columns), None)
+                        if _rc and 'icode' in _rdf.columns:
+                            _rmap = _rdf[['icode', _rc]].drop_duplicates('icode').rename(columns={_rc: f'req_{lbl}'})
+                            _rmap['icode'] = _rmap['icode'].astype(str).str.strip()
+                            bc_df = bc_df.merge(_rmap, on='icode', how='left')
+                # Combined req = max(grc, wms) where available
+                if 'req_grc' in bc_df.columns or 'req_wms' in bc_df.columns:
+                    req_cols = [c for c in ['req_grc', 'req_wms'] if c in bc_df.columns]
+                    bc_df['req'] = bc_df[req_cols].fillna(0).max(axis=1).astype(int)
+                    bc_df.drop(columns=req_cols, inplace=True)
         else:
-            left, right = frames[0], frames[1]
-            common = [c for c in left.columns if c in right.columns and c not in ('icode','store_name','wh_source','segment')]
-            merged = left.merge(right, on='icode', how='outer', suffixes=('_grc','_wms'))
-            merged['wh_source'] = 'BOTH'
-            for c in common:
-                cg, cw = f'{c}_grc', f'{c}_wms'
-                if cg in merged.columns and cw in merged.columns:
-                    merged[c] = merged[cg].fillna(0) + merged[cw].fillna(0)
-                    merged.drop(columns=[cg, cw], inplace=True)
-            bc_df = merged
-        bc_df = bc_df.drop_duplicates(subset=['icode']).reset_index(drop=True)
+            frames = []
+            for obj, key in [(_vobj('barcode_grc'),'grc'),(_vobj('barcode_wms'),'wms')]:
+                if src == 'BOTH' or (src == 'GRC' and key == 'grc') or (src == 'WMS' and key == 'wms'):
+                    df = _load(_CK, obj)
+                    if df is not None:
+                        df = df.copy(); df.columns = [c.lower() for c in df.columns]
+                        seg = biz_segment.upper()
+                        if seg != 'BOTH' and 'segment' in df.columns:
+                            df = df[df['segment'].str.upper() == seg]
+                        df['wh_source'] = key.upper(); frames.append(df)
+            if not frames:
+                from fastapi.responses import Response
+                return Response('No barcode data', media_type='text/plain', status_code=404)
+            if len(frames) == 1:
+                bc_df = frames[0]
+            else:
+                left, right = frames[0], frames[1]
+                common = [c for c in left.columns if c in right.columns and c not in ('icode','store_name','wh_source','segment')]
+                merged = left.merge(right, on='icode', how='outer', suffixes=('_grc','_wms'))
+                merged['wh_source'] = 'BOTH'
+                for c in common:
+                    cg, cw = f'{c}_grc', f'{c}_wms'
+                    if cg in merged.columns and cw in merged.columns:
+                        merged[c] = merged[cg].fillna(0) + merged[cw].fillna(0)
+                        merged.drop(columns=[cg, cw], inplace=True)
+                bc_df = merged
+            bc_df = bc_df.drop_duplicates(subset=['icode']).reset_index(drop=True)
         im = _load(_CK, _IM_OBJ)
         if im is not None:
             im = im.copy(); im.columns = [c.lower() for c in im.columns]
@@ -1218,9 +1243,10 @@ async def build_distribution_base(
         # ── 1. Load base (BARCODE GRC / WMS / BOTH, or uploaded CSV override) ─
         if _uploaded_stock_df is not None:
             # Use uploaded CSV as stock source.
-            # Strategy: outer-join GRC/WMS parquet (for REQ/item metadata) with the
-            # uploaded qty map so barcodes that are in the CSV but not in Oracle are
-            # still included.  Missing metadata is backfilled from V_ITEM_MASTER.
+            # Strategy:
+            #   1. Oracle barcodes (619): use GRC parquet rows (store × barcode), update wh_q from CSV
+            #   2. Upload-only barcodes (971): cross-join with Oracle store list → give each a row per store
+            #   Missing metadata backfilled from V_ITEM_MASTER.
             grc = _load(_CK, "V_BARCODE_REQ_APPS_GRC_V2")
             wms = _load(_CK, "V_BARCODE_REQ_APPS_WMS_V2")
             base_raw = grc if grc is not None else wms
@@ -1233,13 +1259,32 @@ async def build_distribution_base(
                 base.columns = [c.lower() for c in base.columns]
                 base["icode"] = base["icode"].astype(str).str.strip()
                 base["dist_req"] = pd.to_numeric(base.get("req", 0), errors="coerce").fillna(0)
-                # Outer merge: keep all uploaded barcodes even if not in Oracle parquet
-                merge_cols = {"wh_q": "_csv_wh_q", "wh_source": "_csv_wh_source"} if "wh_source" in upload.columns else {"wh_q": "_csv_wh_q"}
-                base = base.merge(upload.rename(columns=merge_cols), on="icode", how="outer")
+
+                # LEFT merge: Oracle rows get wh_q/wh_source from uploaded CSV
+                _upld_rename = {"wh_q": "_csv_wh_q"}
+                if "wh_source" in upload.columns:
+                    _upld_rename["wh_source"] = "_csv_wh_source"
+                base = base.merge(upload.rename(columns=_upld_rename), on="icode", how="left")
                 base["wh_q"] = pd.to_numeric(base["_csv_wh_q"], errors="coerce").fillna(0).astype(int)
-                base["wh_source"] = base.get("_csv_wh_source", pd.Series(dtype=str)).fillna("WMS")
-                drop_cols = [c for c in ["_csv_wh_q", "_csv_wh_source"] if c in base.columns]
-                base.drop(columns=drop_cols, inplace=True)
+                base["wh_source"] = base.get("_csv_wh_source", pd.Series(dtype=str)).fillna("GRC")
+                base.drop(columns=[c for c in ["_csv_wh_q", "_csv_wh_source"] if c in base.columns], inplace=True)
+
+                # Cross-join upload-only barcodes (not in Oracle) × Oracle store list
+                oracle_icodes = set(base["icode"].unique())
+                upload_only = upload[~upload["icode"].isin(oracle_icodes)].drop_duplicates("icode").copy()
+                if len(upload_only) > 0 and "store_name" in base.columns:
+                    store_names = base["store_name"].dropna().unique()
+                    if len(store_names) > 0:
+                        stores_df = pd.DataFrame({"store_name": store_names})
+                        # cartesian product: upload_only × stores
+                        upload_only["_xkey"] = 1
+                        stores_df["_xkey"] = 1
+                        cross_rows = upload_only.merge(stores_df, on="_xkey").drop(columns=["_xkey"])
+                        upload_only.drop(columns=["_xkey"], inplace=True)
+                        cross_rows["dist_req"] = 0
+                        base = pd.concat([base, cross_rows], ignore_index=True, sort=False)
+                        logger.info("upload-only cross-join: %d barcodes × %d stores = %d new rows",
+                                    len(upload_only), len(store_names), len(cross_rows))
             else:
                 # No parquet at all — build base purely from upload + item master
                 base = upload.copy()

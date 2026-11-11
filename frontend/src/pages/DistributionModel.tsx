@@ -1780,17 +1780,41 @@ export default function DistributionModel() {
                   </div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                  background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 8 }}>
+                  background: DK.cardBg, border: `1px solid ${DK.cardBorder}`, borderRadius: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, fontSize: 12, color: tokens.textSecondary }}>
                     CSV: store metadata + barcode + qty + Item Master &mdash; {sbPreview.total_rows.toLocaleString('en-IN')} rows
                   </div>
-                  <a href={`/api/distribution/store-barcode/csv?req_source=${reqSource}&biz_segment=${bizSegment}&stores=${encodeURIComponent(JSON.stringify(selStores))}&store_field_filters=${encodeURIComponent(JSON.stringify(activeFieldFilters))}&item_field_filters=${encodeURIComponent(JSON.stringify(Object.fromEntries(Object.entries(activeItemFieldFilters).filter(([,v])=>v.length>0))))}`}
-                    download
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: tokens.textSecondary, cursor: 'pointer' }}>
+                    <input type="checkbox" id="sbCsvIncludeReq" defaultChecked={false} style={{ cursor: 'pointer' }} />
+                    Join REQ
+                  </label>
+                  <button
+                    onClick={async () => {
+                      const includeReq = (document.getElementById('sbCsvIncludeReq') as HTMLInputElement)?.checked ?? false
+                      try {
+                        const params = new URLSearchParams({
+                          req_source: reqSource, biz_segment: bizSegment,
+                          stores: JSON.stringify(selStores),
+                          store_field_filters: JSON.stringify(activeFieldFilters),
+                          item_field_filters: JSON.stringify(Object.fromEntries(Object.entries(activeItemFieldFilters).filter(([,v])=>v.length>0))),
+                          include_req: String(includeReq),
+                        })
+                        const res = await fetch(`/api/distribution/store-barcode/csv?${params}`, { credentials: 'include' })
+                        if (!res.ok) throw new Error(await res.text())
+                        const blob = await res.blob()
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `store_x_barcode_${reqSource}_${bizSegment}${includeReq ? '_with_req' : ''}.csv`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      } catch (e) { alert('CSV download failed: ' + e) }
+                    }}
                     style={{ padding: '6px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7,
                       border: 'none', background: '#7c3aed', color: '#fff',
-                      textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     ⬇ Download CSV
-                  </a>
+                  </button>
                 </div>
               </div>
             )}

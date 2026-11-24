@@ -33,6 +33,10 @@ from app.api.routes import nso as nso_routes
 from app.api.routes import sale as sale_routes
 from app.api.routes import req_dashboard as req_dashboard_routes
 from app.api.routes import distribution as distribution_routes
+from app.api.routes.distribution_v2 import (
+    result_router, run_router, stores_router, items_router,
+    presets_router, export_router,
+)
 from app.api.routes import simulation as simulation_routes
 from app.api.routes import option_listing as option_listing_routes
 from app.api.routes import oracle_refresh as oracle_refresh_routes
@@ -468,6 +472,12 @@ app.include_router(nso_routes.router,   prefix="/api")    # NSO Dashboard
 app.include_router(sale_routes.router,  prefix="/api")    # Sale Dashboard
 app.include_router(req_dashboard_routes.router, prefix="/api")  # Requirements Dashboard
 app.include_router(distribution_routes.router, prefix="/api")  # Distribution Model
+app.include_router(result_router,  prefix="/api")  # V2 Result
+app.include_router(run_router,     prefix="/api")  # V2 Run
+app.include_router(stores_router,  prefix="/api")  # V2 Stores
+app.include_router(items_router,   prefix="/api")  # V2 Items
+app.include_router(presets_router, prefix="/api")  # V2 Presets
+app.include_router(export_router,  prefix="/api")  # V2 Export
 app.include_router(simulation_routes.router, prefix="/api")   # Allocation Simulation
 app.include_router(option_listing_routes.router, prefix="/api")  # Option Listing (Pre-Winter AW26)
 app.include_router(oracle_refresh_routes.router, prefix="/api")  # Oracle / Excel Refresh

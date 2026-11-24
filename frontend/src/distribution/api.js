@@ -1,61 +1,98 @@
-// API calls — uses relative /api path (same-host FastAPI backend)
+// Distribution V2 API — all calls to local FastAPI backend
 const TOKEN_KEY = 'ck_ss27_token'
 
-const headers = () => {
-  const token = localStorage.getItem(TOKEN_KEY) || ''
-  return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-               : { 'Content-Type': 'application/json' }
+const authHeaders = () => {
+  const t = localStorage.getItem(TOKEN_KEY) || ''
+  return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
-const get  = (url) => fetch(url, { headers: headers() }).then(r => r.json())
-const post = (url, body) => fetch(url, {
-  method: 'POST', headers: headers(),
-  body: JSON.stringify(body),
-}).then(r => r.json())
-const del  = (url) => fetch(url, { method: 'DELETE', headers: headers() }).then(r => r.json())
+const jsonHeaders = () => ({ 'Content-Type': 'application/json', ...authHeaders() })
 
-// ── Stores ──────────────────────────────────────────────────────────────────
-export const getStores        = ()  => get('/api/stores/')
-export const getStoreStatus   = ()  => get('/api/stores/status')
-export const getStoreFields   = ()  => get('/api/stores/fields')
-export const getFieldValues   = (f) => get(`/api/stores/field/${f}`)
+const get  = (url) => fetch(url, { headers: authHeaders() }).then(r => r.json())
+const post = (url, body) => fetch(url, { method: 'POST', headers: jsonHeaders(), body: JSON.stringify(body) }).then(r => r.json())
+const del  = (url) => fetch(url, { method: 'DELETE', headers: authHeaders() }).then(r => r.json())
+const put  = (url, body) => fetch(url, { method: 'PUT', headers: jsonHeaders(), body: JSON.stringify(body) }).then(r => r.json())
 
-// ── Items ────────────────────────────────────────────────────────────────────
-export const getItemStatus    = ()  => get('/api/items/status')
-export const getDivisions     = ()  => get('/api/items/divisions')
-
-// ── Presets ──────────────────────────────────────────────────────────────────
-export const getPresets       = ()             => get('/api/presets/')
-export const getPreset        = (name)         => get(`/api/presets/${name}`)
-export const savePreset       = (name, body)   => post(`/api/presets/${name}`, body)
-export const setDefaultPreset = (name)         => post(`/api/presets/${name}/default`, {})
-export const deletePreset     = (name)         => del(`/api/presets/${name}`)
-export const unsetDefault     = ()             => del('/api/presets/default')
-
-// ── Result / Dashboard ───────────────────────────────────────────────────────
-export const getSummary       = ()  => get('/api/result/summary')
-export const getFilterOptions = ()  => get('/api/result/filters')
-export const getChartDivision = ()  => get('/api/result/charts/division')
-export const getChartReason   = ()  => get('/api/result/charts/reason')
-export const getRows          = (p) => {
-  const q = new URLSearchParams(p).toString()
-  return get(`/api/result/rows?${q}`)
+// Unwrap APIResponse envelope
+const unwrap = async (promise) => {
+  const r = await promise
+  if (r && r.success === false) throw new Error(r.message || 'API error')
+  return r?.data !== undefined ? r.data : r
 }
 
-// ── Run ──────────────────────────────────────────────────────────────────────
-export const startRun  = (config) => post('/api/run/', config)
-export const getJob    = (id)     => get(`/api/run/${id}`)
-export const listJobs  = ()       => get('/api/run/')
+// File upload (multipart)
+const upload = (url, file, extraParams = {}) => {
+  const form = new FormData()
+  form.append('file', file)
+  const q = new URLSearchParams(extraParams).toString()
+  return fetch(`${url}${q ? '?' + q : ''}`, { method: 'POST', headers: authHeaders(), body: form }).then(r => r.json())
+}
 
-// ── Export ───────────────────────────────────────────────────────────────────
-export const getExportUrl = (mode = 'division') => `/api/export/download?mode=${mode}`
+// ── Stock CSV ──────────────────────────────────────────────────────────────────
+export const getStockStatus    = ()            => unwrap(get('/api/distribution/upload-stock-csv/status'))
+export const uploadStock       = (file, save)  => upload('/api/distribution/upload-stock-csv', file, { save })
+export const deleteStock       = (removeSaved) => del(`/api/distribution/upload-stock-csv?remove_saved=${removeSaved}`)
 
-// ── WebSocket ────────────────────────────────────────────────────────────────
-export const openJobWS = (jobId, onMessage, onClose) => {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const ws = new WebSocket(`${protocol}//${location.host}/api/run/ws/${jobId}`)
-  ws.onmessage = (e) => onMessage(JSON.parse(e.data))
-  ws.onclose   = onClose
-  ws.onerror   = (e) => console.error('WS error', e)
-  return ws
+// ── REQ CSV ───────────────────────────────────────────────────────────────────
+export const getReqStatus      = ()            => unwrap(get('/api/distribution/upload-req-csv/status'))
+export const uploadReq         = (type, file, save) => upload(`/api/distribution/upload-req-csv/${type}`, file, { save })
+export const deleteReq         = (type, removeSaved) => del(`/api/distribution/upload-req-csv/${type}?remove_saved=${removeSaved}`)
+
+// ── Store Priority ─────────────────────────────────────────────────────────────
+export const getPriorityStatus = ()            => unwrap(get('/api/distribution/upload-store-priority/status'))
+export const uploadPriority    = (type, file, save) => upload(`/api/distribution/upload-store-priority/${type}`, file, { save })
+export const deletePriority    = (type, removeSaved) => del(`/api/distribution/upload-store-priority/${type}?remove_saved=${removeSaved}`)
+
+// ── Item Master ───────────────────────────────────────────────────────────────
+export const getItemMasterStatus = () => unwrap(get('/api/distribution/item-master/status'))
+export const downloadItemMaster  = () => unwrap(post('/api/distribution/item-master/download', {}))
+
+// ── Filters / Meta ────────────────────────────────────────────────────────────
+export const getStoreFilterMeta = () => unwrap(get('/api/distribution/store-filter-meta'))
+export const getItemFilterMeta  = () => unwrap(get('/api/distribution/item-filter-meta'))
+export const getStoreList       = () => unwrap(get('/api/distribution/store-list'))
+
+// ── Hold Rules ────────────────────────────────────────────────────────────────
+export const getHoldRules  = () => get('/api/distribution/hold-rules').then(r => r?.data ?? [])
+export const saveHoldRules = (rules) => put('/api/distribution/hold-rules', rules)
+
+// ── Base ──────────────────────────────────────────────────────────────────────
+export const getBaseStatus = () => get('/api/distribution/base/status')
+export const buildBase = (params) => {
+  const q = new URLSearchParams(params).toString()
+  return fetch(`/api/distribution/build-base?${q}`, { method: 'POST', headers: authHeaders() }).then(r => r.json())
+}
+
+// ── Distribute ────────────────────────────────────────────────────────────────
+export const distribute = (body) => {
+  const q = new URLSearchParams({ min_qty: body.min_qty ?? 0 }).toString()
+  return fetch(`/api/distribution/distribute?${q}`, {
+    method: 'POST', headers: jsonHeaders(),
+    body: JSON.stringify({ wh_col: 'wh_q', max_round: 10, hold_rules: body.hold_rules || [], apply_option_listing: false })
+  }).then(r => r.json())
+}
+
+// ── Results ───────────────────────────────────────────────────────────────────
+export const getDivisionSummary = () => get('/api/distribution/division-summary')
+export const getExportPreview   = () => unwrap(get('/api/distribution/export-preview'))
+
+// ── Export (download) ─────────────────────────────────────────────────────────
+export const exportExcel = (params = {}) => {
+  const q = new URLSearchParams(params).toString()
+  return fetch(`/api/distribution/export?${q}`, { method: 'POST', headers: authHeaders() })
+}
+export const exportCsv = (params = {}) => {
+  const q = new URLSearchParams(params).toString()
+  return fetch(`/api/distribution/export-csv?${q}`, { method: 'POST', headers: authHeaders() })
+}
+
+// ── Store Presets ─────────────────────────────────────────────────────────────
+export const getStorePresets   = () => unwrap(get('/api/distribution/store-presets'))
+export const saveStorePreset   = (name, stores) => unwrap(post('/api/distribution/store-presets', { name, stores }))
+export const deleteStorePreset = (name) => unwrap(del(`/api/distribution/store-presets/${encodeURIComponent(name)}`))
+
+// ── Barcode preview ───────────────────────────────────────────────────────────
+export const getBarcodePreview = (params) => {
+  const q = new URLSearchParams(params).toString()
+  return unwrap(get(`/api/distribution/barcode-preview?${q}`))
 }
